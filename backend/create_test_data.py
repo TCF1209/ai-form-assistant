@@ -263,7 +263,6 @@ def create_test_data():
     print("2. Access the API at: http://localhost:8000/api/v1/")
     print("3. Access Django Admin at: http://localhost:8000/admin/")
     print("4. Test the API with the credentials above")
-    print()
 
 if __name__ == "__main__":
     create_test_data()

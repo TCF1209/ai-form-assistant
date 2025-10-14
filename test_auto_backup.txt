@@ -1,0 +1,8 @@
+Test Auto Backup
+================
+
+This file tests the automatic GitHub backup feature.
+Created at: 2025-01-14
+Purpose: Verify that commits automatically push to GitHub
+
+If you see this file in your GitHub repository, the auto-backup is working!

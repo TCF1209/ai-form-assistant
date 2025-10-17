@@ -95,20 +95,20 @@ const Sidebar = ({ isOpen, onClose }) => {
       <aside
         className={`
           fixed lg:static inset-y-0 left-0 z-30
-          w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700
+          w-64 bg-white border-r border-slate-200
           transform transition-transform duration-300 ease-in-out
           ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200 dark:border-gray-700">
-            <span className="text-xl font-bold text-gray-900 dark:text-white">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-slate-200">
+            <span className="text-xl font-bold text-slate-800">
               AI Office
             </span>
             <button
               onClick={onClose}
-              className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              className="lg:hidden text-slate-500 hover:text-slate-700"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -133,8 +133,8 @@ const Sidebar = ({ isOpen, onClose }) => {
                   transition-colors duration-200
                   ${
                     isActive(item.href)
-                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      ? 'bg-sky-50 text-sky-500'
+                      : 'text-slate-700 hover:bg-slate-100'
                   }
                 `}
               >
@@ -145,19 +145,19 @@ const Sidebar = ({ isOpen, onClose }) => {
           </nav>
 
           {/* User Profile (Bottom) */}
-          <div className="px-4 py-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="px-4 py-4 border-t border-slate-200">
             <Link
               to="/profile"
-              className="flex items-center px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              className="flex items-center px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg"
             >
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center text-white font-semibold">
                 {user?.first_name?.[0] || user?.email?.[0] || 'U'}
               </div>
               <div className="ml-3 overflow-hidden">
                 <p className="text-sm font-medium truncate">
                   {user?.first_name || user?.email}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                <p className="text-xs text-slate-500 truncate">
                   View profile
                 </p>
               </div>

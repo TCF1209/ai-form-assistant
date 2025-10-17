@@ -27,13 +27,13 @@ const Header = ({ onMenuClick }) => {
   };
 
   return (
-    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+    <header className="bg-white border-b border-slate-200">
       <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
         {/* Left side - Menu button */}
         <div className="flex items-center">
           <button
             onClick={onMenuClick}
-            className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="lg:hidden text-slate-500 hover:text-slate-700"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -51,7 +51,7 @@ const Header = ({ onMenuClick }) => {
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
-            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="p-2 text-slate-500 hover:text-sky-500 rounded-lg hover:bg-slate-100"
             title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {theme === 'dark' ? (
@@ -76,7 +76,7 @@ const Header = ({ onMenuClick }) => {
           </button>
 
           {/* Notifications */}
-          <button className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 relative">
+          <button className="p-2 text-slate-500 hover:text-sky-500 rounded-lg hover:bg-slate-100 relative">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -93,13 +93,13 @@ const Header = ({ onMenuClick }) => {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-slate-100"
             >
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
+              <div className="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center text-white font-semibold">
                 {user?.first_name?.[0] || user?.email?.[0] || 'U'}
               </div>
               <svg
-                className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${
+                className={`w-4 h-4 text-slate-500 transition-transform ${
                   dropdownOpen ? 'transform rotate-180' : ''
                 }`}
                 fill="none"
@@ -117,12 +117,12 @@ const Header = ({ onMenuClick }) => {
 
             {/* Dropdown Menu */}
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
-                <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50">
+                <div className="px-4 py-2 border-b border-slate-200">
+                  <p className="text-sm font-medium text-slate-800">
                     {user?.first_name || 'User'}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  <p className="text-xs text-slate-500 truncate">
                     {user?.email}
                   </p>
                 </div>
@@ -130,7 +130,7 @@ const Header = ({ onMenuClick }) => {
                 <Link
                   to="/profile"
                   onClick={() => setDropdownOpen(false)}
-                  className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
                 >
                   <div className="flex items-center">
                     <svg
@@ -153,7 +153,7 @@ const Header = ({ onMenuClick }) => {
                 <Link
                   to="/settings"
                   onClick={() => setDropdownOpen(false)}
-                  className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
                 >
                   <div className="flex items-center">
                     <svg
@@ -181,7 +181,7 @@ const Header = ({ onMenuClick }) => {
 
                 <button
                   onClick={handleLogout}
-                  className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-slate-100"
                 >
                   <div className="flex items-center">
                     <svg

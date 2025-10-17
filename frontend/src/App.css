@@ -1,84 +1,72 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* Tailwind CSS Directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Global Styles */
+@layer base {
+  * {
+    @apply m-0 p-0 box-border;
+  }
+
+  body {
+    @apply antialiased;
+  }
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+/* Custom Component Styles */
+@layer components {
+  #root {
+    @apply min-h-screen;
+  }
 
-#root {
-  min-height: 100vh;
-}
+  .layout {
+    @apply min-h-screen;
+  }
 
-.layout {
-  min-height: 100vh;
-}
-
-.logo {
-  float: left;
-  color: white;
-  font-size: 18px;
-  font-weight: bold;
-  margin-right: 50px;
-  line-height: 64px;
-}
-
-.site-layout-content {
-  min-height: 280px;
-  padding: 24px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.page-content {
-  margin-bottom: 40px;
-}
-
-.page-content p {
-  font-size: 16px;
-  line-height: 1.6;
-  color: #595959;
-  margin-top: 16px;
-}
-
-.counter-section {
-  margin-top: 40px;
-  padding: 24px;
-  background: #f5f5f5;
-  border-radius: 8px;
-  text-align: center;
-}
-
-.counter-section button {
-  margin-top: 16px;
-  font-size: 16px;
-  height: 40px;
-  padding: 0 32px;
-}
-
-/* Menu link styling */
-.ant-menu-dark .ant-menu-item a {
-  color: rgba(255, 255, 255, 0.65);
-}
-
-.ant-menu-dark .ant-menu-item-selected a {
-  color: #fff;
-}
-
-/* Responsive design */
-@media (max-width: 768px) {
   .logo {
-    margin-right: 20px;
+    @apply float-left text-white text-lg font-bold mr-12 leading-[64px];
   }
 
   .site-layout-content {
-    padding: 16px;
+    @apply min-h-[280px] p-6 bg-white rounded-lg shadow-md;
+  }
+
+  .page-content {
+    @apply mb-10;
+  }
+
+  .page-content p {
+    @apply text-base leading-relaxed text-gray-600 mt-4;
+  }
+
+  .counter-section {
+    @apply mt-10 p-6 bg-gray-100 rounded-lg text-center;
+  }
+
+  .counter-section button {
+    @apply mt-4 text-base h-10 px-8;
+  }
+}
+
+/* Ant Design Overrides */
+@layer utilities {
+  .ant-menu-dark .ant-menu-item a {
+    @apply text-white/65;
+  }
+
+  .ant-menu-dark .ant-menu-item-selected a {
+    @apply text-white;
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .logo {
+    @apply mr-5;
+  }
+
+  .site-layout-content {
+    @apply p-4;
   }
 }

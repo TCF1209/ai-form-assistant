@@ -139,6 +139,83 @@ class UserViewSet(viewsets.ModelViewSet):
             'user': UserSerializer(user).data
         })
 
+    @action(detail=True, methods=['post'])
+    def assign_role(self, request, pk=None):
+        """
+        Assign role to a user.
+        POST /api/v1/users/{id}/assign_role/
+        """
+        user = self.get_object()
+        role = request.data.get('role')
+
+        if role not in [User.UserRole.ADMIN, User.UserRole.MANAGER, User.UserRole.USER]:
+            return Response(
+                {'error': 'Invalid role. Must be ADMIN, MANAGER, or USER'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        old_role = user.role
+        user.role = role
+        user.save()
+
+        # Log the action
+        AuditLog.objects.create(
+            user=request.user,
+            action=AuditLog.ActionType.UPDATE,
+            model_name='User',
+            object_id=str(user.id),
+            object_repr=str(user),
+            changes={'role': {'from': old_role, 'to': role}},
+            ip_address=self.get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')
+        )
+
+        return Response({
+            'message': f'Role updated successfully to {role}',
+            'user': UserSerializer(user).data
+        })
+
+    @action(detail=True, methods=['post'])
+    def assign_department(self, request, pk=None):
+        """
+        Assign department to a user.
+        POST /api/v1/users/{id}/assign_department/
+        """
+        user = self.get_object()
+        department_id = request.data.get('department_id')
+
+        try:
+            department = Department.objects.get(id=department_id) if department_id else None
+        except Department.DoesNotExist:
+            return Response(
+                {'error': 'Department not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        old_department = user.department
+        user.department = department
+        user.save()
+
+        # Log the action
+        AuditLog.objects.create(
+            user=request.user,
+            action=AuditLog.ActionType.UPDATE,
+            model_name='User',
+            object_id=str(user.id),
+            object_repr=str(user),
+            changes={'department': {
+                'from': str(old_department) if old_department else None,
+                'to': str(department) if department else None
+            }},
+            ip_address=self.get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')
+        )
+
+        return Response({
+            'message': 'Department updated successfully',
+            'user': UserSerializer(user).data
+        })
+
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """

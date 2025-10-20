@@ -168,23 +168,23 @@ class LoginSerializer(serializers.Serializer):
         email_or_username = attrs.get('email_or_username')
         password = attrs.get('password')
 
-        # Try to find user by email or username
-        user = None
+        # Since our User model uses email as USERNAME_FIELD,
+        # we need to get the email for authentication
         if '@' in email_or_username:
-            # It's an email
+            # It's already an email
+            email = email_or_username.lower()
+        else:
+            # It's a username - find the email
             try:
-                user = User.objects.get(email=email_or_username.lower())
-                username = user.username
+                user_obj = User.objects.get(username=email_or_username)
+                email = user_obj.email
             except User.DoesNotExist:
                 raise serializers.ValidationError(
                     'Invalid credentials. Please try again.'
                 )
-        else:
-            # It's a username
-            username = email_or_username
 
-        # Authenticate using username and password
-        user = authenticate(username=username, password=password)
+        # Authenticate using email (since USERNAME_FIELD = 'email')
+        user = authenticate(username=email, password=password)
 
         if not user:
             raise serializers.ValidationError(

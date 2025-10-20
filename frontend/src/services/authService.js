@@ -14,8 +14,16 @@ const authService = {
   // Login user
   login: async (credentials) => {
     try {
-      const response = await api.post('/auth/token/', credentials);
-      const { access, refresh, user } = response.data;
+      // Map email field to email_or_username for backend compatibility
+      const loginData = {
+        email_or_username: credentials.email || credentials.username,
+        password: credentials.password,
+      };
+      const response = await api.post('/auth/login/', loginData);
+
+      // Backend sends tokens in a nested 'tokens' object
+      const { tokens, user } = response.data;
+      const { access, refresh } = tokens;
 
       // Store tokens and user data
       localStorage.setItem('access_token', access);

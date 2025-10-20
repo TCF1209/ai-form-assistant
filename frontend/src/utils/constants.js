@@ -5,7 +5,7 @@ export const APP_NAME = import.meta.env.VITE_APP_NAME || 'AI Office Assistant';
 // API Endpoints
 export const API_ENDPOINTS = {
   AUTH: {
-    LOGIN: '/auth/token/',
+    LOGIN: '/auth/login/',
     REGISTER: '/auth/register/',
     LOGOUT: '/auth/logout/',
     REFRESH: '/auth/token/refresh/',

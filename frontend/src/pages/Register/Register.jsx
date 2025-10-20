@@ -41,8 +41,11 @@ const Register = () => {
     // Email validation
     if (!formData.email) {
       newErrors.email = 'Email is required';
-    } else if (!validateEmail(formData.email)) {
-      newErrors.email = 'Email is invalid';
+    } else {
+      const emailError = validateEmail(formData.email);
+      if (emailError) {
+        newErrors.email = emailError;
+      }
     }
 
     // Password validation

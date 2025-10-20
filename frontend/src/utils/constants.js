@@ -154,7 +154,7 @@ export const SUCCESS_MESSAGES = {
 
 // Regex Patterns
 export const REGEX_PATTERNS = {
-  EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  EMAIL: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
   PHONE: /^[\d\s\-\+\(\)]+$/,
   URL: /^https?:\/\/.+/,
   PASSWORD: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/,

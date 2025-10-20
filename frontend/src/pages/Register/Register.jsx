@@ -93,11 +93,13 @@ const Register = () => {
 
     // Prepare data for API
     const registrationData = {
+      username: formData.email.split('@')[0], // Generate username from email
       email: formData.email,
       password: formData.password,
+      password_confirm: formData.confirmPassword, // Add password_confirm field
       first_name: formData.firstName,
       last_name: formData.lastName,
-      phone_number: formData.phoneNumber || null,
+      phone_number: formData.phoneNumber || '', // Send empty string instead of null
     };
 
     const result = await register(registrationData);
@@ -105,9 +107,42 @@ const Register = () => {
     if (result.success) {
       navigate('/dashboard', { replace: true });
     } else {
-      setErrors({
-        general: result.error?.detail || result.error?.email?.[0] || 'Registration failed. Please try again.',
-      });
+      // Handle field-specific errors from the backend
+      const backendErrors = {};
+
+      if (result.error) {
+        // Check for field-specific errors
+        if (result.error.email) {
+          backendErrors.email = result.error.email[0];
+        }
+        if (result.error.username) {
+          backendErrors.general = result.error.username[0];
+        }
+        if (result.error.password) {
+          backendErrors.password = result.error.password[0];
+        }
+        if (result.error.password_confirm) {
+          backendErrors.confirmPassword = result.error.password_confirm[0];
+        }
+        if (result.error.first_name) {
+          backendErrors.firstName = result.error.first_name[0];
+        }
+        if (result.error.last_name) {
+          backendErrors.lastName = result.error.last_name[0];
+        }
+        if (result.error.detail) {
+          backendErrors.general = result.error.detail;
+        }
+
+        // If no specific errors, show a general error
+        if (Object.keys(backendErrors).length === 0) {
+          backendErrors.general = 'Registration failed. Please try again.';
+        }
+      } else {
+        backendErrors.general = 'Registration failed. Please try again.';
+      }
+
+      setErrors(backendErrors);
     }
   };
 

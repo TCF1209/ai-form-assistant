@@ -22,7 +22,7 @@ const Sidebar = ({ isOpen, onClose }) => {
       ),
     },
     {
-      name: 'Users',
+      name: 'User Management',
       href: '/users',
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -34,7 +34,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           />
         </svg>
       ),
-      adminOnly: false,
+      roles: ['ADMIN'], // Only visible to ADMIN role
     },
     {
       name: 'Tasks',
@@ -138,25 +138,33 @@ const Sidebar = ({ isOpen, onClose }) => {
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-            {navigation.map((item) => (
-              <Link
-                key={item.name}
-                to={item.href}
-                onClick={() => onClose()}
-                className={`
-                  flex items-center px-4 py-3 text-sm font-medium rounded-lg
-                  transition-colors duration-200
-                  ${
-                    isActive(item.href)
-                      ? 'bg-sky-50 text-sky-500'
-                      : 'text-slate-700 hover:bg-slate-100'
-                  }
-                `}
-              >
-                <span className="mr-3">{item.icon}</span>
-                {item.name}
-              </Link>
-            ))}
+            {navigation
+              .filter(item => {
+                // If item has role restrictions, check if user has required role
+                if (item.roles) {
+                  return item.roles.includes(user?.role);
+                }
+                return true; // Show items without role restrictions to everyone
+              })
+              .map((item) => (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  onClick={() => onClose()}
+                  className={`
+                    flex items-center px-4 py-3 text-sm font-medium rounded-lg
+                    transition-colors duration-200
+                    ${
+                      isActive(item.href)
+                        ? 'bg-sky-50 text-sky-500'
+                        : 'text-slate-700 hover:bg-slate-100'
+                    }
+                  `}
+                >
+                  <span className="mr-3">{item.icon}</span>
+                  {item.name}
+                </Link>
+              ))}
           </nav>
 
           {/* User Profile (Bottom) */}

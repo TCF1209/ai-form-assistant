@@ -37,18 +37,23 @@ const UserEditModal = ({ user, departments, onClose, onSave }) => {
     try {
       setLoading(true);
 
+      // Only update existing user (creation is handled by AddUserModal)
       if (user) {
-        // Update existing user
         await api.patch(`/users/users/${user.id}/`, formData);
-      } else {
-        // Create new user (would need password fields)
-        await api.post('/users/users/', formData);
+        onSave();
       }
-
-      onSave();
     } catch (error) {
       if (error.response?.data) {
-        setErrors(error.response.data);
+        // Handle validation errors from backend
+        const backendErrors = {};
+        Object.keys(error.response.data).forEach(key => {
+          if (Array.isArray(error.response.data[key])) {
+            backendErrors[key] = error.response.data[key][0];
+          } else {
+            backendErrors[key] = error.response.data[key];
+          }
+        });
+        setErrors(backendErrors);
       } else {
         setErrors({ general: 'An error occurred. Please try again.' });
       }
@@ -62,7 +67,7 @@ const UserEditModal = ({ user, departments, onClose, onSave }) => {
       <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-auto">
         <div className="p-6">
           <h2 className="text-2xl font-bold text-slate-800 mb-4">
-            {user ? 'Edit User' : 'Create User'}
+            Edit User
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">

@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
+import AddUserModal from './AddUserModal';
 import UserEditModal from './UserEditModal';
 import DepartmentModal from './DepartmentModal';
 
 const UserManagement = () => {
-  const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -15,6 +14,7 @@ const UserManagement = () => {
   const [selectedRole, setSelectedRole] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [editingUser, setEditingUser] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDepartmentModal, setShowDepartmentModal] = useState(false);
   const [stats, setStats] = useState(null);
@@ -205,7 +205,7 @@ const UserManagement = () => {
           {currentUser?.role === 'ADMIN' && (
             <>
               <button
-                onClick={() => navigate('/users/new')}
+                onClick={() => setShowAddModal(true)}
                 className="px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600"
               >
                 Add User
@@ -350,6 +350,19 @@ const UserManagement = () => {
           </table>
         </div>
       </div>
+
+      {/* Add User Modal */}
+      {showAddModal && (
+        <AddUserModal
+          departments={departments}
+          onClose={() => setShowAddModal(false)}
+          onSave={() => {
+            fetchUsers();
+            fetchStats();
+            setShowAddModal(false);
+          }}
+        />
+      )}
 
       {/* Edit User Modal */}
       {showEditModal && (

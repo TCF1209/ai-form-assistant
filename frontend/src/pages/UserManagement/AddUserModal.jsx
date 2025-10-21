@@ -19,6 +19,43 @@ const AddUserModal = ({ departments, onClose, onSave }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Generate Employee ID based on name and department
+  const generateEmployeeId = () => {
+    const year = new Date().getFullYear();
+    const randomNum = Math.floor(Math.random() * 9000) + 1000; // 4-digit random number
+
+    let prefix = 'EMP';
+
+    // Use department code if available
+    if (formData.department && departments) {
+      const dept = departments.find(d => d.id === parseInt(formData.department));
+      if (dept && dept.code) {
+        prefix = dept.code.substring(0, 3).toUpperCase();
+      }
+    } else if (formData.first_name && formData.last_name) {
+      // Use initials if no department
+      prefix = (formData.first_name.charAt(0) + formData.last_name.charAt(0)).toUpperCase();
+    }
+
+    return `${prefix}${year}${randomNum}`;
+  };
+
+  // Generate username from email
+  const generateUsername = () => {
+    if (formData.email) {
+      // Extract username part from email
+      const username = formData.email.split('@')[0].toLowerCase();
+      // Remove special characters and keep only letters, numbers, and underscores
+      return username.replace(/[^a-z0-9_]/g, '');
+    } else if (formData.first_name && formData.last_name) {
+      // Generate from name if no email
+      const firstName = formData.first_name.toLowerCase().replace(/[^a-z]/g, '');
+      const lastName = formData.last_name.toLowerCase().replace(/[^a-z]/g, '');
+      return `${firstName}.${lastName}`;
+    }
+    return '';
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -212,18 +249,35 @@ const AddUserModal = ({ departments, onClose, onSave }) => {
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Username *
                 </label>
-                <input
-                  type="text"
-                  name="username"
-                  value={formData.username}
-                  onChange={handleChange}
-                  className={`w-full px-3 py-2 border ${
-                    errors.username ? 'border-red-300' : 'border-slate-300'
-                  } rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500`}
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    name="username"
+                    value={formData.username}
+                    onChange={handleChange}
+                    className={`flex-1 px-3 py-2 border ${
+                      errors.username ? 'border-red-300' : 'border-slate-300'
+                    } rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const generatedUsername = generateUsername();
+                      setFormData(prev => ({ ...prev, username: generatedUsername }));
+                    }}
+                    disabled={!formData.email && (!formData.first_name || !formData.last_name)}
+                    className="px-3 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
+                    title={!formData.email ? 'Enter email or name first' : 'Generate from email'}
+                  >
+                    Generate
+                  </button>
+                </div>
                 {errors.username && (
                   <p className="mt-1 text-sm text-red-600">{errors.username}</p>
                 )}
+                <p className="mt-1 text-xs text-slate-500">
+                  Auto-generates from email or name
+                </p>
               </div>
             </div>
 
@@ -322,14 +376,30 @@ const AddUserModal = ({ departments, onClose, onSave }) => {
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Employee ID
                 </label>
-                <input
-                  type="text"
-                  name="employee_id"
-                  value={formData.employee_id}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
-                  placeholder="EMP001"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    name="employee_id"
+                    value={formData.employee_id}
+                    onChange={handleChange}
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
+                    placeholder="e.g., EMP20241234"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const generatedId = generateEmployeeId();
+                      setFormData(prev => ({ ...prev, employee_id: generatedId }));
+                    }}
+                    className="px-3 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700"
+                    title="Generate Employee ID"
+                  >
+                    Generate
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Auto-generates based on department and current year
+                </p>
               </div>
             </div>
 

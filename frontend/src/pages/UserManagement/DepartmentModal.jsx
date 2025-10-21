@@ -69,6 +69,29 @@ const DepartmentModal = ({ departments: initialDepartments, onClose, onSave }) =
     setIsCreating(false);
   };
 
+  const generateDepartmentCode = (name) => {
+    if (!name) return '';
+
+    // Generate code from department name
+    // Example: "Human Resources" -> "HR001", "Information Technology" -> "IT001"
+    const words = name.trim().split(' ');
+    let code = '';
+
+    if (words.length === 1) {
+      // Single word: take first 3 letters
+      code = words[0].substring(0, 3).toUpperCase();
+    } else {
+      // Multiple words: take first letter of each word
+      code = words.map(word => word.charAt(0)).join('').toUpperCase();
+      // Limit to 4 characters
+      code = code.substring(0, 4);
+    }
+
+    // Add a random 3-digit number to ensure uniqueness
+    const randomNum = Math.floor(Math.random() * 900) + 100;
+    return `${code}${randomNum}`;
+  };
+
   const handleCreate = () => {
     setIsCreating(true);
     setEditingId(null);
@@ -200,16 +223,34 @@ const DepartmentModal = ({ departments: initialDepartments, onClose, onSave }) =
                   <label className="block text-sm font-medium text-slate-700 mb-1">
                     Code *
                   </label>
-                  <input
-                    type="text"
-                    value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                    className={`w-full px-3 py-2 border ${
-                      errors.code ? 'border-red-300' : 'border-slate-300'
-                    } rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500`}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={formData.code}
+                      onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                      placeholder="e.g., HR001, IT002"
+                      className={`flex-1 px-3 py-2 border ${
+                        errors.code ? 'border-red-300' : 'border-slate-300'
+                      } rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const generatedCode = generateDepartmentCode(formData.name);
+                        setFormData({ ...formData, code: generatedCode });
+                      }}
+                      disabled={!formData.name}
+                      className="px-3 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
+                      title={!formData.name ? 'Enter department name first' : 'Generate code from name'}
+                    >
+                      Generate
+                    </button>
+                  </div>
                   {errors.code && (
                     <p className="mt-1 text-sm text-red-600">{errors.code}</p>
+                  )}
+                  {!formData.name && formData.code === '' && (
+                    <p className="mt-1 text-xs text-slate-500">Enter department name to enable auto-generation</p>
                   )}
                 </div>
 

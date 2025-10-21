@@ -15,6 +15,27 @@ const UserEditModal = ({ user, departments, onClose, onSave }) => {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
+  // Generate Employee ID based on name and department
+  const generateEmployeeId = () => {
+    const year = new Date().getFullYear();
+    const randomNum = Math.floor(Math.random() * 9000) + 1000; // 4-digit random number
+
+    let prefix = 'EMP';
+
+    // Use department code if available
+    if (formData.department && departments) {
+      const dept = departments.find(d => d.id === parseInt(formData.department));
+      if (dept && dept.code) {
+        prefix = dept.code.substring(0, 3).toUpperCase();
+      }
+    } else if (formData.first_name && formData.last_name) {
+      // Use initials if no department
+      prefix = (formData.first_name.charAt(0) + formData.last_name.charAt(0)).toUpperCase();
+    }
+
+    return `${prefix}${year}${randomNum}`;
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -173,13 +194,27 @@ const UserEditModal = ({ user, departments, onClose, onSave }) => {
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Employee ID
                 </label>
-                <input
-                  type="text"
-                  name="employee_id"
-                  value={formData.employee_id}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    name="employee_id"
+                    value={formData.employee_id}
+                    onChange={handleChange}
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
+                    placeholder="e.g., EMP20241234"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const generatedId = generateEmployeeId();
+                      setFormData(prev => ({ ...prev, employee_id: generatedId }));
+                    }}
+                    className="px-3 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700"
+                    title="Generate new Employee ID"
+                  >
+                    Generate
+                  </button>
+                </div>
               </div>
             </div>
 

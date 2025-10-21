@@ -110,7 +110,7 @@ const AddUserModal = ({ departments, onClose, onSave }) => {
       };
 
       // Create new user
-      await api.post('/users/users/', userData);
+      await api.post('/users/', userData);
 
       // Show success message or handle success
       onSave();

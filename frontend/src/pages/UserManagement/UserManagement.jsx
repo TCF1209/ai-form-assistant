@@ -23,7 +23,7 @@ const UserManagement = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/users/users/');
+      const response = await api.get('/users/');
       setUsers(response.data);
     } catch (error) {
       console.error('Failed to fetch users:', error);
@@ -35,7 +35,7 @@ const UserManagement = () => {
   // Fetch departments
   const fetchDepartments = async () => {
     try {
-      const response = await api.get('/users/departments/');
+      const response = await api.get('/departments/');
       setDepartments(response.data);
     } catch (error) {
       console.error('Failed to fetch departments:', error);
@@ -45,7 +45,7 @@ const UserManagement = () => {
   // Fetch stats
   const fetchStats = async () => {
     try {
-      const response = await api.get('/users/users/stats/');
+      const response = await api.get('/users/stats/');
       setStats(response.data);
     } catch (error) {
       console.error('Failed to fetch stats:', error);
@@ -78,7 +78,7 @@ const UserManagement = () => {
   const handleToggleActive = async (userId, isActive) => {
     try {
       const endpoint = isActive ? 'deactivate' : 'activate';
-      await api.post(`/users/users/${userId}/${endpoint}/`);
+      await api.post(`/users/${userId}/${endpoint}/`);
       fetchUsers();
     } catch (error) {
       console.error('Failed to toggle user status:', error);
@@ -88,7 +88,7 @@ const UserManagement = () => {
   // Handle role assignment
   const handleRoleChange = async (userId, newRole) => {
     try {
-      await api.post(`/users/users/${userId}/assign_role/`, { role: newRole });
+      await api.post(`/users/${userId}/assign_role/`, { role: newRole });
       fetchUsers();
     } catch (error) {
       console.error('Failed to update role:', error);
@@ -98,7 +98,7 @@ const UserManagement = () => {
   // Handle department assignment
   const handleDepartmentChange = async (userId, departmentId) => {
     try {
-      await api.post(`/users/users/${userId}/assign_department/`, {
+      await api.post(`/users/${userId}/assign_department/`, {
         department_id: departmentId
       });
       fetchUsers();
@@ -117,7 +117,7 @@ const UserManagement = () => {
   const handleDeleteUser = async (userId) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
-        await api.delete(`/users/users/${userId}/`);
+        await api.delete(`/users/${userId}/`);
         fetchUsers();
       } catch (error) {
         console.error('Failed to delete user:', error);

@@ -39,7 +39,7 @@ const UserEditModal = ({ user, departments, onClose, onSave }) => {
 
       // Only update existing user (creation is handled by AddUserModal)
       if (user) {
-        await api.patch(`/users/users/${user.id}/`, formData);
+        await api.patch(`/users/${user.id}/`, formData);
         onSave();
       }
     } catch (error) {

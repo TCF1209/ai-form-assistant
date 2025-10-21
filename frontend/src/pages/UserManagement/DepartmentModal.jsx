@@ -23,7 +23,7 @@ const DepartmentModal = ({ departments: initialDepartments, onClose, onSave }) =
 
   const fetchDepartments = async () => {
     try {
-      const response = await api.get('/users/departments/');
+      const response = await api.get('/departments/');
       setDepartments(response.data);
     } catch (error) {
       console.error('Failed to fetch departments:', error);
@@ -32,7 +32,7 @@ const DepartmentModal = ({ departments: initialDepartments, onClose, onSave }) =
 
   const fetchUsers = async () => {
     try {
-      const response = await api.get('/users/users/');
+      const response = await api.get('/users/');
       setUsers(response.data);
     } catch (error) {
       console.error('Failed to fetch users:', error);
@@ -89,10 +89,10 @@ const DepartmentModal = ({ departments: initialDepartments, onClose, onSave }) =
 
       if (editingId) {
         // Update existing department
-        await api.patch(`/users/departments/${editingId}/`, dataToSend);
+        await api.patch(`/departments/${editingId}/`, dataToSend);
       } else {
         // Create new department
-        await api.post('/users/departments/', dataToSend);
+        await api.post('/departments/', dataToSend);
       }
 
       fetchDepartments();
@@ -111,7 +111,7 @@ const DepartmentModal = ({ departments: initialDepartments, onClose, onSave }) =
   const handleDelete = async (deptId) => {
     if (window.confirm('Are you sure you want to delete this department?')) {
       try {
-        await api.delete(`/users/departments/${deptId}/`);
+        await api.delete(`/departments/${deptId}/`);
         fetchDepartments();
       } catch (error) {
         console.error('Failed to delete department:', error);
@@ -121,7 +121,7 @@ const DepartmentModal = ({ departments: initialDepartments, onClose, onSave }) =
 
   const handleToggleActive = async (dept) => {
     try {
-      await api.patch(`/users/departments/${dept.id}/`, {
+      await api.patch(`/departments/${dept.id}/`, {
         is_active: !dept.is_active
       });
       fetchDepartments();

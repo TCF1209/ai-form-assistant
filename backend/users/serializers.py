@@ -38,12 +38,13 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     """
-    Serializer for User model - for retrieving user details.
+    Serializer for User model - for retrieving and creating user details.
     """
     full_name = serializers.ReadOnlyField()
     department_name = serializers.SerializerMethodField()
     is_admin = serializers.ReadOnlyField()
     is_manager = serializers.ReadOnlyField()
+    password = serializers.CharField(write_only=True, required=False, style={'input_type': 'password'})
 
     class Meta:
         model = User
@@ -51,16 +52,58 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'first_name', 'last_name', 'full_name',
             'role', 'department', 'department_name', 'phone_number', 'employee_id',
             'profile_picture', 'is_email_verified', 'is_active', 'is_admin',
-            'is_manager', 'created_at', 'updated_at', 'last_activity', 'last_login'
+            'is_manager', 'created_at', 'updated_at', 'last_activity', 'last_login',
+            'password'
         ]
         read_only_fields = [
             'id', 'created_at', 'updated_at', 'is_email_verified',
             'last_activity', 'last_login'
         ]
+        extra_kwargs = {
+            'password': {'write_only': True, 'required': False}
+        }
 
     def get_department_name(self, obj):
         """Get the department name."""
         return obj.department.name if obj.department else None
+
+    def validate_email(self, value):
+        """Ensure email is unique when creating a new user."""
+        if self.instance is None:  # Creating a new user
+            if User.objects.filter(email=value.lower()).exists():
+                raise serializers.ValidationError("A user with this email already exists.")
+        return value.lower()
+
+    def validate_username(self, value):
+        """Ensure username is unique when creating a new user."""
+        if self.instance is None:  # Creating a new user
+            if User.objects.filter(username=value).exists():
+                raise serializers.ValidationError("A user with this username already exists.")
+        return value
+
+    def create(self, validated_data):
+        """Create a new user with encrypted password."""
+        password = validated_data.pop('password', None)
+
+        if not password:
+            raise serializers.ValidationError({'password': 'Password is required when creating a user.'})
+
+        # Validate password using Django's password validators
+        try:
+            validate_password(password)
+        except ValidationError as e:
+            raise serializers.ValidationError({'password': list(e.messages)})
+
+        user = User.objects.create_user(
+            password=password,
+            **validated_data
+        )
+        return user
+
+    def update(self, instance, validated_data):
+        """Update user instance, ignoring password field."""
+        validated_data.pop('password', None)  # Password update should use separate endpoint
+        return super().update(instance, validated_data)
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):

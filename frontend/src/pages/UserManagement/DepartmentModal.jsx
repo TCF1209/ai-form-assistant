@@ -23,19 +23,37 @@ const DepartmentModal = ({ departments: initialDepartments, onClose, onSave }) =
 
   const fetchDepartments = async () => {
     try {
-      const response = await api.get('/departments/');
-      setDepartments(response.data);
+      const response = await api.get('/departments/?page_size=1000');
+      // Handle paginated response
+      if (response.data.results !== undefined) {
+        setDepartments(response.data.results);
+      } else if (Array.isArray(response.data)) {
+        setDepartments(response.data);
+      } else {
+        console.error('Unexpected response format:', response.data);
+        setDepartments([]);
+      }
     } catch (error) {
       console.error('Failed to fetch departments:', error);
+      setDepartments([]);
     }
   };
 
   const fetchUsers = async () => {
     try {
-      const response = await api.get('/users/');
-      setUsers(response.data);
+      const response = await api.get('/users/?page_size=1000');
+      // Handle paginated response
+      if (response.data.results !== undefined) {
+        setUsers(response.data.results);
+      } else if (Array.isArray(response.data)) {
+        setUsers(response.data);
+      } else {
+        console.error('Unexpected response format:', response.data);
+        setUsers([]);
+      }
     } catch (error) {
       console.error('Failed to fetch users:', error);
+      setUsers([]);
     }
   };
 

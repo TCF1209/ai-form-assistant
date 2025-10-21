@@ -19,26 +19,48 @@ const UserManagement = () => {
   const [showDepartmentModal, setShowDepartmentModal] = useState(false);
   const [stats, setStats] = useState(null);
 
-  // Fetch users
+  // Fetch users (handle pagination)
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/users/');
-      setUsers(response.data);
+      // Request large page size to get all users
+      const response = await api.get('/users/?page_size=1000');
+
+      // Handle paginated response
+      if (response.data.results !== undefined) {
+        setUsers(response.data.results);
+      } else if (Array.isArray(response.data)) {
+        setUsers(response.data);
+      } else {
+        console.error('Unexpected response format:', response.data);
+        setUsers([]);
+      }
     } catch (error) {
       console.error('Failed to fetch users:', error);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch departments
+  // Fetch departments (handle pagination)
   const fetchDepartments = async () => {
     try {
-      const response = await api.get('/departments/');
-      setDepartments(response.data);
+      // Request large page size to get all departments
+      const response = await api.get('/departments/?page_size=1000');
+
+      // Handle paginated response
+      if (response.data.results !== undefined) {
+        setDepartments(response.data.results);
+      } else if (Array.isArray(response.data)) {
+        setDepartments(response.data);
+      } else {
+        console.error('Unexpected response format:', response.data);
+        setDepartments([]);
+      }
     } catch (error) {
       console.error('Failed to fetch departments:', error);
+      setDepartments([]);
     }
   };
 

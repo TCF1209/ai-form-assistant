@@ -435,7 +435,7 @@ const AddUserModal = ({ departments, onClose, onSave }) => {
                   className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
                 >
                   <option value="USER">User</option>
-                  <option value="MANAGER">Manager</option>
+                  <option value="MANAGER">Form Manager</option>
                   <option value="ADMIN">Admin</option>
                 </select>
               </div>

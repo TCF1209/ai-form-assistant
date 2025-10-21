@@ -297,10 +297,10 @@ const DepartmentModal = ({ departments: initialDepartments, onClose, onSave }) =
                   >
                     <option value="">None</option>
                     {users
-                      .filter(u => u.role === 'MANAGER' || u.role === 'ADMIN')
+                      .filter(u => u.is_active) // Only show active users, regardless of role
                       .map(user => (
                         <option key={user.id} value={user.id}>
-                          {user.full_name}
+                          {user.full_name} ({user.role === 'MANAGER' ? 'Form Manager' : user.role === 'ADMIN' ? 'Admin' : 'User'})
                         </option>
                       ))}
                   </select>

@@ -175,7 +175,7 @@ const UserManagement = () => {
             <p className="text-2xl font-bold text-purple-600">{stats.admins}</p>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
-            <p className="text-sm text-slate-600">Managers</p>
+            <p className="text-sm text-slate-600">Form Managers</p>
             <p className="text-2xl font-bold text-blue-600">{stats.managers}</p>
           </div>
           <div className="bg-white p-4 rounded-lg shadow">
@@ -207,7 +207,7 @@ const UserManagement = () => {
           >
             <option value="">All Roles</option>
             <option value="ADMIN">Admin</option>
-            <option value="MANAGER">Manager</option>
+            <option value="MANAGER">Form Manager</option>
             <option value="USER">User</option>
           </select>
 
@@ -299,7 +299,7 @@ const UserManagement = () => {
                           className="text-sm border border-slate-300 rounded px-2 py-1"
                         >
                           <option value="USER">User</option>
-                          <option value="MANAGER">Manager</option>
+                          <option value="MANAGER">Form Manager</option>
                           <option value="ADMIN">Admin</option>
                         </select>
                       ) : (
@@ -308,7 +308,7 @@ const UserManagement = () => {
                           user.role === 'MANAGER' ? 'bg-blue-100 text-blue-800' :
                           'bg-slate-100 text-slate-800'
                         }`}>
-                          {user.role}
+                          {user.role === 'MANAGER' ? 'Form Manager' : user.role === 'ADMIN' ? 'Admin' : 'User'}
                         </span>
                       )}
                     </td>
@@ -317,7 +317,11 @@ const UserManagement = () => {
                         <select
                           value={user.department || ''}
                           onChange={(e) => handleDepartmentChange(user.id, e.target.value)}
-                          className="text-sm border border-slate-300 rounded px-2 py-1"
+                          className="text-sm border border-slate-300 rounded px-2 py-1 max-h-32 overflow-y-auto"
+                          size={departments.length > 5 ? "5" : undefined}
+                          style={{ position: 'relative' }}
+                          onFocus={(e) => e.target.size = Math.min(10, departments.length + 1)}
+                          onBlur={(e) => e.target.size = 1}
                         >
                           <option value="">No Department</option>
                           {departments.map(dept => (

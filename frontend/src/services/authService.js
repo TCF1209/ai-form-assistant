@@ -41,10 +41,12 @@ const authService = {
     try {
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
-        await api.post('/auth/logout/', { refresh: refreshToken });
+        // Backend expects 'refresh_token' not 'refresh'
+        await api.post('/auth/logout/', { refresh_token: refreshToken });
       }
     } catch (error) {
       console.error('Logout error:', error);
+      // Even if logout fails on server, we should clear local session
     } finally {
       // Clear local storage regardless of API call success
       localStorage.removeItem('access_token');

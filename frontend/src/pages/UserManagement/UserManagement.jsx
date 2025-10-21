@@ -117,17 +117,8 @@ const UserManagement = () => {
     }
   };
 
-  // Handle department assignment
-  const handleDepartmentChange = async (userId, departmentId) => {
-    try {
-      await api.post(`/users/${userId}/assign_department/`, {
-        department_id: departmentId
-      });
-      fetchUsers();
-    } catch (error) {
-      console.error('Failed to update department:', error);
-    }
-  };
+  // Note: Department changes are now handled through the Edit User modal
+  // The table displays department as read-only text
 
   // Handle edit user
   const handleEditUser = (user) => {
@@ -288,7 +279,7 @@ const UserManagement = () => {
                           {user.full_name}
                         </div>
                         <div className="text-sm text-slate-500">{user.email}</div>
-                        <div className="text-xs text-slate-400">@{user.username}</div>
+                        <div className="text-xs text-slate-400">{user.employee_id || 'No Employee ID'}</div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -313,28 +304,9 @@ const UserManagement = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {currentUser?.role === 'ADMIN' ? (
-                        <select
-                          value={user.department || ''}
-                          onChange={(e) => handleDepartmentChange(user.id, e.target.value)}
-                          className="text-sm border border-slate-300 rounded px-2 py-1 max-h-32 overflow-y-auto"
-                          size={departments.length > 5 ? "5" : undefined}
-                          style={{ position: 'relative' }}
-                          onFocus={(e) => e.target.size = Math.min(10, departments.length + 1)}
-                          onBlur={(e) => e.target.size = 1}
-                        >
-                          <option value="">No Department</option>
-                          {departments.map(dept => (
-                            <option key={dept.id} value={dept.id}>
-                              {dept.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="text-sm text-slate-900">
-                          {user.department_name || 'N/A'}
-                        </span>
-                      )}
+                      <span className="text-sm text-slate-900">
+                        {user.department_name || 'N/A'}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${

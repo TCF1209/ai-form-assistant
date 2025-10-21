@@ -107,18 +107,8 @@ const UserManagement = () => {
     }
   };
 
-  // Handle role assignment
-  const handleRoleChange = async (userId, newRole) => {
-    try {
-      await api.post(`/users/${userId}/assign_role/`, { role: newRole });
-      fetchUsers();
-    } catch (error) {
-      console.error('Failed to update role:', error);
-    }
-  };
-
-  // Note: Department changes are now handled through the Edit User modal
-  // The table displays department as read-only text
+  // Note: Role and Department changes are now handled through the Edit User modal
+  // The table displays both role and department as read-only text
 
   // Handle edit user
   const handleEditUser = (user) => {
@@ -283,25 +273,13 @@ const UserManagement = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {currentUser?.role === 'ADMIN' ? (
-                        <select
-                          value={user.role}
-                          onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                          className="text-sm border border-slate-300 rounded px-2 py-1"
-                        >
-                          <option value="USER">User</option>
-                          <option value="MANAGER">Form Manager</option>
-                          <option value="ADMIN">Admin</option>
-                        </select>
-                      ) : (
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          user.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' :
-                          user.role === 'MANAGER' ? 'bg-blue-100 text-blue-800' :
-                          'bg-slate-100 text-slate-800'
-                        }`}>
-                          {user.role === 'MANAGER' ? 'Form Manager' : user.role === 'ADMIN' ? 'Admin' : 'User'}
-                        </span>
-                      )}
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        user.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' :
+                        user.role === 'MANAGER' ? 'bg-blue-100 text-blue-800' :
+                        'bg-slate-100 text-slate-800'
+                      }`}>
+                        {user.role === 'MANAGER' ? 'Form Manager' : user.role === 'ADMIN' ? 'Admin' : 'User'}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm text-slate-900">

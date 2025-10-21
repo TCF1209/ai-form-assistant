@@ -28,6 +28,9 @@ urlpatterns = [
 
     # Users app endpoints (for ViewSets)
     path('api/v1/', include('users.urls')),
+
+    # Forms app endpoints
+    path('api/v1/', include('forms.urls')),
 ]
 
 # Serve media files in development

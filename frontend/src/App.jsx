@@ -16,6 +16,7 @@ import Login from './pages/Login/Login';
 import Register from './pages/Register/Register';
 import Dashboard from './pages/Dashboard/Dashboard';
 import UserManagement from './pages/UserManagement/UserManagement';
+import Forms from './pages/Forms/Forms';
 
 // Placeholder components for future pages
 const TasksPage = () => <div>Tasks Page - Coming Soon</div>;
@@ -96,6 +97,7 @@ function App() {
                   </RoleBasedRoute>
                 }
               />
+              <Route path="/forms" element={<Forms />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/documents" element={<DocumentsPage />} />

@@ -100,10 +100,10 @@ class FormViewSet(viewsets.ModelViewSet):
         if not self.request.user.department:
             raise PermissionDenied("You must be assigned to a department to create forms.")
 
-        # Ensure the form is created for the manager's department
+        # Force the form to be created for the manager's department (ignore client-provided department)
         serializer.save(
             created_by=self.request.user,
-            department=self.request.user.department
+            department=self.request.user.department  # Always use manager's department
         )
 
     def perform_update(self, serializer):
@@ -446,12 +446,12 @@ class FormViewSet(viewsets.ModelViewSet):
 
         template = FORM_TEMPLATES[template_key]
 
-        # Create the form
+        # Create the form (always use manager's department)
         form = Form.objects.create(
             name=form_name or template['name'],
             code=form_code,
             description=template['description'],
-            department=request.user.department,
+            department=request.user.department,  # Always use manager's department
             created_by=request.user,
             status=Form.FormStatus.DRAFT,
             is_template=False,

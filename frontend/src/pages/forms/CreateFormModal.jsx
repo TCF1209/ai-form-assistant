@@ -6,11 +6,19 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
   const { user } = useAuth();
   const isFormManager = user?.role === 'MANAGER';
 
+  // Initialize with Form Manager's department if applicable
+  const getDepartmentId = () => {
+    if (isFormManager && user?.department) {
+      return typeof user.department === 'object' ? user.department.id : user.department;
+    }
+    return '';
+  };
+
   const [formData, setFormData] = useState({
     name: '',
     code: '',
     description: '',
-    department: '',
+    department: getDepartmentId(),
     status: 'DRAFT',
     requires_approval: true,
     is_template: false
@@ -21,11 +29,15 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
 
   // Pre-fill department for Form Managers (they can only create in their department)
   useEffect(() => {
-    if (isFormManager && user?.department?.id) {
-      setFormData(prev => ({
-        ...prev,
-        department: user.department.id
-      }));
+    if (isFormManager && user?.department) {
+      // Handle both possible formats: department as object or as ID
+      const deptId = typeof user.department === 'object' ? user.department.id : user.department;
+      if (deptId) {
+        setFormData(prev => ({
+          ...prev,
+          department: deptId
+        }));
+      }
     }
     // Fetch available templates
     fetchTemplates();
@@ -94,7 +106,8 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
     const newErrors = {};
     if (!useTemplate && !formData.name) newErrors.name = 'Name is required';
     if (!formData.code) newErrors.code = 'Code is required';
-    if (!formData.department) newErrors.department = 'Department is required';
+    // Only validate department for non-Form Managers (Admin creating forms)
+    if (!isFormManager && !formData.department) newErrors.department = 'Department is required';
     if (useTemplate && !selectedTemplate) newErrors.template = 'Please select a template';
 
     if (Object.keys(newErrors).length > 0) {

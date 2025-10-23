@@ -2,6 +2,7 @@
 Form views for REST API.
 """
 
+import re
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -231,6 +232,25 @@ class FormViewSet(viewsets.ModelViewSet):
             max_order = form.fields.aggregate(models.Max('order'))['order__max'] or -1
             request.data['order'] = max_order + 1
 
+        # Auto-generate field name from label if not provided
+        if 'name' not in request.data or not request.data.get('name'):
+            label = request.data.get('label', '')
+            if label:
+                # Convert label to field name: "Full Name" -> "full_name"
+                field_name = re.sub(r'[^a-zA-Z0-9\s]', '', label)  # Remove special chars
+                field_name = field_name.lower().replace(' ', '_')  # Lowercase and replace spaces
+                field_name = re.sub(r'_+', '_', field_name)  # Remove multiple underscores
+                field_name = field_name.strip('_')  # Remove leading/trailing underscores
+
+                # Ensure uniqueness within the form
+                base_name = field_name
+                counter = 1
+                while form.fields.filter(name=field_name).exists():
+                    field_name = f"{base_name}_{counter}"
+                    counter += 1
+
+                request.data['name'] = field_name
+
         serializer = FormFieldSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(form=form)
@@ -270,6 +290,25 @@ class FormViewSet(viewsets.ModelViewSet):
                 {"error": "Field not found."},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+        # Auto-generate field name from label if label changed but name not provided
+        if 'label' in request.data and ('name' not in request.data or not request.data.get('name')):
+            label = request.data.get('label', '')
+            if label:
+                # Convert label to field name: "Full Name" -> "full_name"
+                field_name = re.sub(r'[^a-zA-Z0-9\s]', '', label)
+                field_name = field_name.lower().replace(' ', '_')
+                field_name = re.sub(r'_+', '_', field_name)
+                field_name = field_name.strip('_')
+
+                # Ensure uniqueness within the form (excluding current field)
+                base_name = field_name
+                counter = 1
+                while form.fields.exclude(id=field_id).filter(name=field_name).exists():
+                    field_name = f"{base_name}_{counter}"
+                    counter += 1
+
+                request.data['name'] = field_name
 
         serializer = FormFieldSerializer(field, data=request.data, partial=True)
         if serializer.is_valid():

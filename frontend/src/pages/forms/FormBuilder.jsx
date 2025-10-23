@@ -87,7 +87,6 @@ const SortableField = ({ field, onEdit, onDelete }) => {
               <span className="inline-block bg-slate-100 px-2 py-1 rounded mr-2">
                 {fieldType?.label}
               </span>
-              <span className="mr-2">Name: {field.name}</span>
               {field.placeholder && <span>Placeholder: {field.placeholder}</span>}
             </div>
             {field.help_text && (
@@ -381,7 +380,6 @@ const FormBuilder = () => {
 // Field Editor Modal Component
 const FieldEditor = ({ field, formId, onClose, onSave }) => {
   const [fieldData, setFieldData] = useState({
-    name: field?.name || '',
     label: field?.label || '',
     field_type: field?.field_type || 'TEXT',
     placeholder: field?.placeholder || '',
@@ -401,14 +399,22 @@ const FieldEditor = ({ field, formId, onClose, onSave }) => {
     try {
       let response;
       if (field) {
-        // Update existing field
+        // Update existing field - don't send name to allow backend to regenerate if needed
+        const updateData = { ...fieldData };
+        // Keep the existing field name unless the label changed
+        if (field.label === fieldData.label && field.name) {
+          updateData.name = field.name;
+        }
         response = await api.put(`/forms/${formId}/update_field/`, {
           field_id: field.id,
-          ...fieldData
+          ...updateData
         });
       } else {
-        // Add new field
-        response = await api.post(`/forms/${formId}/add_field/`, fieldData);
+        // Add new field - let backend auto-generate the name
+        const newFieldData = { ...fieldData };
+        // Don't send name for new fields - let backend generate it
+        delete newFieldData.name;
+        response = await api.post(`/forms/${formId}/add_field/`, newFieldData);
       }
       onSave(response.data);
     } catch (error) {
@@ -460,38 +466,19 @@ const FieldEditor = ({ field, formId, onClose, onSave }) => {
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              {/* Field Label */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Label *
-                </label>
-                <input
-                  type="text"
-                  value={fieldData.label}
-                  onChange={(e) => setFieldData({ ...fieldData, label: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
-                  required
-                />
-              </div>
-
-              {/* Field Name */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Field Name (ID) *
-                </label>
-                <input
-                  type="text"
-                  value={fieldData.name}
-                  onChange={(e) => setFieldData({
-                    ...fieldData,
-                    name: e.target.value.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase()
-                  })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
-                  required
-                  pattern="[a-zA-Z0-9_]+"
-                />
-              </div>
+            {/* Field Label */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Label *
+              </label>
+              <input
+                type="text"
+                value={fieldData.label}
+                onChange={(e) => setFieldData({ ...fieldData, label: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
+                required
+                placeholder="Enter field label (e.g., Full Name, Email Address)"
+              />
             </div>
 
             {/* Placeholder */}

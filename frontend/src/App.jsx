@@ -14,9 +14,10 @@ import RoleBasedRoute from './components/Auth/RoleBasedRoute';
 // Pages
 import Login from './pages/Login/Login';
 import Register from './pages/Register/Register';
-import Dashboard from './pages/Dashboard/Dashboard';
+import Dashboard from './pages/dashboard/Dashboard';
 import UserManagement from './pages/UserManagement/UserManagement';
-import Forms from './pages/Forms/Forms';
+import Forms from './pages/forms/Forms';
+import FormBuilder from './pages/forms/FormBuilder';
 
 // Placeholder components for future pages
 const TasksPage = () => <div>Tasks Page - Coming Soon</div>;
@@ -98,6 +99,7 @@ function App() {
                 }
               />
               <Route path="/forms" element={<Forms />} />
+              <Route path="/forms/:formId/builder" element={<FormBuilder />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/documents" element={<DocumentsPage />} />

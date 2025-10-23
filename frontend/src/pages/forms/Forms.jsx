@@ -138,10 +138,6 @@ const Forms = () => {
   });
 
   // Handle form actions
-  const handleEditForm = (form) => {
-    // TODO: Implement form builder/editor
-    console.log('Edit form:', form);
-  };
 
   const handleDuplicateForm = async (form) => {
     const newCode = prompt('Enter a new code for the duplicated form:');
@@ -409,13 +405,14 @@ const Forms = () => {
                             </button>
                           )}
 
-                          {/* Edit button - only for Form Manager on their department's forms */}
+                          {/* Edit/Build button - only for Form Manager on their department's forms */}
                           {canEditForm(form) && (
                             <button
-                              onClick={() => handleEditForm(form)}
+                              onClick={() => navigate(`/forms/${form.id}/builder`)}
                               className="text-slate-600 hover:text-slate-900"
+                              title="Build/Edit form fields"
                             >
-                              Edit
+                              Build
                             </button>
                           )}
 

@@ -6,6 +6,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
+from django.db import models
 from django.db.models import Q, Count
 from django.shortcuts import get_object_or_404
 from .models import Form, FormField, FormSubmission, FormFile
@@ -14,6 +15,7 @@ from .serializers import (
     FormFieldSerializer, FormSubmissionListSerializer,
     FormSubmissionDetailSerializer, FormFileSerializer
 )
+from .templates import FORM_TEMPLATES
 from users.permissions import IsAdmin, IsManager, IsOwnerOrAdmin
 
 
@@ -224,11 +226,221 @@ class FormViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # Auto-increment order if not provided
+        if 'order' not in request.data:
+            max_order = form.fields.aggregate(models.Max('order'))['order__max'] or -1
+            request.data['order'] = max_order + 1
+
         serializer = FormFieldSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save(form=form)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['put'])
+    def update_field(self, request, pk=None):
+        """Update a field in the form."""
+        form = self.get_object()
+        field_id = request.data.get('field_id')
+
+        if not field_id:
+            return Response(
+                {"error": "field_id is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Only MANAGER can update fields
+        if request.user.role != 'MANAGER':
+            return Response(
+                {"error": "Only Form Managers can update fields."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Manager can only update fields in forms from their own department
+        if form.department != request.user.department:
+            return Response(
+                {"error": "You can only update fields in forms from your own department."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            field = form.fields.get(id=field_id)
+        except FormField.DoesNotExist:
+            return Response(
+                {"error": "Field not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = FormFieldSerializer(field, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['delete'])
+    def delete_field(self, request, pk=None):
+        """Delete a field from the form."""
+        form = self.get_object()
+        field_id = request.query_params.get('field_id')
+
+        if not field_id:
+            return Response(
+                {"error": "field_id is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Only MANAGER can delete fields
+        if request.user.role != 'MANAGER':
+            return Response(
+                {"error": "Only Form Managers can delete fields."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Manager can only delete fields from forms in their own department
+        if form.department != request.user.department:
+            return Response(
+                {"error": "You can only delete fields from forms in your own department."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            field = form.fields.get(id=field_id)
+            field.delete()
+
+            # Re-order remaining fields
+            remaining_fields = form.fields.all().order_by('order')
+            for index, field in enumerate(remaining_fields):
+                field.order = index
+                field.save()
+
+            return Response(
+                {"message": "Field deleted successfully."},
+                status=status.HTTP_204_NO_CONTENT
+            )
+        except FormField.DoesNotExist:
+            return Response(
+                {"error": "Field not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=True, methods=['post'])
+    def reorder_fields(self, request, pk=None):
+        """Reorder fields in the form (for drag-and-drop)."""
+        form = self.get_object()
+
+        # Only MANAGER can reorder fields
+        if request.user.role != 'MANAGER':
+            return Response(
+                {"error": "Only Form Managers can reorder fields."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Manager can only reorder fields in forms from their own department
+        if form.department != request.user.department:
+            return Response(
+                {"error": "You can only reorder fields in forms from your own department."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        field_ids = request.data.get('field_ids', [])
+        if not field_ids:
+            return Response(
+                {"error": "field_ids array is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Update the order of each field
+        for index, field_id in enumerate(field_ids):
+            try:
+                field = form.fields.get(id=field_id)
+                field.order = index
+                field.save()
+            except FormField.DoesNotExist:
+                return Response(
+                    {"error": f"Field {field_id} not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        return Response(
+            {"message": "Fields reordered successfully."},
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=False, methods=['post'])
+    def create_from_template(self, request):
+        """Create a form from a predefined template."""
+        template_key = request.data.get('template')
+        form_code = request.data.get('code')
+        form_name = request.data.get('name')
+
+        if not template_key or template_key not in FORM_TEMPLATES:
+            return Response(
+                {"error": "Valid template key is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not form_code:
+            return Response(
+                {"error": "Form code is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Only MANAGER can create forms
+        if request.user.role != 'MANAGER':
+            return Response(
+                {"error": "Only Form Managers can create forms."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if not request.user.department:
+            return Response(
+                {"error": "You must be assigned to a department to create forms."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Check if code already exists
+        if Form.objects.filter(code=form_code).exists():
+            return Response(
+                {"error": "Form with this code already exists."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        template = FORM_TEMPLATES[template_key]
+
+        # Create the form
+        form = Form.objects.create(
+            name=form_name or template['name'],
+            code=form_code,
+            description=template['description'],
+            department=request.user.department,
+            created_by=request.user,
+            status=Form.FormStatus.DRAFT,
+            is_template=False,
+            requires_approval=True
+        )
+
+        # Create fields from template
+        for field_data in template['fields']:
+            FormField.objects.create(
+                form=form,
+                **field_data
+            )
+
+        serializer = FormDetailSerializer(form)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'])
+    def templates(self, request):
+        """Get available form templates."""
+        templates = []
+        for key, template in FORM_TEMPLATES.items():
+            templates.append({
+                'key': key,
+                'name': template['name'],
+                'description': template['description'],
+                'field_count': len(template['fields'])
+            })
+        return Response(templates)
 
 
 class FormSubmissionViewSet(viewsets.ModelViewSet):

@@ -15,6 +15,9 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
     requires_approval: true,
     is_template: false
   });
+  const [useTemplate, setUseTemplate] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [templates, setTemplates] = useState([]);
 
   // Pre-fill department for Form Managers (they can only create in their department)
   useEffect(() => {
@@ -24,7 +27,18 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
         department: user.department.id
       }));
     }
+    // Fetch available templates
+    fetchTemplates();
   }, [isFormManager, user]);
+
+  const fetchTemplates = async () => {
+    try {
+      const response = await api.get('/forms/templates/');
+      setTemplates(response.data);
+    } catch (error) {
+      console.error('Failed to fetch templates:', error);
+    }
+  };
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -78,9 +92,10 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
 
     // Validate required fields
     const newErrors = {};
-    if (!formData.name) newErrors.name = 'Name is required';
+    if (!useTemplate && !formData.name) newErrors.name = 'Name is required';
     if (!formData.code) newErrors.code = 'Code is required';
     if (!formData.department) newErrors.department = 'Department is required';
+    if (useTemplate && !selectedTemplate) newErrors.template = 'Please select a template';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -89,7 +104,19 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
 
     try {
       setLoading(true);
-      await api.post('/forms/', formData);
+
+      if (useTemplate) {
+        // Create from template
+        await api.post('/forms/create_from_template/', {
+          template: selectedTemplate,
+          code: formData.code,
+          name: formData.name || undefined
+        });
+      } else {
+        // Create regular form
+        await api.post('/forms/', formData);
+      }
+
       onSave();
     } catch (error) {
       if (error.response?.data) {
@@ -131,6 +158,57 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
             {errors.general && (
               <div className="rounded-md bg-red-50 p-4">
                 <p className="text-sm text-red-800">{errors.general}</p>
+              </div>
+            )}
+
+            {/* Template Toggle */}
+            <div className="mb-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={useTemplate}
+                  onChange={(e) => setUseTemplate(e.target.checked)}
+                  className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-slate-300 rounded"
+                />
+                <span className="ml-2 text-sm text-slate-700">
+                  Use a template
+                </span>
+              </label>
+            </div>
+
+            {/* Template Selection */}
+            {useTemplate && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Select Template *
+                </label>
+                <select
+                  value={selectedTemplate}
+                  onChange={(e) => {
+                    setSelectedTemplate(e.target.value);
+                    const template = templates.find(t => t.key === e.target.value);
+                    if (template) {
+                      setFormData(prev => ({
+                        ...prev,
+                        name: template.name,
+                        description: template.description
+                      }));
+                    }
+                  }}
+                  className={`w-full px-3 py-2 border ${
+                    errors.template ? 'border-red-300' : 'border-slate-300'
+                  } rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500`}
+                >
+                  <option value="">Choose a template...</option>
+                  {templates.map(template => (
+                    <option key={template.key} value={template.key}>
+                      {template.name} ({template.field_count} fields)
+                    </option>
+                  ))}
+                </select>
+                {errors.template && (
+                  <p className="mt-1 text-sm text-red-600">{errors.template}</p>
+                )}
               </div>
             )}
 

@@ -55,17 +55,15 @@ class FormViewSet(viewsets.ModelViewSet):
 
         # Filter by user's access level
         if user.role == 'USER':
-            # Regular users can only see active forms from their department or public forms
+            # Regular users can see active forms from their department or public forms
+            # They should also see forms that are active regardless of who created them
             queryset = queryset.filter(
-                Q(status=Form.FormStatus.ACTIVE) &
-                (Q(department=user.department) | Q(config__public=True))
+                status=Form.FormStatus.ACTIVE
             )
         elif user.role == 'MANAGER':
-            # Managers can see all forms from their department and public forms
-            if user.department:
-                queryset = queryset.filter(
-                    Q(department=user.department) | Q(config__public=True)
-                )
+            # Form Managers can see all forms (active, draft, inactive)
+            # They have form management permissions
+            pass  # No filtering needed - they see all forms
         # ADMIN can see all forms (no filter needed)
 
         # Apply additional filters from query params

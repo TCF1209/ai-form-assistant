@@ -252,13 +252,13 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
             # Regular users can only see their own submissions
             queryset = queryset.filter(submitted_by=user)
         elif user.role == 'MANAGER':
-            # Managers can see submissions from their department
+            # Form Managers can see all submissions from their department's forms
             if user.department:
                 queryset = queryset.filter(form__department=user.department)
             else:
-                # Manager without department sees only their own
-                queryset = queryset.filter(submitted_by=user)
-        # ADMIN can see all submissions (no filter needed)
+                # Manager without department sees nothing
+                queryset = queryset.none()
+        # ADMIN can see all submissions from all departments
 
         # Apply additional filters
         form_filter = self.request.query_params.get('form')
@@ -276,6 +276,10 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """Set submitted_by to current user when creating submission."""
+        # Only USER role can create/submit forms
+        if self.request.user.role != 'USER':
+            raise PermissionDenied("Only users can submit forms. Admins and Form Managers cannot submit forms.")
+
         serializer.save(submitted_by=self.request.user)
 
     def perform_update(self, serializer):

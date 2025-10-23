@@ -35,7 +35,7 @@ const Forms = () => {
     if (isFormManager && form?.department_id === user?.department?.id) return true; // Manager can delete from own dept
     return false;
   };
-  const canSubmitForm = true; // All users can submit forms
+  const canSubmitForm = isUser; // Only USER role can submit forms
   const canManageSubmissions = isAdmin || isFormManager; // Admin and Manager can manage submissions
 
   // Fetch forms

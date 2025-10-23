@@ -22,8 +22,21 @@ const Forms = () => {
     search: ''
   });
 
-  // Check if user can manage forms (ADMIN or MANAGER)
-  const canManageForms = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+  // Permission checks based on roles
+  const isAdmin = user?.role === 'ADMIN';
+  const isFormManager = user?.role === 'MANAGER';
+  const isUser = user?.role === 'USER';
+
+  // Different permissions for different roles
+  const canCreateForm = isFormManager; // Only Form Manager can create
+  const canEditForm = (form) => isFormManager && form?.department_id === user?.department?.id;
+  const canDeleteForm = (form) => {
+    if (isAdmin) return true; // Admin can delete any form
+    if (isFormManager && form?.department_id === user?.department?.id) return true; // Manager can delete from own dept
+    return false;
+  };
+  const canSubmitForm = true; // All users can submit forms
+  const canManageSubmissions = isAdmin || isFormManager; // Admin and Manager can manage submissions
 
   // Fetch forms
   const fetchForms = async () => {
@@ -212,9 +225,9 @@ const Forms = () => {
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-slate-800">Forms Management</h1>
         <p className="text-slate-600 mt-2">
-          {canManageForms
-            ? 'Create and manage forms, view submissions'
-            : 'Submit forms and track your submissions'}
+          {isAdmin && 'View and delete forms from all departments'}
+          {isFormManager && 'Create and manage forms in your department'}
+          {isUser && 'Submit forms and track your submissions'}
         </p>
       </div>
 
@@ -299,7 +312,7 @@ const Forms = () => {
             </select>
           )}
 
-          {canManageForms && activeTab === 'forms' && (
+          {canCreateForm && activeTab === 'forms' && (
             <button
               onClick={() => setShowCreateModal(true)}
               className="px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600"
@@ -386,7 +399,8 @@ const Forms = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex gap-2">
-                          {form.status === 'ACTIVE' && (
+                          {/* Submit button - available for all users on ACTIVE forms */}
+                          {form.status === 'ACTIVE' && canSubmitForm && (
                             <button
                               onClick={() => handleSubmitForm(form)}
                               className="text-sky-600 hover:text-sky-900"
@@ -394,29 +408,35 @@ const Forms = () => {
                               Submit
                             </button>
                           )}
-                          {canManageForms && (
-                            <>
-                              <button
-                                onClick={() => handleEditForm(form)}
-                                className="text-slate-600 hover:text-slate-900"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDuplicateForm(form)}
-                                className="text-blue-600 hover:text-blue-900"
-                              >
-                                Duplicate
-                              </button>
-                              {(user?.role === 'ADMIN' || form.created_by === user?.id) && (
-                                <button
-                                  onClick={() => handleDeleteForm(form)}
-                                  className="text-red-600 hover:text-red-900"
-                                >
-                                  Delete
-                                </button>
-                              )}
-                            </>
+
+                          {/* Edit button - only for Form Manager on their department's forms */}
+                          {canEditForm(form) && (
+                            <button
+                              onClick={() => handleEditForm(form)}
+                              className="text-slate-600 hover:text-slate-900"
+                            >
+                              Edit
+                            </button>
+                          )}
+
+                          {/* Duplicate button - only for Form Manager on their department's forms */}
+                          {canEditForm(form) && (
+                            <button
+                              onClick={() => handleDuplicateForm(form)}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              Duplicate
+                            </button>
+                          )}
+
+                          {/* Delete button - Admin can delete any, Manager can delete from own dept */}
+                          {canDeleteForm(form) && (
+                            <button
+                              onClick={() => handleDeleteForm(form)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Delete
+                            </button>
                           )}
                         </div>
                       </td>
@@ -499,7 +519,7 @@ const Forms = () => {
                           >
                             View
                           </button>
-                          {canManageForms && submission.status === 'SUBMITTED' && (
+                          {canManageSubmissions && submission.status === 'SUBMITTED' && (
                             <>
                               <button
                                 onClick={() => handleApproveSubmission(submission)}

@@ -55,16 +55,18 @@ class FormViewSet(viewsets.ModelViewSet):
 
         # Filter by user's access level
         if user.role == 'USER':
-            # Regular users can see active forms from their department or public forms
-            # They should also see forms that are active regardless of who created them
+            # Regular users can see only ACTIVE forms (they can view and submit)
             queryset = queryset.filter(
                 status=Form.FormStatus.ACTIVE
             )
         elif user.role == 'MANAGER':
-            # Form Managers can see all forms (active, draft, inactive)
-            # They have form management permissions
-            pass  # No filtering needed - they see all forms
-        # ADMIN can see all forms (no filter needed)
+            # Form Managers can only see forms from their own department
+            if user.department:
+                queryset = queryset.filter(department=user.department)
+            else:
+                # Manager without department sees nothing
+                queryset = queryset.none()
+        # ADMIN can see all forms from all departments (view and delete only)
 
         # Apply additional filters from query params
         status_filter = self.request.query_params.get('status')
@@ -87,35 +89,75 @@ class FormViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """Set created_by to current user when creating form."""
-        if self.request.user.role not in ['ADMIN', 'MANAGER']:
-            raise PermissionDenied("Only Form Managers and Admins can create forms.")
-        serializer.save(created_by=self.request.user)
+        # Only MANAGER can create forms, ADMIN cannot
+        if self.request.user.role != 'MANAGER':
+            raise PermissionDenied("Only Form Managers can create forms.")
+
+        # Manager can only create forms for their own department
+        if not self.request.user.department:
+            raise PermissionDenied("You must be assigned to a department to create forms.")
+
+        # Ensure the form is created for the manager's department
+        serializer.save(
+            created_by=self.request.user,
+            department=self.request.user.department
+        )
 
     def perform_update(self, serializer):
         """Check permissions when updating form."""
         instance = self.get_object()
+
+        # ADMIN cannot edit forms
+        if self.request.user.role == 'ADMIN':
+            raise PermissionDenied("Admins can only view and delete forms, not edit them.")
+
+        # USER cannot edit forms
         if self.request.user.role == 'USER':
-            raise PermissionDenied("You don't have permission to update this form.")
-        if self.request.user.role == 'MANAGER' and instance.created_by != self.request.user:
+            raise PermissionDenied("Users can only view and submit forms, not edit them.")
+
+        # MANAGER can only edit forms from their own department
+        if self.request.user.role == 'MANAGER':
             if instance.department != self.request.user.department:
-                raise PermissionDenied("You can only edit forms from your department.")
+                raise PermissionDenied("You can only edit forms from your own department.")
+
         serializer.save()
 
     def perform_destroy(self, instance):
         """Check permissions when deleting form."""
-        if self.request.user.role not in ['ADMIN', 'MANAGER']:
-            raise PermissionDenied("You don't have permission to delete forms.")
-        if self.request.user.role == 'MANAGER' and instance.created_by != self.request.user:
-            raise PermissionDenied("You can only delete forms you created.")
-        instance.delete()
+        # USER cannot delete forms
+        if self.request.user.role == 'USER':
+            raise PermissionDenied("Users can only view and submit forms, not delete them.")
+
+        # ADMIN can delete any form
+        if self.request.user.role == 'ADMIN':
+            instance.delete()
+            return
+
+        # MANAGER can only delete forms from their own department
+        if self.request.user.role == 'MANAGER':
+            if instance.department != self.request.user.department:
+                raise PermissionDenied("You can only delete forms from your own department.")
+            instance.delete()
+            return
+
+        raise PermissionDenied("You don't have permission to delete forms.")
 
     @action(detail=True, methods=['post'])
     def duplicate(self, request, pk=None):
         """Duplicate a form with a new code."""
         form = self.get_object()
-        if request.user.role not in ['ADMIN', 'MANAGER']:
+
+        # Only MANAGER can duplicate forms, not ADMIN or USER
+        if request.user.role != 'MANAGER':
             return Response(
-                {"error": "Only Form Managers and Admins can duplicate forms."},
+                {"error": "Only Form Managers can duplicate forms."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Manager can only duplicate forms from their own department
+        if form.department != request.user.department:
+            return Response(
+                {"error": "You can only duplicate forms from your own department."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -167,9 +209,18 @@ class FormViewSet(viewsets.ModelViewSet):
     def add_field(self, request, pk=None):
         """Add a new field to the form."""
         form = self.get_object()
-        if request.user.role not in ['ADMIN', 'MANAGER']:
+
+        # Only MANAGER can add fields, not ADMIN or USER
+        if request.user.role != 'MANAGER':
             return Response(
-                {"error": "Only Form Managers and Admins can add fields."},
+                {"error": "Only Form Managers can add fields."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Manager can only add fields to forms from their own department
+        if form.department != request.user.department:
+            return Response(
+                {"error": "You can only add fields to forms from your own department."},
                 status=status.HTTP_403_FORBIDDEN
             )
 

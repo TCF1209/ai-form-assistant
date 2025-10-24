@@ -564,7 +564,21 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
         if self.request.user.role != 'USER':
             raise PermissionDenied("Only users can submit forms. Admins and Form Managers cannot submit forms.")
 
-        serializer.save(submitted_by=self.request.user)
+        # Handle file uploads
+        files_data = {}
+        for key in self.request.FILES.keys():
+            files_data[key] = self.request.FILES[key]
+
+        # Save the submission
+        submission = serializer.save(submitted_by=self.request.user)
+
+        # Save files if any
+        for field_name, file in files_data.items():
+            FormFile.objects.create(
+                submission=submission,
+                field_name=field_name,
+                file=file
+            )
 
     def perform_update(self, serializer):
         """Check permissions when updating submission."""
@@ -581,6 +595,50 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
                     raise PermissionDenied("You can only edit submissions from your department.")
 
         serializer.save()
+
+    @action(detail=False, methods=['get'])
+    def drafts(self, request):
+        """Get draft submissions for the current user."""
+        form_id = request.query_params.get('form')
+
+        queryset = self.get_queryset().filter(
+            submitted_by=request.user,
+            status=FormSubmission.SubmissionStatus.DRAFT
+        )
+
+        if form_id:
+            queryset = queryset.filter(form_id=form_id)
+
+        serializer = FormSubmissionListSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def save_draft(self, request, pk=None):
+        """Save progress on a submission as draft."""
+        submission = self.get_object()
+
+        if submission.submitted_by != request.user:
+            return Response(
+                {"error": "You can only save your own submissions."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if submission.status not in [
+            FormSubmission.SubmissionStatus.DRAFT,
+            FormSubmission.SubmissionStatus.SUBMITTED
+        ]:
+            return Response(
+                {"error": "Cannot save as draft."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        submission.data = request.data.get('data', {})
+        submission.status = FormSubmission.SubmissionStatus.DRAFT
+        submission.version = submission.version + 1
+        submission.save()
+
+        serializer = self.get_serializer(submission)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
@@ -600,10 +658,74 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
             )
 
         submission.status = FormSubmission.SubmissionStatus.SUBMITTED
+        submission.version = submission.version + 1
         submission.save()
 
         serializer = self.get_serializer(submission)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def upload_file(self, request, pk=None):
+        """Upload a file for a submission."""
+        submission = self.get_object()
+
+        if submission.submitted_by != request.user:
+            return Response(
+                {"error": "You can only upload files to your own submissions."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        field_name = request.data.get('field_name')
+        if not field_name:
+            return Response(
+                {"error": "field_name is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if 'file' not in request.FILES:
+            return Response(
+                {"error": "No file provided."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        file = request.FILES['file']
+
+        # Delete existing file for this field if any
+        FormFile.objects.filter(
+            submission=submission,
+            field_name=field_name
+        ).delete()
+
+        # Create new file record
+        form_file = FormFile.objects.create(
+            submission=submission,
+            field_name=field_name,
+            file=file
+        )
+
+        return Response({
+            'id': form_file.id,
+            'field_name': form_file.field_name,
+            'file': form_file.file.url,
+            'uploaded_at': form_file.uploaded_at
+        })
+
+    @action(detail=True, methods=['get'])
+    def files(self, request, pk=None):
+        """Get all files for a submission."""
+        submission = self.get_object()
+
+        files = FormFile.objects.filter(submission=submission)
+        data = []
+        for file in files:
+            data.append({
+                'id': file.id,
+                'field_name': file.field_name,
+                'file': file.file.url,
+                'uploaded_at': file.uploaded_at
+            })
+
+        return Response(data)
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):

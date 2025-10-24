@@ -402,7 +402,7 @@ const Forms = () => {
                           {/* Submit button - available for all users on ACTIVE forms */}
                           {form.status === 'ACTIVE' && canSubmitForm && (
                             <button
-                              onClick={() => handleSubmitForm(form)}
+                              onClick={() => navigate(`/forms/${form.id}/submit`)}
                               className="text-sky-600 hover:text-sky-900"
                             >
                               Submit

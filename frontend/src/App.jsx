@@ -18,6 +18,7 @@ import Dashboard from './pages/dashboard/Dashboard';
 import UserManagement from './pages/UserManagement/UserManagement';
 import Forms from './pages/forms/Forms';
 import FormBuilder from './pages/forms/FormBuilder';
+import FormSubmission from './pages/forms/FormSubmission';
 
 // Placeholder components for future pages
 const TasksPage = () => <div>Tasks Page - Coming Soon</div>;
@@ -100,6 +101,7 @@ function App() {
               />
               <Route path="/forms" element={<Forms />} />
               <Route path="/forms/:formId/builder" element={<FormBuilder />} />
+              <Route path="/forms/:formId/submit" element={<FormSubmission />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/documents" element={<DocumentsPage />} />

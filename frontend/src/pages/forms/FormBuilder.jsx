@@ -32,11 +32,13 @@ const FIELD_TYPES = [
   { value: 'TIME', label: 'Time', icon: '⏰' },
   { value: 'DATETIME', label: 'Date & Time', icon: '📆' },
   { value: 'SELECT', label: 'Dropdown', icon: '▼' },
+  { value: 'MULTISELECT', label: 'Multiple Choice', icon: '☐' },
   { value: 'RADIO', label: 'Radio Buttons', icon: '⭕' },
   { value: 'CHECKBOX', label: 'Checkbox', icon: '☑️' },
   { value: 'FILE', label: 'File Upload', icon: '📎' },
   { value: 'URL', label: 'URL', icon: '🔗' },
   { value: 'RATING', label: 'Rating', icon: '⭐' },
+  { value: 'SIGNATURE', label: 'Signature', icon: '✍️' },
 ];
 
 // Sortable field component
@@ -488,7 +490,7 @@ const FieldEditor = ({ field, formId, onClose, onSave }) => {
   };
 
   const fieldType = FIELD_TYPES.find(t => t.value === fieldData.field_type);
-  const needsOptions = ['SELECT', 'RADIO', 'CHECKBOX', 'MULTISELECT'].includes(fieldData.field_type);
+  const needsOptions = ['SELECT', 'MULTISELECT', 'RADIO', 'CHECKBOX'].includes(fieldData.field_type);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -518,7 +520,7 @@ const FieldEditor = ({ field, formId, onClose, onSave }) => {
                 value={fieldData.field_type}
                 onChange={(e) => setFieldData({ ...fieldData, field_type: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
-                disabled={!!field}
+                disabled={!!field?.id}
               >
                 {FIELD_TYPES.map(type => (
                   <option key={type.value} value={type.value}>
@@ -648,7 +650,7 @@ const FieldEditor = ({ field, formId, onClose, onSave }) => {
                 disabled={loading}
                 className="px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600 disabled:opacity-50"
               >
-                {loading ? 'Saving...' : (field ? 'Update Field' : 'Add Field')}
+                {loading ? 'Saving...' : (field?.id ? 'Update Field' : 'Add Field')}
               </button>
             </div>
           </form>

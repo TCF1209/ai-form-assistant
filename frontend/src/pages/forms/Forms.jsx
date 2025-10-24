@@ -28,8 +28,12 @@ const Forms = () => {
   const isUser = user?.role === 'USER';
 
   // Different permissions for different roles
-  const canCreateForm = isFormManager; // Only Form Manager can create
-  const canEditForm = (form) => isFormManager && form?.department_id === user?.department?.id;
+  const canCreateForm = isAdmin || isFormManager; // Admin and Form Manager can create
+  const canEditForm = (form) => {
+    if (isAdmin) return true; // Admin can edit any form
+    if (isFormManager && form?.department_id === user?.department?.id) return true; // Manager can edit own dept
+    return false;
+  };
   const canDeleteForm = (form) => {
     if (isAdmin) return true; // Admin can delete any form
     if (isFormManager && form?.department_id === user?.department?.id) return true; // Manager can delete from own dept

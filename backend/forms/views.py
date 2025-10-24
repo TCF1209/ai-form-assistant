@@ -6,7 +6,7 @@ import re
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.db import models
 from django.db.models import Q, Count
 from django.shortcuts import get_object_or_404
@@ -92,38 +92,47 @@ class FormViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """Set created_by to current user when creating form."""
-        # Only MANAGER can create forms, ADMIN cannot
-        if self.request.user.role != 'MANAGER':
-            raise PermissionDenied("Only Form Managers can create forms.")
+        # Admin and Manager can create forms, User cannot
+        if self.request.user.role not in ['ADMIN', 'MANAGER']:
+            raise PermissionDenied("Only Admins and Form Managers can create forms.")
 
-        # Manager can only create forms for their own department
-        if not self.request.user.department:
-            raise PermissionDenied("You must be assigned to a department to create forms.")
-
-        # Force the form to be created for the manager's department (ignore client-provided department)
-        serializer.save(
-            created_by=self.request.user,
-            department=self.request.user.department  # Always use manager's department
-        )
+        # Admin can create for any department, Manager only for their own
+        if self.request.user.role == 'ADMIN':
+            # Admin can specify any department (use what's provided in request)
+            if 'department' not in serializer.validated_data:
+                raise ValidationError("Department is required when creating a form.")
+            serializer.save(created_by=self.request.user)
+        else:  # MANAGER
+            # Manager can only create forms for their own department
+            if not self.request.user.department:
+                raise PermissionDenied("You must be assigned to a department to create forms.")
+            # Force the form to be created for the manager's department (ignore client-provided department)
+            serializer.save(
+                created_by=self.request.user,
+                department=self.request.user.department  # Always use manager's department
+            )
 
     def perform_update(self, serializer):
         """Check permissions when updating form."""
         instance = self.get_object()
 
-        # ADMIN cannot edit forms
-        if self.request.user.role == 'ADMIN':
-            raise PermissionDenied("Admins can only view and delete forms, not edit them.")
-
         # USER cannot edit forms
         if self.request.user.role == 'USER':
             raise PermissionDenied("Users can only view and submit forms, not edit them.")
+
+        # ADMIN can edit any form
+        if self.request.user.role == 'ADMIN':
+            serializer.save()
+            return
 
         # MANAGER can only edit forms from their own department
         if self.request.user.role == 'MANAGER':
             if instance.department != self.request.user.department:
                 raise PermissionDenied("You can only edit forms from your own department.")
+            serializer.save()
+            return
 
-        serializer.save()
+        raise PermissionDenied("You don't have permission to edit forms.")
 
     def perform_destroy(self, instance):
         """Check permissions when deleting form."""
@@ -424,14 +433,15 @@ class FormViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Only MANAGER can create forms
-        if request.user.role != 'MANAGER':
+        # Only Admins and Form Managers can create forms
+        if request.user.role not in ['ADMIN', 'MANAGER']:
             return Response(
-                {"error": "Only Form Managers can create forms."},
+                {"error": "Only Admins and Form Managers can create forms."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        if not request.user.department:
+        # For Managers, must have department; for Admins, department must be in request
+        if request.user.role == 'MANAGER' and not request.user.department:
             return Response(
                 {"error": "You must be assigned to a department to create forms."},
                 status=status.HTTP_403_FORBIDDEN
@@ -449,12 +459,32 @@ class FormViewSet(viewsets.ModelViewSet):
         # Get status from request or default to DRAFT
         form_status = request.data.get('status', Form.FormStatus.DRAFT)
 
-        # Create the form (always use manager's department)
+        # Determine department based on role
+        if request.user.role == 'ADMIN':
+            # Admin must provide department
+            department_id = request.data.get('department')
+            if not department_id:
+                return Response(
+                    {"error": "Department is required for Admin users."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            from users.models import Department
+            try:
+                department = Department.objects.get(id=department_id)
+            except Department.DoesNotExist:
+                return Response(
+                    {"error": "Invalid department ID."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:  # MANAGER
+            department = request.user.department
+
+        # Create the form
         form = Form.objects.create(
             name=form_name or template['name'],
             code=form_code,
             description=template['description'],
-            department=request.user.department,  # Always use manager's department
+            department=department,
             created_by=request.user,
             status=form_status,  # Use provided status or default to DRAFT
             is_template=False,

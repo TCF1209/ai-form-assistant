@@ -5,12 +5,15 @@ import api from '../../services/api';
 const CreateFormModal = ({ departments, onClose, onSave }) => {
   const { user } = useAuth();
   const isFormManager = user?.role === 'MANAGER';
+  const isAdmin = user?.role === 'ADMIN';
 
   // Initialize with Form Manager's department if applicable
   const getDepartmentId = () => {
+    // Form Manager: use their department
     if (isFormManager && user?.department) {
       return typeof user.department === 'object' ? user.department.id : user.department;
     }
+    // Admin: can select any department
     return '';
   };
 
@@ -106,8 +109,8 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
     const newErrors = {};
     if (!useTemplate && !formData.name) newErrors.name = 'Name is required';
     if (!formData.code) newErrors.code = 'Code is required';
-    // Only validate department for non-Form Managers (Admin creating forms)
-    if (!isFormManager && !formData.department) newErrors.department = 'Department is required';
+    // Department is required for everyone
+    if (!formData.department) newErrors.department = 'Department is required';
     if (useTemplate && !selectedTemplate) newErrors.template = 'Please select a template';
 
     if (Object.keys(newErrors).length > 0) {
@@ -119,13 +122,20 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
       setLoading(true);
 
       if (useTemplate) {
-        // Create from template - include status
-        await api.post('/forms/create_from_template/', {
+        // Create from template - include status and department for Admin
+        const templateData = {
           template: selectedTemplate,
           code: formData.code,
           name: formData.name || undefined,
           status: formData.status  // Include status for templates
-        });
+        };
+
+        // Admin needs to send department
+        if (isAdmin) {
+          templateData.department = formData.department;
+        }
+
+        await api.post('/forms/create_from_template/', templateData);
       } else {
         // Create regular form - ensure all fields are sent
         console.log('Creating form with data:', formData);
@@ -302,7 +312,7 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
                   name="department"
                   value={formData.department}
                   onChange={handleChange}
-                  disabled={isFormManager} // Form Managers can't change department
+                  disabled={isFormManager} // Form Managers can't change department, Admin can select any
                   className={`w-full px-3 py-2 border ${
                     errors.department ? 'border-red-300' : 'border-slate-300'
                   } rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500 ${

@@ -142,7 +142,7 @@ const FormBuilder = () => {
   );
 
   // Check if user can edit this form
-  const canEdit = user?.role === 'MANAGER' && form?.department_id === user?.department?.id;
+  const canEdit = user?.role === 'ADMIN' || (user?.role === 'MANAGER' && form?.department_id === user?.department?.id);
 
   useEffect(() => {
     fetchForm();
@@ -300,7 +300,7 @@ const FormBuilder = () => {
       <div className="p-6">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <p className="text-red-800">
-            You don't have permission to edit this form. Only Form Managers can edit forms from their department.
+            You don't have permission to edit this form. Only Admins and Form Managers can edit forms.
           </p>
         </div>
       </div>

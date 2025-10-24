@@ -227,19 +227,42 @@ const FormBuilder = () => {
   const handleSaveForm = async () => {
     setSaving(true);
     try {
-      // Update form details (status, description, etc.)
-      await api.put(`/forms/${formId}/`, {
+      // Debug: Log the form object to check if all fields are present
+      console.log('Form object before save:', form);
+
+      // Ensure department is sent as ID (in case it's an object)
+      const departmentId = typeof form.department === 'object'
+        ? form.department.id
+        : form.department;
+
+      // Include all required fields from the form object
+      const formData = {
         name: form.name,
-        description: form.description,
+        code: form.code,  // Required field
+        description: form.description || '',
+        department: departmentId,  // Required field - send as ID
         status: form.status,
-        requires_approval: form.requires_approval
-      });
+        requires_approval: form.requires_approval,
+        is_template: form.is_template || false
+      };
+
+      console.log('Sending form data:', formData);
+
+      await api.put(`/forms/${formId}/`, formData);
 
       // Show success message
       alert('Form saved successfully!');
     } catch (error) {
       console.error('Failed to save form:', error);
-      alert('Failed to save form. Please try again.');
+      if (error.response?.data) {
+        // Show specific error messages from backend
+        const errors = Object.entries(error.response.data)
+          .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
+          .join('\n');
+        alert(`Failed to save form:\n${errors}`);
+      } else {
+        alert('Failed to save form. Please try again.');
+      }
     } finally {
       setSaving(false);
     }

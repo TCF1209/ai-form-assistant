@@ -399,6 +399,14 @@ const Forms = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex gap-2">
+                          {/* View button - available for all users */}
+                          <button
+                            onClick={() => navigate(`/forms/${form.id}`)}
+                            className="text-slate-600 hover:text-slate-900"
+                          >
+                            View
+                          </button>
+
                           {/* Submit button - available for all users on ACTIVE forms */}
                           {form.status === 'ACTIVE' && canSubmitForm && (
                             <button

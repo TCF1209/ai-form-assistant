@@ -460,7 +460,7 @@ const FieldEditor = ({ field, formId, onClose, onSave }) => {
 
     try {
       let response;
-      if (field) {
+      if (field?.id) {
         // Update existing field - don't send name to allow backend to regenerate if needed
         const updateData = { ...fieldData };
         // Keep the existing field name unless the label changed
@@ -496,7 +496,7 @@ const FieldEditor = ({ field, formId, onClose, onSave }) => {
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-slate-800">
-              {field ? 'Edit Field' : 'Add New Field'}
+              {field?.id ? 'Edit Field' : 'Add New Field'}
             </h2>
             <button
               onClick={onClose}

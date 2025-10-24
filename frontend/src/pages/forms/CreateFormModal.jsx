@@ -119,14 +119,16 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
       setLoading(true);
 
       if (useTemplate) {
-        // Create from template
+        // Create from template - include status
         await api.post('/forms/create_from_template/', {
           template: selectedTemplate,
           code: formData.code,
-          name: formData.name || undefined
+          name: formData.name || undefined,
+          status: formData.status  // Include status for templates
         });
       } else {
-        // Create regular form
+        // Create regular form - ensure all fields are sent
+        console.log('Creating form with data:', formData);
         await api.post('/forms/', formData);
       }
 

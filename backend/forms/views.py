@@ -446,6 +446,9 @@ class FormViewSet(viewsets.ModelViewSet):
 
         template = FORM_TEMPLATES[template_key]
 
+        # Get status from request or default to DRAFT
+        form_status = request.data.get('status', Form.FormStatus.DRAFT)
+
         # Create the form (always use manager's department)
         form = Form.objects.create(
             name=form_name or template['name'],
@@ -453,7 +456,7 @@ class FormViewSet(viewsets.ModelViewSet):
             description=template['description'],
             department=request.user.department,  # Always use manager's department
             created_by=request.user,
-            status=Form.FormStatus.DRAFT,
+            status=form_status,  # Use provided status or default to DRAFT
             is_template=False,
             requires_approval=True
         )

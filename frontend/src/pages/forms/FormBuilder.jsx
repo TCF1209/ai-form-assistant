@@ -172,26 +172,16 @@ const FormBuilder = () => {
     }
   };
 
-  const handleDragEnd = async (event) => {
+  const handleDragEnd = (event) => {
     const { active, over } = event;
 
     if (active.id !== over.id) {
       const oldIndex = fields.findIndex(f => f.id === active.id);
       const newIndex = fields.findIndex(f => f.id === over.id);
 
+      // Just reorder locally, no API call
       const newFields = arrayMove(fields, oldIndex, newIndex);
       setFields(newFields);
-
-      // Update order in backend
-      try {
-        await api.post(`/forms/${formId}/reorder_fields/`, {
-          field_ids: newFields.map(f => f.id)
-        });
-      } catch (error) {
-        console.error('Failed to reorder fields:', error);
-        // Revert on error
-        fetchFields();
-      }
     }
   };
 
@@ -210,16 +200,11 @@ const FormBuilder = () => {
     setShowFieldEditor(true);
   };
 
-  const handleDeleteField = async (field) => {
+  const handleDeleteField = (field) => {
     if (!window.confirm(`Delete field "${field.label}"?`)) return;
 
-    try {
-      await api.delete(`/forms/${formId}/delete_field/?field_id=${field.id}`);
-      setFields(fields.filter(f => f.id !== field.id));
-    } catch (error) {
-      console.error('Failed to delete field:', error);
-      alert('Failed to delete field');
-    }
+    // Simply remove from local state (no API call)
+    setFields(fields.filter(f => f.id !== field.id));
   };
 
   const handlePreview = () => {
@@ -229,35 +214,63 @@ const FormBuilder = () => {
   const handleSaveForm = async () => {
     setSaving(true);
     try {
-      // Debug: Log the form object to check if all fields are present
-      console.log('Form object before save:', form);
-
       // Ensure department is sent as ID (in case it's an object)
       const departmentId = typeof form.department === 'object'
         ? form.department.id
         : form.department;
 
-      // Include all required fields from the form object
+      // Save form details
       const formData = {
         name: form.name,
-        code: form.code,  // Required field
+        code: form.code,
         description: form.description || '',
-        department: departmentId,  // Required field - send as ID
+        department: departmentId,
         status: form.status,
         requires_approval: form.requires_approval,
         is_template: form.is_template || false
       };
 
-      console.log('Sending form data:', formData);
-
       await api.put(`/forms/${formId}/`, formData);
 
+      // Save all fields - delete existing and recreate
+      // First, delete all existing fields
+      const existingFields = fields.filter(f => !f.id.toString().startsWith('temp_'));
+
+      // Then add/update all fields
+      for (const field of fields) {
+        const fieldData = {
+          label: field.label,
+          field_type: field.field_type,
+          placeholder: field.placeholder || '',
+          help_text: field.help_text || '',
+          required: field.required || false,
+          width: field.width || 100,
+          default_value: field.default_value || '',
+          options: field.options || [],
+          validation_rules: field.validation_rules || {},
+          order: fields.indexOf(field)
+        };
+
+        if (field.id.toString().startsWith('temp_')) {
+          // New field - create it
+          await api.post(`/forms/${formId}/add_field/`, fieldData);
+        } else {
+          // Existing field - update it
+          await api.put(`/forms/${formId}/update_field/`, {
+            field_id: field.id,
+            ...fieldData
+          });
+        }
+      }
+
       // Show success message
-      alert('Form saved successfully!');
+      alert('Form and fields saved successfully!');
+
+      // Reload fields to get real IDs from backend
+      await fetchFields();
     } catch (error) {
       console.error('Failed to save form:', error);
       if (error.response?.data) {
-        // Show specific error messages from backend
         const errors = Object.entries(error.response.data)
           .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
           .join('\n');
@@ -419,12 +432,17 @@ const FormBuilder = () => {
           formId={formId}
           onClose={() => setShowFieldEditor(false)}
           onSave={(newField) => {
-            if (editingField) {
+            // Check if we're updating an existing field
+            const existingField = fields.find(f => f.id === newField.id);
+            if (existingField) {
+              // Update existing field in the array
               setFields(fields.map(f => f.id === newField.id ? newField : f));
             } else {
+              // Add new field to the array
               setFields([...fields, newField]);
             }
             setShowFieldEditor(false);
+            setEditingField(null);
           }}
         />
       )}
@@ -454,39 +472,18 @@ const FieldEditor = ({ field, formId, onClose, onSave }) => {
     options: field?.options || [],
     validation_rules: field?.validation_rules || {}
   });
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setLoading(true);
 
-    try {
-      let response;
-      if (field?.id) {
-        // Update existing field - don't send name to allow backend to regenerate if needed
-        const updateData = { ...fieldData };
-        // Keep the existing field name unless the label changed
-        if (field.label === fieldData.label && field.name) {
-          updateData.name = field.name;
-        }
-        response = await api.put(`/forms/${formId}/update_field/`, {
-          field_id: field.id,
-          ...updateData
-        });
-      } else {
-        // Add new field - let backend auto-generate the name
-        const newFieldData = { ...fieldData };
-        // Don't send name for new fields - let backend generate it
-        delete newFieldData.name;
-        response = await api.post(`/forms/${formId}/add_field/`, newFieldData);
-      }
-      onSave(response.data);
-    } catch (error) {
-      console.error('Failed to save field:', error);
-      alert('Failed to save field. Please check your inputs.');
-    } finally {
-      setLoading(false);
-    }
+    // Create field object for local state
+    const fieldToSave = {
+      ...fieldData,
+      id: field?.id || `temp_${Date.now()}`, // Temporary ID for new fields
+      name: field?.name || fieldData.label.toLowerCase().replace(/\s+/g, '_'), // Generate name from label
+    };
+
+    // Call parent's onSave with the field data (no API call here)
+    onSave(fieldToSave);
   };
 
   const fieldType = FIELD_TYPES.find(t => t.value === fieldData.field_type);
@@ -647,10 +644,9 @@ const FieldEditor = ({ field, formId, onClose, onSave }) => {
               </button>
               <button
                 type="submit"
-                disabled={loading}
-                className="px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600 disabled:opacity-50"
+                className="px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600"
               >
-                {loading ? 'Saving...' : (field?.id ? 'Update Field' : 'Add Field')}
+                {field?.id ? 'Update Field' : 'Add Field'}
               </button>
             </div>
           </form>

@@ -222,15 +222,15 @@ class FormViewSet(viewsets.ModelViewSet):
         """Add a new field to the form."""
         form = self.get_object()
 
-        # Only MANAGER can add fields, not ADMIN or USER
-        if request.user.role != 'MANAGER':
+        # Only ADMIN and MANAGER can add fields
+        if request.user.role not in ['ADMIN', 'MANAGER']:
             return Response(
-                {"error": "Only Form Managers can add fields."},
+                {"error": "Only Admins and Form Managers can add fields."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Manager can only add fields to forms from their own department
-        if form.department != request.user.department:
+        # Manager can only add fields to forms from their own department, Admin can add to any
+        if request.user.role == 'MANAGER' and form.department != request.user.department:
             return Response(
                 {"error": "You can only add fields to forms from your own department."},
                 status=status.HTTP_403_FORBIDDEN
@@ -278,15 +278,15 @@ class FormViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Only MANAGER can update fields
-        if request.user.role != 'MANAGER':
+        # Only ADMIN and MANAGER can update fields
+        if request.user.role not in ['ADMIN', 'MANAGER']:
             return Response(
-                {"error": "Only Form Managers can update fields."},
+                {"error": "Only Admins and Form Managers can update fields."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Manager can only update fields in forms from their own department
-        if form.department != request.user.department:
+        # Manager can only update fields in forms from their own department, Admin can update any
+        if request.user.role == 'MANAGER' and form.department != request.user.department:
             return Response(
                 {"error": "You can only update fields in forms from your own department."},
                 status=status.HTTP_403_FORBIDDEN
@@ -337,15 +337,15 @@ class FormViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Only MANAGER can delete fields
-        if request.user.role != 'MANAGER':
+        # Only ADMIN and MANAGER can delete fields
+        if request.user.role not in ['ADMIN', 'MANAGER']:
             return Response(
-                {"error": "Only Form Managers can delete fields."},
+                {"error": "Only Admins and Form Managers can delete fields."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Manager can only delete fields from forms in their own department
-        if form.department != request.user.department:
+        # Manager can only delete fields from forms in their own department, Admin can delete any
+        if request.user.role == 'MANAGER' and form.department != request.user.department:
             return Response(
                 {"error": "You can only delete fields from forms in your own department."},
                 status=status.HTTP_403_FORBIDDEN
@@ -376,15 +376,15 @@ class FormViewSet(viewsets.ModelViewSet):
         """Reorder fields in the form (for drag-and-drop)."""
         form = self.get_object()
 
-        # Only MANAGER can reorder fields
-        if request.user.role != 'MANAGER':
+        # Only ADMIN and MANAGER can reorder fields
+        if request.user.role not in ['ADMIN', 'MANAGER']:
             return Response(
-                {"error": "Only Form Managers can reorder fields."},
+                {"error": "Only Admins and Form Managers can reorder fields."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Manager can only reorder fields in forms from their own department
-        if form.department != request.user.department:
+        # Manager can only reorder fields in forms from their own department, Admin can reorder any
+        if request.user.role == 'MANAGER' and form.department != request.user.department:
             return Response(
                 {"error": "You can only reorder fields in forms from your own department."},
                 status=status.HTTP_403_FORBIDDEN

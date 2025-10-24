@@ -272,7 +272,11 @@ const FormBuilder = () => {
       console.error('Failed to save form:', error);
       if (error.response?.data) {
         const errors = Object.entries(error.response.data)
-          .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
+          .map(([field, messages]) => {
+            // Handle both string and array messages
+            const messageText = Array.isArray(messages) ? messages.join(', ') : messages;
+            return `${field}: ${messageText}`;
+          })
           .join('\n');
         alert(`Failed to save form:\n${errors}`);
       } else {

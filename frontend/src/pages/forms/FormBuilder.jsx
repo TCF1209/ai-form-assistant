@@ -193,8 +193,13 @@ const FormBuilder = () => {
     }
   };
 
-  const handleAddField = () => {
-    setEditingField(null);
+  const handleAddField = (fieldType = null) => {
+    // If fieldType is provided (from field type buttons), create a field object with that type
+    if (fieldType) {
+      setEditingField({ field_type: fieldType });
+    } else {
+      setEditingField(null);
+    }
     setShowFieldEditor(true);
   };
 
@@ -217,6 +222,31 @@ const FormBuilder = () => {
 
   const handlePreview = () => {
     setShowPreview(true);
+  };
+
+  const handleSaveForm = async () => {
+    setSaving(true);
+    try {
+      // Update form details (status, description, etc.)
+      await api.put(`/forms/${formId}/`, {
+        name: form.name,
+        description: form.description,
+        status: form.status,
+        requires_approval: form.requires_approval
+      });
+
+      // Show success message
+      alert('Form saved successfully!');
+    } catch (error) {
+      console.error('Failed to save form:', error);
+      alert('Failed to save form. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleStatusChange = (newStatus) => {
+    setForm({ ...form, status: newStatus });
   };
 
   if (loading) {
@@ -260,6 +290,15 @@ const FormBuilder = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <select
+                value={form?.status || 'DRAFT'}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
+              >
+                <option value="DRAFT">Draft</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
               <button
                 onClick={handlePreview}
                 className="px-4 py-2 border border-slate-300 text-slate-700 rounded-md hover:bg-slate-50"
@@ -267,7 +306,7 @@ const FormBuilder = () => {
                 Preview
               </button>
               <button
-                onClick={() => setSaving(true)}
+                onClick={handleSaveForm}
                 disabled={saving}
                 className="px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600 disabled:opacity-50"
               >
@@ -288,7 +327,7 @@ const FormBuilder = () => {
                 {FIELD_TYPES.map(type => (
                   <button
                     key={type.value}
-                    onClick={handleAddField}
+                    onClick={() => handleAddField(type.value)}
                     className="w-full text-left px-3 py-2 bg-slate-50 hover:bg-slate-100 rounded-md flex items-center gap-2"
                   >
                     <span className="text-lg">{type.icon}</span>

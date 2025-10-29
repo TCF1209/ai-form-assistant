@@ -8,19 +8,19 @@ import {
   PlusOutlined, DeleteOutlined, DragOutlined, SaveOutlined,
   PlayCircleOutlined, SettingOutlined, UserOutlined,
   TeamOutlined, BranchesOutlined, CheckCircleOutlined,
-  CloseCircleOutlined, InfoCircleOutlined, ClockCircleOutlined
+  CloseCircleOutlined, InfoCircleOutlined, ClockCircleOutlined,
+  ForkOutlined
 } from '@ant-design/icons';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import api from '../../services/api';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import ConditionBuilder from './ConditionBuilder';
 
 const { Option } = Select;
 const { TextArea } = Input;
-const { TabPane } = Tabs;
 const { Panel } = Collapse;
 
 // Sortable Step Component
@@ -500,9 +500,15 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
       ]}
       bodyStyle={{ padding: 0 }}
     >
-      <Tabs activeKey={activeTab} onChange={setActiveTab}>
-        <TabPane tab="Basic Information" key="basic">
-          <div style={{ padding: 24 }}>
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={[
+          {
+            key: 'basic',
+            label: 'Basic Information',
+            children: (
+              <div style={{ padding: 24 }}>
             <Form form={form} layout="vertical" disabled={isReadOnly}>
               <Row gutter={16}>
                 <Col span={12}>
@@ -633,10 +639,13 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
               </Row>
             </Form>
           </div>
-        </TabPane>
-
-        <TabPane tab="Workflow Steps" key="steps">
-          <div style={{ padding: 24, minHeight: 400 }}>
+            )
+          },
+          {
+            key: 'steps',
+            label: 'Workflow Steps',
+            children: (
+              <div style={{ padding: 24, minHeight: 400 }}>
             <Row gutter={16}>
               <Col span={editingStepIndex !== null ? 12 : 24}>
                 <Card
@@ -705,8 +714,10 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
               )}
             </Row>
           </div>
-        </TabPane>
-      </Tabs>
+            )
+          }
+        ]}
+      />
     </Modal>
   );
 };

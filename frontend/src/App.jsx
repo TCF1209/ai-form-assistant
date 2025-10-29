@@ -4,8 +4,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 // Layouts
-import MainLayout from './components/Layout/MainLayout';
-import AuthLayout from './components/Layout/AuthLayout';
+import MainLayout from './components/layout/MainLayout';
+import AuthLayout from './components/layout/AuthLayout';
 
 // Route Guards
 import ProtectedRoute from './components/Auth/ProtectedRoute';

@@ -1,0 +1,306 @@
+"""
+Workflow serializers for API endpoints.
+"""
+
+from rest_framework import serializers
+from django.contrib.auth import get_user_model
+from django.db import transaction
+from .models import (
+    Workflow, WorkflowStep, WorkflowInstance,
+    WorkflowApproval, WorkflowNotification
+)
+from forms.models import Form, FormSubmission
+from users.models import Department
+
+User = get_user_model()
+
+
+class WorkflowStepSerializer(serializers.ModelSerializer):
+    """Serializer for workflow steps."""
+
+    assigned_user_detail = serializers.SerializerMethodField()
+    assigned_department_detail = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkflowStep
+        fields = [
+            'id', 'name', 'step_type', 'order',
+            'assigned_role', 'assigned_user', 'assigned_user_detail',
+            'assigned_department', 'assigned_department_detail',
+            'is_required', 'can_skip', 'time_limit_hours',
+            'conditions', 'actions'
+        ]
+
+    def get_assigned_user_detail(self, obj):
+        if obj.assigned_user:
+            return {
+                'id': str(obj.assigned_user.id),
+                'username': obj.assigned_user.username,
+                'email': obj.assigned_user.email,
+                'full_name': f"{obj.assigned_user.first_name} {obj.assigned_user.last_name}".strip()
+            }
+        return None
+
+    def get_assigned_department_detail(self, obj):
+        if obj.assigned_department:
+            return {
+                'id': str(obj.assigned_department.id),
+                'name': obj.assigned_department.name,
+                'code': obj.assigned_department.code
+            }
+        return None
+
+    def validate_assigned_user(self, value):
+        """Ensure only regular users can be approvers."""
+        if value and value.role in ['ADMIN', 'FORM_MANAGER']:
+            raise serializers.ValidationError(
+                "Admins and Form Managers cannot be approvers. Only regular users can approve."
+            )
+        return value
+
+
+class WorkflowSerializer(serializers.ModelSerializer):
+    """Main workflow serializer."""
+
+    steps = WorkflowStepSerializer(many=True, required=False)
+    form_detail = serializers.SerializerMethodField()
+    created_by_detail = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Workflow
+        fields = [
+            'id', 'name', 'code', 'description', 'form', 'form_detail',
+            'workflow_type', 'status', 'created_by', 'created_by_detail',
+            'config', 'approval_threshold', 'allow_delegation',
+            'allow_comments', 'auto_escalate', 'escalation_days',
+            'steps', 'can_edit', 'can_delete',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_form_detail(self, obj):
+        if obj.form:
+            return {
+                'id': str(obj.form.id),
+                'name': obj.form.name,
+                'code': obj.form.code,
+                'department': str(obj.form.department.id) if obj.form.department else None,
+                'department_name': obj.form.department.name if obj.form.department else None
+            }
+        return None
+
+    def get_created_by_detail(self, obj):
+        if obj.created_by:
+            return {
+                'id': str(obj.created_by.id),
+                'username': obj.created_by.username,
+                'email': obj.created_by.email
+            }
+        return None
+
+    def get_can_edit(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
+        user = request.user
+        # Admin can edit all workflows
+        if user.role == 'ADMIN':
+            return True
+        # Form Manager can edit workflows in their department
+        if user.role == 'FORM_MANAGER' and obj.form.department == user.department:
+            return True
+        return False
+
+    def get_can_delete(self, obj):
+        return self.get_can_edit(obj)
+
+    @transaction.atomic
+    def create(self, validated_data):
+        steps_data = validated_data.pop('steps', [])
+        workflow = Workflow.objects.create(**validated_data)
+
+        # Create workflow steps
+        for step_data in steps_data:
+            WorkflowStep.objects.create(workflow=workflow, **step_data)
+
+        return workflow
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        steps_data = validated_data.pop('steps', None)
+
+        # Update workflow fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Update steps if provided
+        if steps_data is not None:
+            # Delete existing steps
+            instance.steps.all().delete()
+
+            # Create new steps
+            for step_data in steps_data:
+                WorkflowStep.objects.create(workflow=instance, **step_data)
+
+        return instance
+
+
+class WorkflowListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for workflow lists."""
+
+    form_name = serializers.CharField(source='form.name', read_only=True)
+    department_name = serializers.CharField(source='form.department.name', read_only=True)
+    steps_count = serializers.IntegerField(source='steps.count', read_only=True)
+
+    class Meta:
+        model = Workflow
+        fields = [
+            'id', 'name', 'code', 'workflow_type', 'status',
+            'form_name', 'department_name', 'steps_count',
+            'created_at'
+        ]
+
+
+class WorkflowInstanceSerializer(serializers.ModelSerializer):
+    """Serializer for workflow instances."""
+
+    workflow_detail = serializers.SerializerMethodField()
+    submission_detail = serializers.SerializerMethodField()
+    current_step_detail = serializers.SerializerMethodField()
+    approvals = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkflowInstance
+        fields = [
+            'id', 'workflow', 'workflow_detail', 'submission', 'submission_detail',
+            'status', 'current_step', 'current_step_detail',
+            'started_at', 'completed_at', 'cancelled_at',
+            'cancelled_by', 'cancellation_reason', 'context_data',
+            'approvals'
+        ]
+        read_only_fields = ['id', 'started_at']
+
+    def get_workflow_detail(self, obj):
+        return {
+            'id': str(obj.workflow.id),
+            'name': obj.workflow.name,
+            'type': obj.workflow.workflow_type
+        }
+
+    def get_submission_detail(self, obj):
+        return {
+            'id': str(obj.submission.id),
+            'submission_number': obj.submission.submission_number,
+            'form_name': obj.submission.form.name,
+            'submitted_by': obj.submission.submitted_by.username if obj.submission.submitted_by else None
+        }
+
+    def get_current_step_detail(self, obj):
+        if obj.current_step:
+            return {
+                'id': str(obj.current_step.id),
+                'name': obj.current_step.name,
+                'order': obj.current_step.order,
+                'type': obj.current_step.step_type
+            }
+        return None
+
+    def get_approvals(self, obj):
+        approvals = obj.approvals.all().order_by('workflow_step__order')
+        return WorkflowApprovalSerializer(approvals, many=True).data
+
+
+class WorkflowApprovalSerializer(serializers.ModelSerializer):
+    """Serializer for workflow approvals."""
+
+    step_detail = serializers.SerializerMethodField()
+    assigned_to_detail = serializers.SerializerMethodField()
+    approved_by_detail = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkflowApproval
+        fields = [
+            'id', 'workflow_instance', 'workflow_step', 'step_detail',
+            'status', 'assigned_to', 'assigned_to_detail',
+            'approved_by', 'approved_by_detail', 'delegated_to',
+            'comments', 'attachments', 'assigned_at', 'due_date',
+            'completed_at'
+        ]
+        read_only_fields = ['id', 'assigned_at']
+
+    def get_step_detail(self, obj):
+        return {
+            'id': str(obj.workflow_step.id),
+            'name': obj.workflow_step.name,
+            'order': obj.workflow_step.order,
+            'type': obj.workflow_step.step_type
+        }
+
+    def get_assigned_to_detail(self, obj):
+        if obj.assigned_to:
+            return {
+                'id': str(obj.assigned_to.id),
+                'username': obj.assigned_to.username,
+                'email': obj.assigned_to.email
+            }
+        return None
+
+    def get_approved_by_detail(self, obj):
+        if obj.approved_by:
+            return {
+                'id': str(obj.approved_by.id),
+                'username': obj.approved_by.username,
+                'email': obj.approved_by.email
+            }
+        return None
+
+
+class ApprovalActionSerializer(serializers.Serializer):
+    """Serializer for approval actions (approve/reject)."""
+
+    action = serializers.ChoiceField(choices=['approve', 'reject', 'delegate'])
+    comments = serializers.CharField(required=False, allow_blank=True)
+    delegate_to = serializers.UUIDField(required=False)
+
+    def validate(self, data):
+        if data['action'] == 'delegate' and not data.get('delegate_to'):
+            raise serializers.ValidationError("delegate_to is required when action is 'delegate'")
+
+        if data.get('delegate_to'):
+            try:
+                user = User.objects.get(id=data['delegate_to'])
+                if user.role in ['ADMIN', 'FORM_MANAGER']:
+                    raise serializers.ValidationError(
+                        "Cannot delegate to Admin or Form Manager. Only regular users can be approvers."
+                    )
+                data['delegate_to'] = user
+            except User.DoesNotExist:
+                raise serializers.ValidationError("Invalid user ID for delegation")
+
+        return data
+
+
+class WorkflowNotificationSerializer(serializers.ModelSerializer):
+    """Serializer for workflow notifications."""
+
+    workflow_approval_detail = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkflowNotification
+        fields = [
+            'id', 'workflow_approval', 'workflow_approval_detail',
+            'notification_type', 'recipient', 'subject', 'message',
+            'is_read', 'is_sent', 'sent_at', 'read_at', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']
+
+    def get_workflow_approval_detail(self, obj):
+        return {
+            'id': str(obj.workflow_approval.id),
+            'step_name': obj.workflow_approval.workflow_step.name,
+            'workflow_name': obj.workflow_approval.workflow_instance.workflow.name
+        }

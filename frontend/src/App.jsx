@@ -20,6 +20,7 @@ import Forms from './pages/forms/Forms';
 import FormBuilder from './pages/forms/FormBuilder';
 import FormSubmission from './pages/forms/FormSubmission';
 import FormView from './pages/forms/FormView';
+import Workflows from './pages/workflows/Workflows';
 
 // Placeholder components for future pages
 const TasksPage = () => <div>Tasks Page - Coming Soon</div>;
@@ -104,6 +105,26 @@ function App() {
               <Route path="/forms/:formId" element={<FormView />} />
               <Route path="/forms/:formId/builder" element={<FormBuilder />} />
               <Route path="/forms/:formId/submit" element={<FormSubmission />} />
+              <Route
+                path="/workflows"
+                element={
+                  <RoleBasedRoute
+                    allowedRoles={['ADMIN', 'FORM_MANAGER']}
+                    fallback={
+                      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+                        <div className="text-center">
+                          <h1 className="mt-4 text-2xl font-semibold text-gray-900">
+                            Access Denied
+                          </h1>
+                          <p className="mt-2 text-gray-600">Only Admins and Form Managers can access Workflow Management.</p>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <Workflows />
+                  </RoleBasedRoute>
+                }
+              />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/documents" element={<DocumentsPage />} />

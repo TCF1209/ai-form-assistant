@@ -31,6 +31,9 @@ urlpatterns = [
 
     # Forms app endpoints
     path('api/v1/', include('forms.urls')),
+
+    # Workflows app endpoints
+    path('api/v1/', include('workflows.urls')),
 ]
 
 # Serve media files in development

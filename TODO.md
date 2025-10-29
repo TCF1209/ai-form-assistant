@@ -106,17 +106,17 @@
   - [x] File upload component (with size/type validation)
   - [x] Progress save feature (draft with auto-save)
 
-#### Week 6: Workflow Engine
-- [ ] Workflow backend
-  - [ ] Sequential approval logic
-  - [ ] Parallel approval logic
-  - [ ] Conditional routing
-  - [ ] Notification system
-- [ ] Workflow designer
-  - [ ] Visual workflow builder
-  - [ ] Drag-and-drop nodes
-  - [ ] Condition builder UI
-  - [ ] Testing interface
+#### Week 6: Workflow Engine ✅
+- [x] Workflow backend
+  - [x] Sequential approval logic
+  - [x] Parallel approval logic
+  - [x] Conditional routing
+  - [x] Notification system
+- [x] Workflow designer
+  - [x] Visual workflow builder
+  - [x] Drag-and-drop nodes
+  - [x] Condition builder UI
+  - [x] Testing interface
 
 #### Week 7: Department & File Management
 - [ ] Department features
@@ -276,16 +276,30 @@
 15. ✅ Fixed form visibility issues across roles
 16. ✅ Implemented department-based access control
 
-### Next Priority: Week 6 - Workflow Engine
-1. ⏳ Design workflow models
-2. ⏳ Implement sequential approval logic
-3. ⏳ Create parallel approval paths
-4. ⏳ Build conditional routing system
-5. ⏳ Add notification triggers
-6. ⏳ Create visual workflow designer
-7. ⏳ Implement drag-and-drop workflow nodes
-8. ⏳ Add condition builder UI
-9. ⏳ Build workflow testing interface
+### Week 6 - Workflow Engine (Completed ✅)
+1. ✅ Designed comprehensive workflow models
+2. ✅ Implemented sequential approval logic
+3. ✅ Created parallel approval paths
+4. ✅ Built conditional routing system
+5. ✅ Added notification triggers
+6. ✅ Created visual workflow designer
+7. ✅ Implemented drag-and-drop workflow nodes
+8. ✅ Added condition builder UI
+9. ✅ Built workflow testing interface
+10. ✅ Implemented permission controls:
+    - Admin: All department workflows
+    - Form Manager: Own department workflows only
+    - Users: Can be approvers (Admin/Manager excluded)
+
+### Next Priority: Week 7 - Department & File Management
+1. ⏳ Create department hierarchy structure
+2. ⏳ Implement department-specific forms
+3. ⏳ Build access control by department
+4. ⏳ Add department analytics dashboard
+5. ⏳ Implement secure file storage
+6. ⏳ Create file preview system
+7. ⏳ Add batch upload support
+8. ⏳ Build file versioning system
 
 ### Completed (Week 1-3)
 - ✅ Created complete authentication system
@@ -366,7 +380,12 @@ git push origin main
   - File upload support ✅
   - Draft auto-save ✅
   - Submission versioning ✅
-- **Week 6 - Workflow Engine**: 0% Complete ⏳
+- **Week 6 - Workflow Engine**: 100% Complete ✅
+  - Workflow backend with all approval types ✅
+  - Visual workflow designer ✅
+  - Drag-and-drop step builder ✅
+  - Condition builder for routing ✅
+  - Permission controls implemented ✅
 - **Week 7 - Department & File Management**: 0% Complete ⏳
 
 ### Upcoming Phases
@@ -374,8 +393,8 @@ git push origin main
 - **Phase 4 (Advanced Features)**: 0% Complete (Week 12-13)
 - **Phase 5 (Testing & Docs)**: 0% Complete (Week 14)
 
-### Overall Project: ~40% Complete
+### Overall Project: ~43% Complete
 
 ---
 
-*Last Updated: 2025-01-24*
+*Last Updated: 2025-01-29*

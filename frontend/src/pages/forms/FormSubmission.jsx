@@ -350,8 +350,36 @@ const FormSubmission = () => {
         }
       }
 
-      alert('Form submitted successfully!');
-      navigate('/forms/submissions');
+      // Check if there's an active workflow for this form
+      try {
+        const workflowResponse = await api.get('/workflows/', {
+          params: {
+            form: formId,
+            status: 'ACTIVE'
+          }
+        });
+
+        const workflows = workflowResponse.data.results || workflowResponse.data;
+
+        if (workflows.length > 0) {
+          // Start workflow instance for the submission
+          const activeWorkflow = workflows[0];
+          await api.post('/workflow-instances/start/', {
+            submission_id: response.data.id,
+            workflow_id: activeWorkflow.id
+          });
+
+          alert('Form submitted successfully! Workflow has been initiated.');
+        } else {
+          alert('Form submitted successfully!');
+        }
+      } catch (workflowError) {
+        console.error('Failed to start workflow:', workflowError);
+        // Form was submitted successfully, just workflow failed
+        alert('Form submitted successfully!');
+      }
+
+      navigate('/submissions');
     } catch (error) {
       console.error('Failed to submit form:', error);
       setErrors({

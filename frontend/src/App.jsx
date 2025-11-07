@@ -21,6 +21,9 @@ import FormBuilder from './pages/forms/FormBuilder';
 import FormSubmission from './pages/forms/FormSubmission';
 import FormView from './pages/forms/FormView';
 import Workflows from './pages/workflows/Workflows';
+import MyApprovals from './pages/approvals/MyApprovals';
+import MySubmissions from './pages/submissions/MySubmissions';
+import Notifications from './pages/notifications/Notifications';
 
 // Placeholder components for future pages
 const TasksPage = () => <div>Tasks Page - Coming Soon</div>;
@@ -125,6 +128,9 @@ function App() {
                   </RoleBasedRoute>
                 }
               />
+              <Route path="/approvals" element={<MyApprovals />} />
+              <Route path="/submissions" element={<MySubmissions />} />
+              <Route path="/notifications" element={<Notifications />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/documents" element={<DocumentsPage />} />

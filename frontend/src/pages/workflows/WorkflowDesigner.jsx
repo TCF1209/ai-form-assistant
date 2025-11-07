@@ -362,7 +362,10 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
   };
 
   const resetForm = () => {
-    form.resetFields();
+    form.setFieldsValue({
+      approval_threshold: 100,
+      escalation_days: 3
+    });
     setSteps([]);
     setEditingStepIndex(null);
     setSelectedForm(null);
@@ -587,7 +590,6 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
                     <InputNumber
                       min={1}
                       max={100}
-                      defaultValue={100}
                       formatter={value => `${value}%`}
                       parser={value => value.replace('%', '')}
                       style={{ width: '100%' }}
@@ -602,7 +604,6 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
                     <InputNumber
                       min={1}
                       max={30}
-                      defaultValue={3}
                       style={{ width: '100%' }}
                     />
                   </Form.Item>

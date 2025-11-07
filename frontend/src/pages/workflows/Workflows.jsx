@@ -143,52 +143,55 @@ const Workflows = () => {
     return colors[type] || 'default';
   };
 
-  const getActionMenu = (record) => (
-    <Menu>
-      {record.status === 'DRAFT' && (
-        <Menu.Item
-          key="activate"
-          icon={<PlayCircleOutlined />}
-          onClick={() => handleActivateWorkflow(record)}
-        >
-          Activate
-        </Menu.Item>
-      )}
-      {record.status === 'ACTIVE' && (
-        <Menu.Item
-          key="deactivate"
-          icon={<PauseCircleOutlined />}
-          onClick={() => handleDeactivateWorkflow(record)}
-        >
-          Deactivate
-        </Menu.Item>
-      )}
-      <Menu.Item
-        key="preview"
-        icon={<EyeOutlined />}
-        onClick={() => handlePreviewWorkflow(record)}
-      >
-        Preview
-      </Menu.Item>
-      <Menu.Item
-        key="clone"
-        icon={<CopyOutlined />}
-        onClick={() => handleCloneWorkflow(record)}
-      >
-        Clone
-      </Menu.Item>
-      <Menu.Divider />
-      <Menu.Item
-        key="delete"
-        icon={<DeleteOutlined />}
-        danger
-        onClick={() => handleDeleteWorkflow(record)}
-        disabled={record.status === 'ACTIVE'}
-      >
-        Delete
-      </Menu.Item>
-    </Menu>
-  );
+  const getActionMenu = (record) => {
+    const items = [];
+
+    if (record.status === 'DRAFT') {
+      items.push({
+        key: 'activate',
+        icon: <PlayCircleOutlined />,
+        label: 'Activate',
+        onClick: () => handleActivateWorkflow(record)
+      });
+    }
+
+    if (record.status === 'ACTIVE') {
+      items.push({
+        key: 'deactivate',
+        icon: <PauseCircleOutlined />,
+        label: 'Deactivate',
+        onClick: () => handleDeactivateWorkflow(record)
+      });
+    }
+
+    items.push(
+      {
+        key: 'preview',
+        icon: <EyeOutlined />,
+        label: 'Preview',
+        onClick: () => handlePreviewWorkflow(record)
+      },
+      {
+        key: 'clone',
+        icon: <CopyOutlined />,
+        label: 'Clone',
+        onClick: () => handleCloneWorkflow(record)
+      },
+      {
+        type: 'divider'
+      },
+      {
+        key: 'delete',
+        icon: <DeleteOutlined />,
+        label: 'Delete',
+        danger: true,
+        onClick: () => handleDeleteWorkflow(record),
+        disabled: record.status === 'ACTIVE'
+      }
+    );
+
+    return { items };
+  };
 
   const columns = [
     {
@@ -273,7 +276,7 @@ const Workflows = () => {
               }
             />
           </Tooltip>
-          <Dropdown overlay={getActionMenu(record)} trigger={['click']}>
+          <Dropdown menu={getActionMenu(record)} trigger={['click']}>
             <Button type="text" icon={<MoreOutlined />} />
           </Dropdown>
         </Space>

@@ -68,7 +68,7 @@ const SortableStep = ({ step, index, onEdit, onDelete, isReadOnly }) => {
         size="small"
         className="workflow-step-card"
         style={{ marginBottom: 8, cursor: isReadOnly ? 'default' : 'move' }}
-        bodyStyle={{ padding: '8px 12px' }}
+        styles={{ body: { padding: '8px 12px' } }}
       >
         <Row align="middle" gutter={8}>
           {!isReadOnly && (
@@ -479,7 +479,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
           {isReadOnly && <Tag color="warning">Read-Only (Active Workflow)</Tag>}
         </Space>
       }
-      visible={visible}
+      open={visible}
       onCancel={onClose}
       width={1200}
       footer={[
@@ -498,7 +498,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
           </Button>
         )
       ]}
-      bodyStyle={{ padding: 0 }}
+      styles={{ body: { padding: 0 } }}
     >
       <Tabs
         activeKey={activeTab}

@@ -183,7 +183,7 @@ const ConditionBuilder = ({ value, onChange }) => {
                 <Card
                   key={index}
                   size="small"
-                  bodyStyle={{ padding: '8px 12px' }}
+                  styles={{ body: { padding: '8px 12px' } }}
                   style={{ backgroundColor: '#fff' }}
                 >
                   <Row gutter={8} align="middle">

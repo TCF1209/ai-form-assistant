@@ -40,9 +40,7 @@ const MySubmissions = () => {
   const fetchSubmissions = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/form-submissions/', {
-        params: { submitted_by: user.id }
-      });
+      const response = await api.get('/submissions/');
       const data = response.data.results || response.data;
 
       // Fetch workflow instances for each submission
@@ -74,9 +72,7 @@ const MySubmissions = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await api.get('/form-submissions/', {
-        params: { submitted_by: user.id }
-      });
+      const response = await api.get('/submissions/');
       const data = response.data.results || response.data;
 
       // Fetch workflow instances

@@ -65,37 +65,87 @@ class FormDetailSerializer(serializers.ModelSerializer):
 
 class FormSubmissionListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for submission lists."""
-    form_name = serializers.CharField(source='form.name', read_only=True)
-    form_code = serializers.CharField(source='form.code', read_only=True)
-    submitted_by_name = serializers.CharField(source='submitted_by.full_name', read_only=True)
+    form_detail = serializers.SerializerMethodField()
+    submitted_by_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = FormSubmission
         fields = [
-            'id', 'submission_number', 'form', 'form_name', 'form_code',
-            'submitted_by', 'submitted_by_name', 'status',
+            'id', 'submission_number', 'form', 'form_detail',
+            'submitted_by', 'submitted_by_detail', 'status', 'data',
             'created_at', 'submitted_at', 'updated_at'
         ]
         read_only_fields = ['id', 'submission_number', 'created_at', 'updated_at']
 
+    def get_form_detail(self, obj):
+        if obj.form:
+            return {
+                'id': str(obj.form.id),
+                'name': obj.form.name,
+                'code': obj.form.code,
+                'department_name': obj.form.department.name if obj.form.department else None
+            }
+        return None
+
+    def get_submitted_by_detail(self, obj):
+        if obj.submitted_by:
+            return {
+                'id': str(obj.submitted_by.id),
+                'username': obj.submitted_by.username,
+                'email': obj.submitted_by.email,
+                'full_name': f"{obj.submitted_by.first_name} {obj.submitted_by.last_name}".strip()
+            }
+        return None
+
 
 class FormSubmissionDetailSerializer(serializers.ModelSerializer):
     """Detailed serializer for form submission."""
-    form_name = serializers.CharField(source='form.name', read_only=True)
-    form_code = serializers.CharField(source='form.code', read_only=True)
-    submitted_by_name = serializers.CharField(source='submitted_by.full_name', read_only=True)
+    form_detail = serializers.SerializerMethodField()
+    submitted_by_detail = serializers.SerializerMethodField()
+    files = serializers.SerializerMethodField()
 
     class Meta:
         model = FormSubmission
         fields = [
-            'id', 'submission_number', 'form', 'form_name', 'form_code',
-            'submitted_by', 'submitted_by_name', 'status', 'data',
-            'ip_address', 'user_agent', 'created_at', 'submitted_at', 'updated_at'
+            'id', 'submission_number', 'form', 'form_detail',
+            'submitted_by', 'submitted_by_detail', 'status', 'data',
+            'ip_address', 'user_agent', 'created_at', 'submitted_at', 'updated_at',
+            'files'
         ]
         read_only_fields = [
             'id', 'submission_number', 'submitted_by',
             'ip_address', 'user_agent', 'created_at', 'updated_at'
         ]
+
+    def get_form_detail(self, obj):
+        if obj.form:
+            return {
+                'id': str(obj.form.id),
+                'name': obj.form.name,
+                'code': obj.form.code,
+                'department_name': obj.form.department.name if obj.form.department else None
+            }
+        return None
+
+    def get_submitted_by_detail(self, obj):
+        if obj.submitted_by:
+            return {
+                'id': str(obj.submitted_by.id),
+                'username': obj.submitted_by.username,
+                'email': obj.submitted_by.email,
+                'full_name': f"{obj.submitted_by.first_name} {obj.submitted_by.last_name}".strip()
+            }
+        return None
+
+    def get_files(self, obj):
+        # Get associated files for this submission
+        files = obj.files.all()
+        return [{
+            'id': str(file.id),
+            'file_name': file.file_name,
+            'file': file.file.url if file.file else None,
+            'uploaded_at': file.uploaded_at
+        } for file in files]
 
     def create(self, validated_data):
         """Create submission with current user as submitter."""

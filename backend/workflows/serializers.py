@@ -220,6 +220,7 @@ class WorkflowApprovalSerializer(serializers.ModelSerializer):
     step_detail = serializers.SerializerMethodField()
     assigned_to_detail = serializers.SerializerMethodField()
     approved_by_detail = serializers.SerializerMethodField()
+    submission_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkflowApproval
@@ -228,7 +229,7 @@ class WorkflowApprovalSerializer(serializers.ModelSerializer):
             'status', 'assigned_to', 'assigned_to_detail',
             'approved_by', 'approved_by_detail', 'delegated_to',
             'comments', 'attachments', 'assigned_at', 'due_date',
-            'completed_at'
+            'completed_at', 'submission_detail'
         ]
         read_only_fields = ['id', 'assigned_at']
 
@@ -255,6 +256,20 @@ class WorkflowApprovalSerializer(serializers.ModelSerializer):
                 'id': str(obj.approved_by.id),
                 'username': obj.approved_by.username,
                 'email': obj.approved_by.email
+            }
+        return None
+
+    def get_submission_detail(self, obj):
+        if obj.workflow_instance and obj.workflow_instance.submission:
+            submission = obj.workflow_instance.submission
+            return {
+                'id': str(submission.id),
+                'submission_number': submission.submission_number,
+                'form_name': submission.form.name if submission.form else None,
+                'form_code': submission.form.code if submission.form else None,
+                'submitted_by': submission.submitted_by.username if submission.submitted_by else None,
+                'status': submission.status,
+                'data': submission.data
             }
         return None
 

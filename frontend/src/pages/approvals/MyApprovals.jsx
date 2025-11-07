@@ -135,13 +135,41 @@ const MyApprovals = () => {
 
   const handleViewSubmission = async (approval) => {
     try {
-      // Fetch submission details
-      const response = await api.get(`/workflow-instances/${approval.workflow_instance}/`);
-      const instance = response.data;
+      // First, fetch the workflow instance details if we need more info
+      let instance = null;
+      if (approval.workflow_instance) {
+        try {
+          const instanceResponse = await api.get(`/workflow-instances/${approval.workflow_instance}/`);
+          instance = instanceResponse.data;
+        } catch (err) {
+          console.log('Could not fetch workflow instance, continuing...');
+        }
+      }
 
-      // Fetch form submission data
-      const submissionResponse = await api.get(`/form-submissions/${instance.submission}/`);
-      const submission = submissionResponse.data;
+      // Fetch the submission data
+      let submission = null;
+      if (approval.submission_detail?.id) {
+        try {
+          const submissionResponse = await api.get(`/submissions/${approval.submission_detail.id}/`);
+          submission = submissionResponse.data;
+        } catch (err) {
+          console.error('Error fetching submission:', err);
+          // If the specific endpoint fails, try to use the detail we already have
+          submission = approval.submission_detail;
+        }
+      } else if (instance?.submission) {
+        try {
+          const submissionResponse = await api.get(`/submissions/${instance.submission}/`);
+          submission = submissionResponse.data;
+        } catch (err) {
+          console.error('Error fetching submission from instance:', err);
+        }
+      }
+
+      if (!submission) {
+        message.error('Could not fetch submission details');
+        return;
+      }
 
       setViewModal({
         visible: true,
@@ -152,8 +180,8 @@ const MyApprovals = () => {
         }
       });
     } catch (error) {
-      console.error('Error fetching submission:', error);
-      message.error('Failed to fetch submission details');
+      console.error('Error in handleViewSubmission:', error);
+      message.error('Failed to load submission details');
     }
   };
 

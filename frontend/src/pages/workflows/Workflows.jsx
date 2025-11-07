@@ -146,7 +146,15 @@ const Workflows = () => {
   const getActionMenu = (record) => {
     const items = [];
 
-    if (record.status === 'DRAFT') {
+    // Add Edit option first
+    items.push({
+      key: 'edit',
+      icon: <EditOutlined />,
+      label: 'Edit',
+      onClick: () => handleEditWorkflow(record)
+    });
+
+    if (record.status === 'DRAFT' || record.status === 'INACTIVE') {
       items.push({
         key: 'activate',
         icon: <PlayCircleOutlined />,
@@ -186,7 +194,7 @@ const Workflows = () => {
         label: 'Delete',
         danger: true,
         onClick: () => handleDeleteWorkflow(record),
-        disabled: record.status === 'ACTIVE'
+        disabled: record.status === 'ACTIVE' || record.status === 'ARCHIVED'
       }
     );
 

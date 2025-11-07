@@ -23,6 +23,7 @@ import FormView from './pages/forms/FormView';
 import Workflows from './pages/workflows/Workflows';
 import MyApprovals from './pages/approvals/MyApprovals';
 import MySubmissions from './pages/submissions/MySubmissions';
+import SubmissionsManagement from './pages/submissions/SubmissionsManagement';
 import Notifications from './pages/notifications/Notifications';
 
 // Placeholder components for future pages
@@ -130,6 +131,26 @@ function App() {
               />
               <Route path="/approvals" element={<MyApprovals />} />
               <Route path="/submissions" element={<MySubmissions />} />
+              <Route
+                path="/submissions/management"
+                element={
+                  <RoleBasedRoute
+                    allowedRoles={['ADMIN', 'FORM_MANAGER']}
+                    fallback={
+                      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+                        <div className="text-center">
+                          <h1 className="mt-4 text-2xl font-semibold text-gray-900">
+                            Access Denied
+                          </h1>
+                          <p className="mt-2 text-gray-600">Only Admins and Form Managers can access Submissions Management.</p>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <SubmissionsManagement />
+                  </RoleBasedRoute>
+                }
+              />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/calendar" element={<CalendarPage />} />

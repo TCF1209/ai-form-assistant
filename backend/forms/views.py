@@ -580,6 +580,33 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
                 file=file
             )
 
+        # Check if submission is being submitted (not draft) and start workflow
+        if submission.status == 'SUBMITTED':
+            self._start_workflow_for_submission(submission)
+
+    def _start_workflow_for_submission(self, submission):
+        """Start workflow for a submitted form if there's an active workflow."""
+        from workflows.models import Workflow, WorkflowInstance
+        from workflows.engine import WorkflowEngine
+
+        # Check for active workflow for this form
+        active_workflow = Workflow.objects.filter(
+            form=submission.form,
+            status='ACTIVE'
+        ).first()
+
+        if active_workflow:
+            # Check if workflow instance already exists
+            existing_instance = WorkflowInstance.objects.filter(
+                submission=submission,
+                workflow=active_workflow
+            ).exists()
+
+            if not existing_instance:
+                # Start the workflow
+                engine = WorkflowEngine()
+                engine.start_workflow(submission, active_workflow)
+
     def perform_update(self, serializer):
         """Check permissions when updating submission."""
         instance = self.get_object()
@@ -594,7 +621,13 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
                 if instance.submitted_by != self.request.user:
                     raise PermissionDenied("You can only edit submissions from your department.")
 
-        serializer.save()
+        # Check if status changed from DRAFT to SUBMITTED
+        old_status = instance.status
+        submission = serializer.save()
+
+        # If status changed to SUBMITTED, start workflow
+        if old_status != 'SUBMITTED' and submission.status == 'SUBMITTED':
+            self._start_workflow_for_submission(submission)
 
     @action(detail=False, methods=['get'])
     def drafts(self, request):

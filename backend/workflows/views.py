@@ -101,8 +101,13 @@ class WorkflowViewSet(viewsets.ModelViewSet):
             raise ValidationError(f"Cannot delete workflow with status '{instance.status}'. Please deactivate it first.")
 
         # Check if workflow has active instances
-        if instance.instances.filter(status__in=['PENDING', 'IN_PROGRESS']).exists():
-            raise ValidationError("Cannot delete workflow with active instances.")
+        active_instances = instance.instances.filter(status__in=['PENDING', 'IN_PROGRESS'])
+        if active_instances.exists():
+            count = active_instances.count()
+            raise ValidationError(
+                f"Cannot delete workflow. It has {count} active instance(s) in PENDING or IN_PROGRESS status. "
+                f"Please complete or cancel these instances before deleting the workflow."
+            )
 
         instance.delete()
 
@@ -138,6 +143,53 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         workflow = self.get_object()
         serializer = self.get_serializer(workflow)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def check_instances(self, request, pk=None):
+        """Check workflow instances status."""
+        workflow = self.get_object()
+
+        instances = workflow.instances.all()
+        active_instances = instances.filter(status__in=['PENDING', 'IN_PROGRESS'])
+
+        return Response({
+            'total_instances': instances.count(),
+            'active_instances': active_instances.count(),
+            'pending': instances.filter(status='PENDING').count(),
+            'in_progress': instances.filter(status='IN_PROGRESS').count(),
+            'completed': instances.filter(status='COMPLETED').count(),
+            'cancelled': instances.filter(status='CANCELLED').count(),
+            'can_delete': active_instances.count() == 0 and workflow.status not in ['ACTIVE', 'ARCHIVED']
+        })
+
+    @action(detail=True, methods=['post'])
+    def cancel_instances(self, request, pk=None):
+        """Cancel all active instances of a workflow."""
+        workflow = self.get_object()
+        user = request.user
+
+        # Permission check
+        if user.role == 'FORM_MANAGER' and workflow.form.department != user.department:
+            raise PermissionDenied("You can only manage workflows in your department.")
+
+        active_instances = workflow.instances.filter(status__in=['PENDING', 'IN_PROGRESS'])
+        count = active_instances.count()
+
+        if count == 0:
+            return Response({'message': 'No active instances to cancel'})
+
+        # Cancel all active instances
+        for instance in active_instances:
+            instance.status = 'CANCELLED'
+            instance.cancelled_at = timezone.now()
+            instance.cancelled_by = user
+            instance.cancellation_reason = 'Bulk cancelled for workflow deletion'
+            instance.save()
+
+        return Response({
+            'status': 'success',
+            'message': f'Successfully cancelled {count} active instance(s)'
+        })
 
     @action(detail=True, methods=['post'])
     def clone(self, request, pk=None):

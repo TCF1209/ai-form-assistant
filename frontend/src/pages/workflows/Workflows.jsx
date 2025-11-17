@@ -28,6 +28,8 @@ const Workflows = () => {
   const [forms, setForms] = useState([]);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [workflowToDelete, setWorkflowToDelete] = useState(null);
+  const [workflowInstances, setWorkflowInstances] = useState(null);
+  const [deletionError, setDeletionError] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -72,9 +74,20 @@ const Workflows = () => {
     setDesignerVisible(true);
   };
 
-  const handleDeleteWorkflow = (workflow) => {
+  const handleDeleteWorkflow = async (workflow) => {
     console.log('Delete clicked for workflow:', workflow.name, 'Status:', workflow.status);
     setWorkflowToDelete(workflow);
+    setDeletionError(null);
+    setWorkflowInstances(null);
+
+    // Check for active instances
+    try {
+      const response = await api.get(`/workflows/${workflow.id}/check_instances/`);
+      setWorkflowInstances(response.data);
+    } catch (error) {
+      console.error('Failed to check instances:', error);
+    }
+
     setDeleteModalVisible(true);
   };
 
@@ -89,13 +102,39 @@ const Workflows = () => {
       setWorkflowToDelete(null);
       fetchWorkflows();
     } catch (error) {
-      // Display specific error message from backend if available
-      const errorMessage = error.response?.data?.error ||
-                          error.response?.data?.detail ||
-                          error.response?.data?.message ||
-                          'Failed to delete workflow';
+      console.log('Error response:', error.response?.data);
+
+      // Try to extract error message from different possible response formats
+      let errorMessage = 'Failed to delete workflow';
+
+      if (error.response?.data) {
+        // Check for Django REST framework error format
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        } else if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        } else if (Array.isArray(error.response.data)) {
+          errorMessage = error.response.data[0];
+        } else if (error.response.data.non_field_errors) {
+          errorMessage = error.response.data.non_field_errors[0];
+        }
+      }
+
+      setDeletionError(errorMessage);
       message.error(errorMessage);
       console.error('Error deleting workflow:', error);
+
+      // Re-check instances after failed delete
+      try {
+        const response = await api.get(`/workflows/${workflowToDelete.id}/check_instances/`);
+        setWorkflowInstances(response.data);
+      } catch (checkError) {
+        console.error('Failed to check instances:', checkError);
+      }
     }
   };
 
@@ -103,6 +142,30 @@ const Workflows = () => {
     console.log('Delete cancelled');
     setDeleteModalVisible(false);
     setWorkflowToDelete(null);
+    setWorkflowInstances(null);
+    setDeletionError(null);
+  };
+
+  const handleCancelInstances = async () => {
+    if (!workflowToDelete) return;
+
+    try {
+      const response = await api.post(`/workflows/${workflowToDelete.id}/cancel_instances/`);
+      message.success(response.data.message);
+
+      // Re-check instances
+      const checkResponse = await api.get(`/workflows/${workflowToDelete.id}/check_instances/`);
+      setWorkflowInstances(checkResponse.data);
+      setDeletionError(null);
+
+      // If instances are now cleared, try deleting again
+      if (checkResponse.data.can_delete) {
+        message.info('You can now delete the workflow');
+      }
+    } catch (error) {
+      message.error('Failed to cancel instances');
+      console.error('Error cancelling instances:', error);
+    }
   };
 
   const handleActivateWorkflow = async (workflow) => {
@@ -445,13 +508,86 @@ const Workflows = () => {
         okText="Delete"
         okType="danger"
         cancelText="Cancel"
+        okButtonProps={{
+          disabled: workflowInstances?.active_instances > 0
+        }}
+        width={600}
       >
-        <p>
-          Are you sure you want to delete "{workflowToDelete?.name}"?
-        </p>
-        <p>
-          This action cannot be undone.
-        </p>
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <p>
+            Are you sure you want to delete "{workflowToDelete?.name}"?
+          </p>
+
+          {workflowInstances && (
+            <Card size="small" style={{ backgroundColor: '#f5f5f5' }}>
+              <Space direction="vertical" style={{ width: '100%' }} size="small">
+                <div><strong>Workflow Instance Status:</strong></div>
+                <div>Total Instances: {workflowInstances.total_instances}</div>
+                {workflowInstances.active_instances > 0 && (
+                  <>
+                    <div style={{ color: 'red' }}>
+                      <strong>Active Instances: {workflowInstances.active_instances}</strong>
+                    </div>
+                    <div>• Pending: {workflowInstances.pending}</div>
+                    <div>• In Progress: {workflowInstances.in_progress}</div>
+                  </>
+                )}
+                <div>• Completed: {workflowInstances.completed}</div>
+                <div>• Cancelled: {workflowInstances.cancelled}</div>
+              </Space>
+            </Card>
+          )}
+
+          {deletionError && (
+            <div style={{
+              padding: '10px',
+              backgroundColor: '#fff2f0',
+              border: '1px solid #ffccc7',
+              borderRadius: '4px',
+              color: '#cf1322'
+            }}>
+              <strong>Error:</strong> {deletionError}
+            </div>
+          )}
+
+          {workflowInstances?.active_instances > 0 && (
+            <div style={{
+              padding: '10px',
+              backgroundColor: '#fff7e6',
+              border: '1px solid #ffd591',
+              borderRadius: '4px'
+            }}>
+              <Space direction="vertical" style={{ width: '100%' }} size="small">
+                <div style={{ color: '#d46b08' }}>
+                  <strong>Cannot delete workflow with active instances!</strong>
+                </div>
+                <div>You can either:</div>
+                <ul style={{ marginBottom: 10 }}>
+                  <li>Wait for the instances to complete</li>
+                  <li>Cancel all active instances first</li>
+                </ul>
+                <Button
+                  type="primary"
+                  danger
+                  onClick={handleCancelInstances}
+                  icon={<DeleteOutlined />}
+                >
+                  Cancel All Active Instances
+                </Button>
+              </Space>
+            </div>
+          )}
+
+          {!workflowInstances?.active_instances && (
+            <p style={{ color: '#52c41a' }}>
+              ✓ This workflow can be safely deleted.
+            </p>
+          )}
+
+          <p style={{ fontStyle: 'italic', color: '#8c8c8c' }}>
+            Note: This action cannot be undone.
+          </p>
+        </Space>
       </Modal>
     </>
   );

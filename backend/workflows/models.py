@@ -90,6 +90,13 @@ class Workflow(models.Model):
             models.Index(fields=['form', 'status']),
             models.Index(fields=['code']),
         ]
+        # Ensure only one workflow per form to keep the system simple
+        constraints = [
+            models.UniqueConstraint(
+                fields=['form'],
+                name='unique_workflow_per_form'
+            )
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.workflow_type})"

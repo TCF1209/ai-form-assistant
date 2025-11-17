@@ -77,6 +77,14 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         if user.role == 'FORM_MANAGER' and form.department != user.department:
             raise PermissionDenied("You can only create workflows for forms in your department.")
 
+        # Check if form already has a workflow
+        if Workflow.objects.filter(form=form).exists():
+            raise ValidationError(
+                f"The form '{form.name}' already has a workflow. "
+                "Each form can only have one workflow. "
+                "Please delete the existing workflow first if you want to create a new one."
+            )
+
         serializer.save(created_by=user)
 
     def perform_update(self, serializer):
@@ -196,42 +204,15 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         """Clone a workflow."""
         workflow = self.get_object()
 
-        # Create a copy
-        new_workflow = Workflow.objects.create(
-            name=f"{workflow.name} (Copy)",
-            code=f"{workflow.code}_copy_{timezone.now().timestamp()}",
-            description=workflow.description,
-            form=workflow.form,
-            workflow_type=workflow.workflow_type,
-            status='DRAFT',
-            created_by=request.user,
-            config=workflow.config,
-            approval_threshold=workflow.approval_threshold,
-            allow_delegation=workflow.allow_delegation,
-            allow_comments=workflow.allow_comments,
-            auto_escalate=workflow.auto_escalate,
-            escalation_days=workflow.escalation_days
+        # Since we now have one workflow per form, we cannot clone to the same form
+        # User must select a different form or delete the existing workflow first
+        return Response(
+            {
+                'error': 'Cannot clone workflow. Each form can only have one workflow. '
+                         'Please create a new workflow for a different form instead.'
+            },
+            status=status.HTTP_400_BAD_REQUEST
         )
-
-        # Clone steps
-        for step in workflow.steps.all():
-            WorkflowStep.objects.create(
-                workflow=new_workflow,
-                name=step.name,
-                step_type=step.step_type,
-                order=step.order,
-                assigned_role=step.assigned_role,
-                assigned_user=step.assigned_user,
-                assigned_department=step.assigned_department,
-                is_required=step.is_required,
-                can_skip=step.can_skip,
-                time_limit_hours=step.time_limit_hours,
-                conditions=step.conditions,
-                actions=step.actions
-            )
-
-        serializer = self.get_serializer(new_workflow)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class WorkflowStepViewSet(viewsets.ModelViewSet):

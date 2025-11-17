@@ -292,6 +292,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
   const [departments, setDepartments] = useState([]);
   const [selectedForm, setSelectedForm] = useState(null);
   const [activeTab, setActiveTab] = useState('basic');
+  const [existingWorkflows, setExistingWorkflows] = useState([]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -308,6 +309,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
     if (visible) {
       fetchUsers();
       fetchDepartments();
+      fetchExistingWorkflows();
       if (workflow) {
         fetchWorkflowDetails();
       } else {
@@ -331,6 +333,15 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
       setDepartments(response.data.results || response.data);
     } catch (error) {
       console.error('Error fetching departments:', error);
+    }
+  };
+
+  const fetchExistingWorkflows = async () => {
+    try {
+      const response = await api.get('/workflows/');
+      setExistingWorkflows(response.data.results || response.data);
+    } catch (error) {
+      console.error('Error fetching existing workflows:', error);
     }
   };
 
@@ -471,6 +482,13 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
     ? forms
     : forms.filter(f => f.department === user.department_id);
 
+  // Check which forms already have workflows
+  const formsWithWorkflows = new Set(
+    existingWorkflows
+      .filter(w => w.id !== workflow?.id) // Exclude current workflow being edited
+      .map(w => w.form)
+  );
+
   const isReadOnly = workflow && workflow.status === 'ACTIVE';
 
   return (
@@ -512,6 +530,15 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
             label: 'Basic Information',
             children: (
               <div style={{ padding: 24 }}>
+            {!workflow && (
+              <Alert
+                message="One Workflow Per Form"
+                description="Each form can only have one workflow to keep the system simple and avoid confusion. Forms that already have workflows are shown in red and cannot be selected."
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            )}
             <Form form={form} layout="vertical" disabled={isReadOnly}>
               <Row gutter={16}>
                 <Col span={12}>
@@ -549,11 +576,21 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
                       onChange={setSelectedForm}
                       disabled={workflow !== null}
                     >
-                      {availableForms.map(form => (
-                        <Option key={form.id} value={form.id}>
-                          {form.name} ({form.department_name})
-                        </Option>
-                      ))}
+                      {availableForms.map(f => {
+                        const hasWorkflow = formsWithWorkflows.has(f.id);
+                        return (
+                          <Option
+                            key={f.id}
+                            value={f.id}
+                            disabled={hasWorkflow}
+                          >
+                            <span style={{ color: hasWorkflow ? '#ff4d4f' : 'inherit' }}>
+                              {f.name} ({f.department_name})
+                              {hasWorkflow && ' - Already has workflow'}
+                            </span>
+                          </Option>
+                        );
+                      })}
                     </Select>
                   </Form.Item>
                 </Col>

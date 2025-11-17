@@ -192,13 +192,10 @@ const Workflows = () => {
   };
 
   const handleCloneWorkflow = async (workflow) => {
-    try {
-      const response = await api.post(`/workflows/${workflow.id}/clone/`);
-      message.success('Workflow cloned successfully');
-      fetchWorkflows();
-    } catch (error) {
-      message.error('Failed to clone workflow');
-    }
+    message.info(
+      'Cloning is disabled. Each form can only have one workflow. ' +
+      'Please create a new workflow for a different form instead.'
+    );
   };
 
   const handlePreviewWorkflow = (workflow) => {

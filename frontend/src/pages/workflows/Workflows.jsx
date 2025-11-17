@@ -26,6 +26,8 @@ const Workflows = () => {
   const [selectedWorkflow, setSelectedWorkflow] = useState(null);
   const [designerVisible, setDesignerVisible] = useState(false);
   const [forms, setForms] = useState([]);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [workflowToDelete, setWorkflowToDelete] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -70,28 +72,37 @@ const Workflows = () => {
     setDesignerVisible(true);
   };
 
-  const handleDeleteWorkflow = async (workflow) => {
-    Modal.confirm({
-      title: 'Delete Workflow',
-      content: `Are you sure you want to delete "${workflow.name}"? This action cannot be undone.`,
-      okText: 'Delete',
-      okType: 'danger',
-      onOk: async () => {
-        try {
-          await api.delete(`/workflows/${workflow.id}/`);
-          message.success('Workflow deleted successfully');
-          fetchWorkflows();
-        } catch (error) {
-          // Display specific error message from backend if available
-          const errorMessage = error.response?.data?.error ||
-                              error.response?.data?.detail ||
-                              error.response?.data?.message ||
-                              'Failed to delete workflow';
-          message.error(errorMessage);
-          console.error('Error deleting workflow:', error);
-        }
-      }
-    });
+  const handleDeleteWorkflow = (workflow) => {
+    console.log('Delete clicked for workflow:', workflow.name, 'Status:', workflow.status);
+    setWorkflowToDelete(workflow);
+    setDeleteModalVisible(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!workflowToDelete) return;
+
+    try {
+      console.log('Sending delete request for workflow:', workflowToDelete.id);
+      await api.delete(`/workflows/${workflowToDelete.id}/`);
+      message.success('Workflow deleted successfully');
+      setDeleteModalVisible(false);
+      setWorkflowToDelete(null);
+      fetchWorkflows();
+    } catch (error) {
+      // Display specific error message from backend if available
+      const errorMessage = error.response?.data?.error ||
+                          error.response?.data?.detail ||
+                          error.response?.data?.message ||
+                          'Failed to delete workflow';
+      message.error(errorMessage);
+      console.error('Error deleting workflow:', error);
+    }
+  };
+
+  const cancelDelete = () => {
+    console.log('Delete cancelled');
+    setDeleteModalVisible(false);
+    setWorkflowToDelete(null);
   };
 
   const handleActivateWorkflow = async (workflow) => {
@@ -154,20 +165,21 @@ const Workflows = () => {
   const getActionMenu = (record) => {
     const items = [];
 
+    // Debug log to see the workflow status
+    console.log('Workflow status for menu:', record.name, record.status);
+
     // Add Edit option first
     items.push({
       key: 'edit',
       icon: <EditOutlined />,
-      label: 'Edit',
-      onClick: () => handleEditWorkflow(record)
+      label: 'Edit'
     });
 
     if (record.status === 'DRAFT' || record.status === 'INACTIVE') {
       items.push({
         key: 'activate',
         icon: <PlayCircleOutlined />,
-        label: 'Activate',
-        onClick: () => handleActivateWorkflow(record)
+        label: 'Activate'
       });
     }
 
@@ -175,8 +187,7 @@ const Workflows = () => {
       items.push({
         key: 'deactivate',
         icon: <PauseCircleOutlined />,
-        label: 'Deactivate',
-        onClick: () => handleDeactivateWorkflow(record)
+        label: 'Deactivate'
       });
     }
 
@@ -184,14 +195,12 @@ const Workflows = () => {
       {
         key: 'preview',
         icon: <EyeOutlined />,
-        label: 'Preview',
-        onClick: () => handlePreviewWorkflow(record)
+        label: 'Preview'
       },
       {
         key: 'clone',
         icon: <CopyOutlined />,
-        label: 'Clone',
-        onClick: () => handleCloneWorkflow(record)
+        label: 'Clone'
       },
       {
         type: 'divider'
@@ -201,7 +210,6 @@ const Workflows = () => {
         icon: <DeleteOutlined />,
         label: 'Delete',
         danger: true,
-        onClick: () => handleDeleteWorkflow(record),
         disabled: record.status === 'ACTIVE' || record.status === 'ARCHIVED',
         title: record.status === 'ACTIVE' ? 'Deactivate workflow before deleting' :
                record.status === 'ARCHIVED' ? 'Cannot delete archived workflows' :
@@ -209,7 +217,48 @@ const Workflows = () => {
       }
     );
 
-    return { items };
+    // Handle menu click at the menu level
+    const handleMenuClick = ({ key }) => {
+      console.log('Menu clicked:', key, 'Status:', record.status);
+
+      // Check if delete is disabled
+      if (key === 'delete' && (record.status === 'ACTIVE' || record.status === 'ARCHIVED')) {
+        message.warning(
+          record.status === 'ACTIVE'
+            ? 'Please deactivate the workflow before deleting'
+            : 'Archived workflows cannot be deleted'
+        );
+        return;
+      }
+
+      switch (key) {
+        case 'edit':
+          handleEditWorkflow(record);
+          break;
+        case 'activate':
+          handleActivateWorkflow(record);
+          break;
+        case 'deactivate':
+          handleDeactivateWorkflow(record);
+          break;
+        case 'preview':
+          handlePreviewWorkflow(record);
+          break;
+        case 'clone':
+          handleCloneWorkflow(record);
+          break;
+        case 'delete':
+          handleDeleteWorkflow(record);
+          break;
+        default:
+          break;
+      }
+    };
+
+    return {
+      items,
+      onClick: handleMenuClick
+    };
   };
 
   const columns = [
@@ -387,6 +436,23 @@ const Workflows = () => {
         workflow={selectedWorkflow}
         forms={forms}
       />
+
+      <Modal
+        title="Delete Workflow"
+        open={deleteModalVisible}
+        onOk={confirmDelete}
+        onCancel={cancelDelete}
+        okText="Delete"
+        okType="danger"
+        cancelText="Cancel"
+      >
+        <p>
+          Are you sure you want to delete "{workflowToDelete?.name}"?
+        </p>
+        <p>
+          This action cannot be undone.
+        </p>
+      </Modal>
     </>
   );
 };

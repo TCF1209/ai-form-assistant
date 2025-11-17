@@ -82,7 +82,12 @@ const Workflows = () => {
           message.success('Workflow deleted successfully');
           fetchWorkflows();
         } catch (error) {
-          message.error('Failed to delete workflow');
+          // Display specific error message from backend if available
+          const errorMessage = error.response?.data?.error ||
+                              error.response?.data?.detail ||
+                              error.response?.data?.message ||
+                              'Failed to delete workflow';
+          message.error(errorMessage);
           console.error('Error deleting workflow:', error);
         }
       }
@@ -102,10 +107,13 @@ const Workflows = () => {
   const handleDeactivateWorkflow = async (workflow) => {
     try {
       await api.post(`/workflows/${workflow.id}/deactivate/`);
-      message.success('Workflow deactivated');
-      fetchWorkflows();
+      message.success('Workflow deactivated successfully');
+      // Immediately refresh the workflows list to show updated status
+      await fetchWorkflows();
     } catch (error) {
-      message.error('Failed to deactivate workflow');
+      const errorMessage = error.response?.data?.error || 'Failed to deactivate workflow';
+      message.error(errorMessage);
+      console.error('Error deactivating workflow:', error);
     }
   };
 
@@ -194,7 +202,10 @@ const Workflows = () => {
         label: 'Delete',
         danger: true,
         onClick: () => handleDeleteWorkflow(record),
-        disabled: record.status === 'ACTIVE' || record.status === 'ARCHIVED'
+        disabled: record.status === 'ACTIVE' || record.status === 'ARCHIVED',
+        title: record.status === 'ACTIVE' ? 'Deactivate workflow before deleting' :
+               record.status === 'ARCHIVED' ? 'Cannot delete archived workflows' :
+               'Delete this workflow'
       }
     );
 

@@ -96,6 +96,10 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         if user.role == 'FORM_MANAGER' and instance.form.department != user.department:
             raise PermissionDenied("You can only delete workflows for forms in your department.")
 
+        # Check if workflow status allows deletion
+        if instance.status in ['ACTIVE', 'ARCHIVED']:
+            raise ValidationError(f"Cannot delete workflow with status '{instance.status}'. Please deactivate it first.")
+
         # Check if workflow has active instances
         if instance.instances.filter(status__in=['PENDING', 'IN_PROGRESS']).exists():
             raise ValidationError("Cannot delete workflow with active instances.")

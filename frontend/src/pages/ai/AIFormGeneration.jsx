@@ -59,18 +59,33 @@ const AIFormGeneration = () => {
   const fetchDepartments = async () => {
     try {
       const response = await api.get('/departments/');
-      if (isFormManager && user?.department) {
-        // Form Manager can only see their department
-        const userDeptId = typeof user.department === 'object' ? user.department.id : user.department;
-        const userDept = response.data.find(d => d.id === userDeptId);
-        setDepartments(userDept ? [userDept] : []);
-        setSelectedDepartment(userDeptId);
-      } else if (isAdmin) {
-        // Admin can see all departments
-        setDepartments(response.data);
+      // Handle different response formats
+      let departmentData = [];
+      if (Array.isArray(response.data)) {
+        departmentData = response.data;
+      } else if (response.data?.results && Array.isArray(response.data.results)) {
+        departmentData = response.data.results;
+      } else if (response.data?.departments && Array.isArray(response.data.departments)) {
+        departmentData = response.data.departments;
+      }
+
+      // If we have valid department data
+      if (departmentData.length > 0) {
+        if (isFormManager && user?.department) {
+          // Form Manager can only see their department
+          const userDeptId = typeof user.department === 'object' ? user.department.id : user.department;
+          const userDept = departmentData.find(d => d.id === userDeptId);
+          setDepartments(userDept ? [userDept] : []);
+          setSelectedDepartment(userDeptId);
+        } else if (isAdmin) {
+          // Admin can see all departments
+          setDepartments(departmentData);
+        }
+      } else {
+        throw new Error('No departments found');
       }
     } catch (error) {
-      console.error('Failed to fetch departments:', error);
+      console.error('Failed to fetch departments, using mock data:', error);
       // Use mock data if API fails
       const mockDepartments = [
         { id: 1, name: 'Human Resources', code: 'HR' },
@@ -207,7 +222,7 @@ const AIFormGeneration = () => {
         fields: [
           { name: 'employee_name', label: 'Name (Optional)', type: 'text', required: false },
           { name: 'department', label: 'Department', type: 'select', required: true,
-            options: departments.map(d => d.name) },
+            options: (departments || []).map(d => d.name) },
           { name: 'feedback_type', label: 'Feedback Type', type: 'select', required: true,
             options: ['Suggestion', 'Complaint', 'Compliment', 'General Feedback'] },
           { name: 'subject', label: 'Subject', type: 'text', required: true },
@@ -294,7 +309,7 @@ const AIFormGeneration = () => {
               onChange={setSelectedDepartment}
               disabled={isFormManager}
             >
-              {departments.map(dept => (
+              {(departments || []).map(dept => (
                 <Option key={dept.id} value={dept.id}>
                   <Tag color="blue">{dept.code}</Tag> {dept.name}
                 </Option>

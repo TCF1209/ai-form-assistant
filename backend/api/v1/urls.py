@@ -42,6 +42,9 @@ urlpatterns = [
     # Authentication endpoints
     path('auth/', include(auth_urlpatterns)),
 
+    # AI Integration endpoints
+    path('ai/', include('ai_integration.urls')),
+
     # Additional app endpoints will be added here
     # path('forms/', include('forms.urls')),
     # path('workflows/', include('workflows.urls')),

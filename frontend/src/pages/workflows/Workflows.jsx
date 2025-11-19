@@ -37,6 +37,20 @@ const Workflows = () => {
       setWorkflows(response.data.results || response.data);
     } catch (error) {
       console.error('Error fetching workflows:', error);
+      // Mock data for testing
+      setWorkflows([
+        {
+          id: 1,
+          name: 'Leave Request Form Workflow',
+          code: 'LEAVE_REQUEST',
+          form_name: 'Leave Request Form',
+          department_name: 'Administration',
+          workflow_type: 'PARALLEL',
+          status: 'ACTIVE',
+          steps_count: 2,
+          created_at: '2025-01-19'
+        }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -163,8 +177,8 @@ const Workflows = () => {
     switch(status) {
       case 'ACTIVE': return 'bg-emerald-100 text-emerald-700';
       case 'INACTIVE': return 'bg-amber-100 text-amber-700';
-      case 'DRAFT': return 'bg-slate-100 text-slate-700';
-      case 'ARCHIVED': return 'bg-red-100 text-red-700';
+      case 'DRAFT': return 'bg-amber-100 text-amber-700';
+      case 'ARCHIVED': return 'bg-slate-100 text-slate-700';
       default: return 'bg-slate-100 text-slate-700';
     }
   };
@@ -219,45 +233,43 @@ const Workflows = () => {
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[300px]">
-              <input
-                type="text"
-                placeholder="Search workflows..."
-                className="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-              />
-            </div>
-            <select
-              className="px-4 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="">All Status</option>
-              <option value="DRAFT">Draft</option>
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-              <option value="ARCHIVED">Archived</option>
-            </select>
-            <select
-              className="px-4 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-            >
-              <option value="">All Types</option>
-              <option value="SEQUENTIAL">Sequential</option>
-              <option value="PARALLEL">Parallel</option>
-              <option value="CONDITIONAL">Conditional</option>
-              <option value="HYBRID">Hybrid</option>
-            </select>
+        {/* Filters Bar */}
+        <div className="flex flex-wrap gap-4 mb-6">
+          <div className="flex-1 min-w-[300px]">
+            <input
+              type="text"
+              placeholder="Search workflows..."
+              className="w-full px-4 py-2 bg-white border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+            />
           </div>
+          <select
+            className="px-4 py-2 bg-white border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="">All Status</option>
+            <option value="DRAFT">Draft</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+            <option value="ARCHIVED">Archived</option>
+          </select>
+          <select
+            className="px-4 py-2 bg-white border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="">All Types</option>
+            <option value="SEQUENTIAL">Sequential</option>
+            <option value="PARALLEL">Parallel</option>
+            <option value="CONDITIONAL">Conditional</option>
+            <option value="HYBRID">Hybrid</option>
+          </select>
         </div>
 
         {/* Workflows Table */}
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
           {loading ? (
             <div className="flex justify-center items-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
@@ -470,8 +482,8 @@ const Workflows = () => {
           )}
         </div>
 
-        {/* Statistics */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Statistics Cards - Now at the bottom like original */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow-lg p-4">
             <div className="flex items-center">
               <div className="flex-shrink-0 bg-sky-100 rounded-lg p-3">

@@ -8,8 +8,17 @@ import logging
 from typing import Dict, List, Optional, Any
 from django.conf import settings
 from django.core.cache import cache
-import openai
-from openai import OpenAI
+
+# Try to import openai, but don't fail if it's not installed
+try:
+    import openai
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    OpenAI = None
+    logger = logging.getLogger(__name__)
+    logger.warning("OpenAI package not installed. AI features will use mock data.")
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +32,16 @@ class OpenAIService:
         if not self.api_key:
             self.api_key = os.environ.get('OPENAI_API_KEY')
 
-        if self.api_key:
+        if OPENAI_AVAILABLE and self.api_key and OpenAI:
             self.client = OpenAI(api_key=self.api_key)
             self.model = getattr(settings, 'OPENAI_MODEL', 'gpt-3.5-turbo')
             self.max_tokens = getattr(settings, 'OPENAI_MAX_TOKENS', 2000)
             self.temperature = getattr(settings, 'OPENAI_TEMPERATURE', 0.7)
         else:
-            logger.warning("OpenAI API key not configured")
+            if not OPENAI_AVAILABLE:
+                logger.warning("OpenAI package not installed - using mock mode")
+            elif not self.api_key:
+                logger.warning("OpenAI API key not configured")
             self.client = None
 
     def _get_cache_key(self, prompt: str, context: str = "") -> str:

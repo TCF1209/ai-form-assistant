@@ -2,21 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
-import {
-  RobotOutlined,
-  FormOutlined,
-  LoadingOutlined,
-  CheckCircleOutlined,
-  ExclamationCircleOutlined,
-  EditOutlined,
-  SendOutlined,
-  ReloadOutlined
-} from '@ant-design/icons';
-import { Button, Input, Select, Card, Tag, message, Alert, Spin, Tabs, Steps, Form, Radio, Switch } from 'antd';
-
-const { TextArea } = Input;
-const { Option } = Select;
-const { Step } = Steps;
 
 const AIFormGeneration = () => {
   const { user } = useAuth();
@@ -45,7 +30,6 @@ const AIFormGeneration = () => {
   // Check if user has access
   useEffect(() => {
     if (!isAdmin && !isFormManager) {
-      message.error('Access denied. Only Admins and Form Managers can access this feature.');
       navigate('/forms');
     }
   }, [isAdmin, isFormManager, navigate]);
@@ -159,9 +143,7 @@ const AIFormGeneration = () => {
       setFormData(mockForm);
       saveToHistory(prompt, selectedDepartment);
       setCurrentStep(2);
-      message.success('Form generated successfully! Review and customize as needed.');
     } catch (error) {
-      message.error('Failed to generate form. Please try again.');
       saveToHistory(prompt, selectedDepartment, 'failed');
     } finally {
       setLoading(false);
@@ -213,25 +195,6 @@ const AIFormGeneration = () => {
             options: ['Company Card', 'Personal Card', 'Cash'] }
         ]
       };
-    } else if (promptLower.includes('feedback') || promptLower.includes('survey')) {
-      return {
-        name: 'Employee Feedback Form',
-        code: `${dept?.code || 'FORM'}_FEEDBACK_${Date.now()}`,
-        description: 'AI-generated form for collecting employee feedback',
-        department_id: deptId,
-        fields: [
-          { name: 'employee_name', label: 'Name (Optional)', type: 'text', required: false },
-          { name: 'department', label: 'Department', type: 'select', required: true,
-            options: (departments || []).map(d => d.name) },
-          { name: 'feedback_type', label: 'Feedback Type', type: 'select', required: true,
-            options: ['Suggestion', 'Complaint', 'Compliment', 'General Feedback'] },
-          { name: 'subject', label: 'Subject', type: 'text', required: true },
-          { name: 'feedback_details', label: 'Feedback Details', type: 'textarea', required: true },
-          { name: 'priority', label: 'Priority', type: 'radio', required: true,
-            options: ['Low', 'Medium', 'High', 'Critical'] },
-          { name: 'anonymous', label: 'Submit Anonymously', type: 'checkbox', required: false }
-        ]
-      };
     } else {
       // Generic form based on prompt
       return {
@@ -254,12 +217,6 @@ const AIFormGeneration = () => {
     }
   };
 
-  const handleEditField = (index, field) => {
-    const updatedFields = [...formData.fields];
-    updatedFields[index] = field;
-    setFormData({ ...formData, fields: updatedFields });
-  };
-
   const handleDeleteField = (index) => {
     const updatedFields = formData.fields.filter((_, i) => i !== index);
     setFormData({ ...formData, fields: updatedFields });
@@ -280,219 +237,300 @@ const AIFormGeneration = () => {
     try {
       // Mock save - in real implementation, this would call the API
       await new Promise(resolve => setTimeout(resolve, 1000));
-
-      message.success('Form saved successfully!');
       // Navigate to form builder or forms list
       navigate('/forms');
     } catch (error) {
-      message.error('Failed to save form. Please try again.');
+      console.error('Failed to save form:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const renderPromptStep = () => (
-    <div className="max-w-4xl mx-auto">
-      <Card className="shadow-lg">
-        <div className="text-center mb-8">
-          <RobotOutlined className="text-6xl text-blue-500 mb-4" />
-          <h2 className="text-2xl font-bold mb-2">AI Form Generator</h2>
-          <p className="text-gray-600">Describe the form you want to create, and AI will generate it for you</p>
+    <div className="min-h-screen bg-slate-50 p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-slate-800 mb-2">AI Form Generator</h1>
+          <p className="text-slate-600">Describe the form you want to create, and AI will generate it for you</p>
         </div>
 
-        <Form layout="vertical">
-          <Form.Item label="Select Department" required>
-            <Select
-              size="large"
-              placeholder="Choose a department"
-              value={selectedDepartment}
-              onChange={setSelectedDepartment}
-              disabled={isFormManager}
-            >
-              {(departments || []).map(dept => (
-                <Option key={dept.id} value={dept.id}>
-                  <Tag color="blue">{dept.code}</Tag> {dept.name}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item label="Describe Your Form" required>
-            <TextArea
-              size="large"
-              rows={6}
-              placeholder="Example: Create a leave application form with fields for employee name, leave dates, reason, and approval workflow..."
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              maxLength={500}
-              showCount
-            />
-          </Form.Item>
-
-          <div className="bg-blue-50 p-4 rounded-lg mb-4">
-            <h4 className="font-semibold text-blue-900 mb-2">💡 Tips for better results:</h4>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Be specific about the fields you need</li>
-              <li>• Mention if you need approval workflows</li>
-              <li>• Specify any validation requirements</li>
-              <li>• Include any special conditions or rules</li>
-            </ul>
+        {/* Main Card */}
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          {/* AI Icon Header */}
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-sky-50 rounded-full mb-4">
+              <svg className="w-10 h-10 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-slate-800">Let's Create Your Form</h2>
           </div>
 
-          <Button
-            type="primary"
-            size="large"
-            icon={<SendOutlined />}
-            onClick={() => {
-              if (!selectedDepartment) {
-                message.warning('Please select a department');
-                return;
-              }
-              if (!prompt.trim()) {
-                message.warning('Please describe the form you want to create');
-                return;
-              }
-              setCurrentStep(1);
-              generateFormWithAI();
-            }}
-            block
-            disabled={!selectedDepartment || !prompt.trim()}
-          >
-            Generate Form with AI
-          </Button>
-        </Form>
-      </Card>
+          {/* Form Fields */}
+          <div className="space-y-6">
+            {/* Department Selection */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Select Department <span className="text-red-500">*</span>
+              </label>
+              <select
+                className="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
+                value={selectedDepartment || ''}
+                onChange={(e) => setSelectedDepartment(Number(e.target.value))}
+                disabled={isFormManager}
+              >
+                <option value="">Choose a department</option>
+                {(departments || []).map(dept => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name} ({dept.code})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-      {/* Generation History */}
-      {generationHistory.length > 0 && (
-        <Card className="mt-6 shadow-lg">
-          <h3 className="text-lg font-semibold mb-4">Recent Generations</h3>
-          <div className="space-y-2">
-            {generationHistory.slice(0, 5).map(item => (
-              <div key={item.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer">
-                <div className="flex-1">
-                  <p className="text-sm font-medium truncate">{item.prompt}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Tag color="blue" className="text-xs">{item.department}</Tag>
-                    <span className="text-xs text-gray-500">
-                      {new Date(item.timestamp).toLocaleDateString()}
-                    </span>
-                  </div>
+            {/* Form Description */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Describe Your Form <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                className="w-full px-4 py-3 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
+                rows={6}
+                placeholder="Example: Create a leave application form with fields for employee name, leave dates, reason, and approval workflow..."
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                maxLength={500}
+              />
+              <p className="text-sm text-slate-500 mt-1">{prompt.length}/500 characters</p>
+            </div>
+
+            {/* Tips Section */}
+            <div className="bg-sky-50 border border-sky-200 rounded-lg p-4">
+              <div className="flex">
+                <svg className="w-5 h-5 text-sky-500 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <h4 className="text-sm font-semibold text-sky-900 mb-1">Tips for better results:</h4>
+                  <ul className="text-sm text-sky-800 space-y-1">
+                    <li>• Be specific about the fields you need</li>
+                    <li>• Mention if you need approval workflows</li>
+                    <li>• Specify any validation requirements</li>
+                    <li>• Include any special conditions or rules</li>
+                  </ul>
                 </div>
-                <Tag color={item.status === 'completed' ? 'green' : 'red'}>
-                  {item.status === 'completed' ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
-                </Tag>
               </div>
-            ))}
+            </div>
+
+            {/* Generate Button */}
+            <button
+              onClick={() => {
+                if (!selectedDepartment) {
+                  alert('Please select a department');
+                  return;
+                }
+                if (!prompt.trim()) {
+                  alert('Please describe the form you want to create');
+                  return;
+                }
+                setCurrentStep(1);
+                generateFormWithAI();
+              }}
+              disabled={!selectedDepartment || !prompt.trim()}
+              className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
+                selectedDepartment && prompt.trim()
+                  ? 'bg-sky-500 hover:bg-sky-600 text-white shadow-sm'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              <span className="flex items-center justify-center">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Generate Form with AI
+              </span>
+            </button>
           </div>
-        </Card>
-      )}
+        </div>
+
+        {/* Recent Generations */}
+        {generationHistory.length > 0 && (
+          <div className="mt-8 bg-white rounded-lg shadow-lg p-6">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">Recent Generations</h3>
+            <div className="space-y-3">
+              {generationHistory.slice(0, 5).map(item => (
+                <div key={item.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-700 truncate">{item.prompt}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="inline-block px-2 py-1 text-xs font-medium bg-sky-100 text-sky-700 rounded">
+                        {item.department}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {new Date(item.timestamp).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full ${
+                    item.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {item.status === 'completed' ? '✓' : '✗'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 
   const renderGeneratingStep = () => (
-    <div className="max-w-2xl mx-auto text-center">
-      <Card className="shadow-lg p-8">
-        <Spin
-          indicator={<LoadingOutlined style={{ fontSize: 48 }} spin />}
-          size="large"
-        />
-        <h2 className="text-2xl font-bold mt-6 mb-2">Generating Your Form...</h2>
-        <p className="text-gray-600 mb-4">AI is analyzing your requirements and creating the perfect form structure</p>
+    <div className="min-h-screen bg-slate-50 p-6">
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          {/* Loading Animation */}
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-sky-50 rounded-full mb-6 animate-pulse">
+              <svg className="w-10 h-10 text-sky-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </div>
 
-        <div className="bg-gray-50 rounded-lg p-4 text-left">
-          <h4 className="font-semibold mb-2">Processing:</h4>
-          <p className="text-sm text-gray-700 italic">"{prompt}"</p>
-        </div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Generating Your Form...</h2>
+            <p className="text-slate-600 mb-6">AI is analyzing your requirements and creating the perfect form structure</p>
 
-        <div className="mt-6 space-y-2">
-          <div className="flex items-center justify-center text-sm text-gray-600">
-            <CheckCircleOutlined className="text-green-500 mr-2" />
-            Analyzing requirements...
-          </div>
-          <div className="flex items-center justify-center text-sm text-gray-600">
-            <LoadingOutlined className="mr-2" />
-            Generating form fields...
-          </div>
-          <div className="flex items-center justify-center text-sm text-gray-600">
-            <span className="mr-2">⏳</span>
-            Setting up validations...
+            {/* Processing Info */}
+            <div className="bg-slate-50 rounded-lg p-4 mb-6 text-left">
+              <h4 className="font-semibold text-slate-700 mb-2">Processing:</h4>
+              <p className="text-sm text-slate-600 italic">"{prompt}"</p>
+            </div>
+
+            {/* Progress Steps */}
+            <div className="space-y-3 text-left max-w-xs mx-auto">
+              <div className="flex items-center">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 mr-3">
+                  ✓
+                </span>
+                <span className="text-sm text-slate-600">Analyzing requirements...</span>
+              </div>
+              <div className="flex items-center">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-sky-100 mr-3">
+                  <span className="w-3 h-3 bg-sky-500 rounded-full animate-pulse"></span>
+                </span>
+                <span className="text-sm text-slate-600">Generating form fields...</span>
+              </div>
+              <div className="flex items-center">
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-slate-400 mr-3">
+                  ○
+                </span>
+                <span className="text-sm text-slate-400">Setting up validations...</span>
+              </div>
+            </div>
           </div>
         </div>
-      </Card>
+      </div>
     </div>
   );
 
   const renderReviewStep = () => (
-    <div className="max-w-6xl mx-auto">
-      <Card className="shadow-lg">
-        <div className="flex justify-between items-center mb-6">
+    <div className="min-h-screen bg-slate-50 p-6">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="mb-6 flex justify-between items-center">
           <div>
-            <h2 className="text-2xl font-bold">Review Generated Form</h2>
-            <p className="text-gray-600">AI has generated your form. Review and customize as needed.</p>
+            <h1 className="text-3xl font-bold text-slate-800 mb-2">Review Generated Form</h1>
+            <p className="text-slate-600">AI has generated your form. Review and customize as needed.</p>
           </div>
-          <div className="space-x-2">
-            <Button
-              icon={<ReloadOutlined />}
+          <div className="flex gap-3">
+            <button
               onClick={() => {
                 setCurrentStep(0);
                 setGeneratedForm(null);
               }}
+              className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md transition-colors"
             >
-              Regenerate
-            </Button>
-            <Button
-              type={isEditing ? 'default' : 'primary'}
-              icon={<EditOutlined />}
+              <span className="flex items-center">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Regenerate
+              </span>
+            </button>
+            <button
               onClick={() => setIsEditing(!isEditing)}
+              className={`px-4 py-2 rounded-md transition-colors ${
+                isEditing
+                  ? 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300'
+                  : 'bg-sky-500 hover:bg-sky-600 text-white shadow-sm'
+              }`}
             >
-              {isEditing ? 'Done Editing' : 'Edit Fields'}
-            </Button>
+              <span className="flex items-center">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                {isEditing ? 'Done Editing' : 'Edit Fields'}
+              </span>
+            </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Form Details */}
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Form Details</h3>
-            <Form layout="vertical">
-              <Form.Item label="Form Name">
-                <Input
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">Form Details</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Form Name</label>
+                <input
+                  type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   disabled={!isEditing}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-50 disabled:text-slate-500"
                 />
-              </Form.Item>
-              <Form.Item label="Form Code">
-                <Input
-                  value={formData.code}
-                  disabled
-                  suffix={<Tag color="green">Auto-generated</Tag>}
-                />
-              </Form.Item>
-              <Form.Item label="Description">
-                <TextArea
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Form Code</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.code}
+                    disabled
+                    className="w-full px-3 py-2 pr-24 border border-slate-300 rounded-md bg-slate-50 text-slate-500"
+                  />
+                  <span className="absolute right-2 top-2 inline-block px-2 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded">
+                    Auto-generated
+                  </span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   disabled={!isEditing}
                   rows={3}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-50 disabled:text-slate-500"
                 />
-              </Form.Item>
-            </Form>
+              </div>
+            </div>
           </div>
 
           {/* Generated Fields */}
-          <div>
+          <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Generated Fields ({formData.fields?.length || 0})</h3>
+              <h3 className="text-lg font-semibold text-slate-800">Generated Fields ({formData.fields?.length || 0})</h3>
               {isEditing && (
-                <Button
-                  type="dashed"
-                  size="small"
+                <button
                   onClick={handleAddField}
+                  className="px-3 py-1 bg-sky-500 hover:bg-sky-600 text-white text-sm rounded-md transition-colors"
                 >
                   + Add Field
-                </Button>
+                </button>
               )}
             </div>
 
@@ -500,31 +538,39 @@ const AIFormGeneration = () => {
               {formData.fields?.map((field, index) => (
                 <div
                   key={index}
-                  className={`p-3 border rounded-lg ${isEditing ? 'hover:border-blue-400' : ''}`}
+                  className={`p-3 border rounded-lg transition-colors ${
+                    isEditing ? 'border-slate-300 hover:border-sky-400' : 'border-slate-200'
+                  }`}
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium">{field.label}</span>
-                        {field.required && <Tag color="red" className="text-xs">Required</Tag>}
-                        <Tag color="blue" className="text-xs">{field.type}</Tag>
+                        <span className="font-medium text-slate-700">{field.label}</span>
+                        {field.required && (
+                          <span className="inline-block px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
+                            Required
+                          </span>
+                        )}
+                        <span className="inline-block px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-700 rounded">
+                          {field.type}
+                        </span>
                       </div>
-                      <p className="text-xs text-gray-500">Field name: {field.name}</p>
+                      <p className="text-xs text-slate-500">Field name: {field.name}</p>
                       {field.options && (
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-slate-500 mt-1">
                           Options: {Array.isArray(field.options) ? field.options.join(', ') : 'Custom options'}
                         </p>
                       )}
                     </div>
                     {isEditing && (
-                      <Button
-                        type="text"
-                        danger
-                        size="small"
+                      <button
                         onClick={() => handleDeleteField(index)}
+                        className="text-red-500 hover:text-red-700 transition-colors"
                       >
-                        Delete
-                      </Button>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -534,39 +580,90 @@ const AIFormGeneration = () => {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex justify-end gap-3 mt-6 pt-6 border-t">
-          <Button
-            size="large"
+        <div className="flex justify-end gap-3 mt-6">
+          <button
             onClick={() => navigate('/forms')}
+            className="px-6 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md transition-colors"
           >
             Cancel
-          </Button>
-          <Button
-            type="primary"
-            size="large"
-            icon={<CheckCircleOutlined />}
+          </button>
+          <button
             onClick={handleSaveForm}
-            loading={loading}
+            disabled={loading}
+            className="px-6 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-md shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Save Form
-          </Button>
+            {loading ? (
+              <span className="flex items-center">
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Saving...
+              </span>
+            ) : (
+              <span className="flex items-center">
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Save Form
+              </span>
+            )}
+          </button>
         </div>
-      </Card>
+      </div>
+    </div>
+  );
+
+  // Steps indicator
+  const renderSteps = () => (
+    <div className="max-w-4xl mx-auto mb-8">
+      <div className="flex items-center justify-between">
+        {['Describe Form', 'AI Generation', 'Review & Save'].map((step, index) => (
+          <div key={index} className="flex-1 flex items-center">
+            <div className="flex items-center">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
+                currentStep > index
+                  ? 'bg-emerald-500 text-white'
+                  : currentStep === index
+                    ? 'bg-sky-500 text-white'
+                    : 'bg-slate-200 text-slate-500'
+              }`}>
+                {currentStep > index ? '✓' : index + 1}
+              </div>
+              <div className="ml-3">
+                <p className={`text-sm font-medium ${
+                  currentStep >= index ? 'text-slate-800' : 'text-slate-500'
+                }`}>
+                  {step}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {index === 0 && 'Tell AI what you need'}
+                  {index === 1 && 'Creating your form'}
+                  {index === 2 && 'Customize and save'}
+                </p>
+              </div>
+            </div>
+            {index < 2 && (
+              <div className={`flex-1 h-0.5 mx-4 ${
+                currentStep > index ? 'bg-emerald-500' : 'bg-slate-200'
+              }`} />
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 
   return (
-    <div className="p-6">
-      {/* Steps indicator */}
-      <div className="mb-8">
-        <Steps current={currentStep}>
-          <Step title="Describe Form" description="Tell AI what you need" />
-          <Step title="AI Generation" description="Creating your form" />
-          <Step title="Review & Save" description="Customize and save" />
-        </Steps>
-      </div>
+    <div className="min-h-screen bg-slate-50">
+      {/* Show steps only for step 0 */}
+      {currentStep === 0 && (
+        <div className="bg-white border-b border-slate-200 py-6">
+          {renderSteps()}
+        </div>
+      )}
 
-      {/* Render current step */}
+      {/* Render current step content */}
       {currentStep === 0 && renderPromptStep()}
       {currentStep === 1 && renderGeneratingStep()}
       {currentStep === 2 && renderReviewStep()}

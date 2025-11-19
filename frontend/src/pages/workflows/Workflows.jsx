@@ -208,10 +208,12 @@ const Workflows = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="p-6">
-        {/* Header */}
-        <div className="mb-6">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      {/* Main Content Area */}
+      <div className="flex-1">
+        <div className="p-6">
+          {/* Header */}
+          <div className="mb-6">
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold text-slate-800 mb-2">Workflow Management</h1>
@@ -269,7 +271,7 @@ const Workflows = () => {
         </div>
 
         {/* Workflows Table */}
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
           {loading ? (
             <div className="flex justify-center items-center h-64">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
@@ -481,68 +483,63 @@ const Workflows = () => {
             </div>
           )}
         </div>
+        </div>
+      </div>
 
-        {/* Statistics Cards - Now at the bottom like original */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow-lg p-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-sky-100 rounded-lg p-3">
-                <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-slate-600">Total Workflows</p>
-                <p className="text-2xl font-semibold text-slate-900">{workflows.length}</p>
-              </div>
+      {/* Statistics Cards - Fixed at bottom */}
+      <div className="bg-white border-t border-slate-200 p-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="flex items-center">
+            <div className="flex-shrink-0 bg-sky-100 rounded-lg p-3">
+              <svg className="w-6 h-6 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-slate-600">Total Workflows</p>
+              <p className="text-2xl font-semibold text-slate-900">{workflows.length}</p>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-lg p-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-emerald-100 rounded-lg p-3">
-                <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-slate-600">Active</p>
-                <p className="text-2xl font-semibold text-slate-900">
-                  {workflows.filter(w => w.status === 'ACTIVE').length}
-                </p>
-              </div>
+          <div className="flex items-center">
+            <div className="flex-shrink-0 bg-emerald-100 rounded-lg p-3">
+              <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-slate-600">Active</p>
+              <p className="text-2xl font-semibold text-slate-900">
+                {workflows.filter(w => w.status === 'ACTIVE').length}
+              </p>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-lg p-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-amber-100 rounded-lg p-3">
-                <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-slate-600">Draft</p>
-                <p className="text-2xl font-semibold text-slate-900">
-                  {workflows.filter(w => w.status === 'DRAFT').length}
-                </p>
-              </div>
+          <div className="flex items-center">
+            <div className="flex-shrink-0 bg-amber-100 rounded-lg p-3">
+              <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-slate-600">Draft</p>
+              <p className="text-2xl font-semibold text-slate-900">
+                {workflows.filter(w => w.status === 'DRAFT').length}
+              </p>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-lg p-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 bg-slate-100 rounded-lg p-3">
-                <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-slate-600">Archived</p>
-                <p className="text-2xl font-semibold text-slate-900">
-                  {workflows.filter(w => w.status === 'ARCHIVED').length}
-                </p>
-              </div>
+          <div className="flex items-center">
+            <div className="flex-shrink-0 bg-slate-100 rounded-lg p-3">
+              <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-slate-600">Archived</p>
+              <p className="text-2xl font-semibold text-slate-900">
+                {workflows.filter(w => w.status === 'ARCHIVED').length}
+              </p>
             </div>
           </div>
         </div>

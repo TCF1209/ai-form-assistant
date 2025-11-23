@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import formService from '../../services/formService';
+import { message } from 'antd';
 
 const AIFormGeneration = () => {
   const { user } = useAuth();
@@ -142,9 +144,11 @@ const AIFormGeneration = () => {
       setGeneratedForm(mockForm);
       setFormData(mockForm);
       saveToHistory(prompt, selectedDepartment);
+      message.success('Form generated successfully! Review and customize as needed.');
       setCurrentStep(2);
     } catch (error) {
       saveToHistory(prompt, selectedDepartment, 'failed');
+      message.error('Failed to generate form. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -235,12 +239,48 @@ const AIFormGeneration = () => {
   const handleSaveForm = async () => {
     setLoading(true);
     try {
-      // Mock save - in real implementation, this would call the API
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      // Navigate to form builder or forms list
-      navigate('/forms');
+      // Prepare the form data for API
+      const aiFormData = {
+        title: formData.name,
+        code: formData.code,
+        description: formData.description,
+        department: formData.department_id || selectedDepartment,
+        prompt: prompt,
+        fields: formData.fields.map((field, index) => ({
+          name: field.name,
+          label: field.label,
+          type: field.type,
+          placeholder: field.placeholder || '',
+          helpText: field.help_text || '',
+          required: field.required || false,
+          options: field.options || [],
+          validation: field.validation_rules || {},
+          defaultValue: field.default_value || '',
+          width: field.width || 100
+        }))
+      };
+
+      // Save the form using the formService
+      const savedForm = await formService.createAIForm(aiFormData);
+
+      message.success('Form created successfully!');
+
+      // Navigate to the form details or forms list
+      navigate(`/forms/${savedForm.id}`);
+
     } catch (error) {
       console.error('Failed to save form:', error);
+
+      // Show error message to user
+      if (error.response?.data?.error) {
+        message.error(error.response.data.error);
+      } else if (error.response?.data?.message) {
+        message.error(error.response.data.message);
+      } else if (error.message) {
+        message.error(error.message);
+      } else {
+        message.error('Failed to save form. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

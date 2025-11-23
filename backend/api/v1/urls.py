@@ -4,6 +4,7 @@ URL configuration for API v1.
 
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenVerifyView
+from rest_framework.routers import DefaultRouter
 
 from .auth_views import (
     RegisterView,
@@ -16,7 +17,15 @@ from .auth_views import (
     UserDetailView,
 )
 
+# Import ViewSets for user management
+from users.views import UserViewSet, DepartmentViewSet
+
 app_name = 'api_v1'
+
+# Create router for user management
+router = DefaultRouter()
+router.register(r'users', UserViewSet, basename='user')
+router.register(r'departments', DepartmentViewSet, basename='department')
 
 # Authentication URLs
 auth_urlpatterns = [
@@ -44,6 +53,9 @@ urlpatterns = [
 
     # AI Integration endpoints
     path('ai/', include('ai_integration.urls')),
+
+    # User and Department management endpoints (directly included)
+    path('', include(router.urls)),
 
     # Additional app endpoints will be added here
     # path('forms/', include('forms.urls')),

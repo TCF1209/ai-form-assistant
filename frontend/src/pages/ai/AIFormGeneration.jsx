@@ -12,6 +12,7 @@ const AIFormGeneration = () => {
   // State management
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [departmentsLoading, setDepartmentsLoading] = useState(true);
   const [departments, setDepartments] = useState([]);
   const [selectedDepartment, setSelectedDepartment] = useState(null);
   const [prompt, setPrompt] = useState('');
@@ -27,14 +28,15 @@ const AIFormGeneration = () => {
 
   // Role-based access control
   const isAdmin = user?.role === 'ADMIN';
-  const isFormManager = user?.role === 'FORM_MANAGER';
+  const isFormManager = user?.role === 'MANAGER';
 
   // Check if user has access
   useEffect(() => {
-    if (!isAdmin && !isFormManager) {
+    // Only redirect if user is loaded and doesn't have access
+    if (user && !isAdmin && !isFormManager) {
       navigate('/forms');
     }
-  }, [isAdmin, isFormManager, navigate]);
+  }, [user, isAdmin, isFormManager, navigate]);
 
   // Fetch departments
   useEffect(() => {
@@ -43,6 +45,7 @@ const AIFormGeneration = () => {
   }, []);
 
   const fetchDepartments = async () => {
+    setDepartmentsLoading(true);
     try {
       const response = await api.get('/departments/');
       // Handle different response formats
@@ -61,10 +64,18 @@ const AIFormGeneration = () => {
           // Form Manager can only see their department
           const userDeptId = typeof user.department === 'object' ? user.department.id : user.department;
           const userDept = departmentData.find(d => d.id === userDeptId);
-          setDepartments(userDept ? [userDept] : []);
-          setSelectedDepartment(userDeptId);
+          if (userDept) {
+            setDepartments([userDept]);
+            setSelectedDepartment(userDeptId);
+          } else {
+            // If can't find user's department, show all and let them select
+            setDepartments(departmentData);
+          }
         } else if (isAdmin) {
           // Admin can see all departments
+          setDepartments(departmentData);
+        } else {
+          // User role - show all departments but they might get redirected
           setDepartments(departmentData);
         }
       } else {
@@ -80,12 +91,21 @@ const AIFormGeneration = () => {
         { id: 4, name: 'Operations', code: 'OPS' }
       ];
 
-      if (isFormManager) {
-        setDepartments([mockDepartments[0]]);
-        setSelectedDepartment(1);
+      if (isFormManager && user?.department) {
+        const userDeptId = typeof user.department === 'object' ? user.department.id : user.department;
+        const mockDept = mockDepartments.find(d => d.id === userDeptId);
+        if (mockDept) {
+          setDepartments([mockDept]);
+          setSelectedDepartment(userDeptId);
+        } else {
+          setDepartments([mockDepartments[0]]);
+          setSelectedDepartment(1);
+        }
       } else {
         setDepartments(mockDepartments);
       }
+    } finally {
+      setDepartmentsLoading(false);
     }
   };
 
@@ -318,15 +338,24 @@ const AIFormGeneration = () => {
               <select
                 className="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
                 value={selectedDepartment || ''}
-                onChange={(e) => setSelectedDepartment(Number(e.target.value))}
-                disabled={isFormManager}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSelectedDepartment(value ? Number(value) : null);
+                }}
+                disabled={isFormManager || departmentsLoading}
               >
-                <option value="">Choose a department</option>
-                {(departments || []).map(dept => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name} ({dept.code})
-                  </option>
-                ))}
+                {departmentsLoading ? (
+                  <option value="">Loading departments...</option>
+                ) : (
+                  <>
+                    <option value="">Choose a department</option>
+                    {(departments || []).map(dept => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name} ({dept.code})
+                      </option>
+                    ))}
+                  </>
+                )}
               </select>
             </div>
 
@@ -368,28 +397,44 @@ const AIFormGeneration = () => {
             <button
               onClick={() => {
                 if (!selectedDepartment) {
-                  alert('Please select a department');
+                  message.warning('Please select a department');
                   return;
                 }
                 if (!prompt.trim()) {
-                  alert('Please describe the form you want to create');
+                  message.warning('Please describe the form you want to create');
+                  return;
+                }
+                if (prompt.trim().length < 10) {
+                  message.warning('Please provide more details about the form (at least 10 characters)');
                   return;
                 }
                 setCurrentStep(1);
                 generateFormWithAI();
               }}
-              disabled={!selectedDepartment || !prompt.trim()}
+              disabled={!selectedDepartment || !prompt.trim() || loading || departmentsLoading}
               className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
-                selectedDepartment && prompt.trim()
+                selectedDepartment && prompt.trim() && !loading && !departmentsLoading
                   ? 'bg-sky-500 hover:bg-sky-600 text-white shadow-sm'
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'
               }`}
             >
               <span className="flex items-center justify-center">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                Generate Form with AI
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 mr-2 text-slate-400" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Generate Form with AI
+                  </>
+                )}
               </span>
             </button>
           </div>
@@ -401,7 +446,19 @@ const AIFormGeneration = () => {
             <h3 className="text-lg font-semibold text-slate-800 mb-4">Recent Generations</h3>
             <div className="space-y-3">
               {generationHistory.slice(0, 5).map(item => (
-                <div key={item.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+                <div
+                  key={item.id}
+                  className="flex justify-between items-center p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                  onClick={() => {
+                    // Load the previous generation
+                    setPrompt(item.prompt);
+                    const dept = departments.find(d => d.name === item.department);
+                    if (dept) {
+                      setSelectedDepartment(dept.id);
+                    }
+                    message.info('Previous generation loaded. Click "Generate Form with AI" to regenerate.');
+                  }}
+                >
                   <div className="flex-1">
                     <p className="text-sm font-medium text-slate-700 truncate">{item.prompt}</p>
                     <div className="flex items-center gap-2 mt-1">

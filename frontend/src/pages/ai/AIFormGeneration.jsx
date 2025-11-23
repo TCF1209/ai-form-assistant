@@ -83,12 +83,12 @@ const AIFormGeneration = () => {
       }
     } catch (error) {
       console.error('Failed to fetch departments, using mock data:', error);
-      // Use mock data if API fails
+      // Use mock data if API fails (using string IDs to match UUID format)
       const mockDepartments = [
-        { id: 1, name: 'Human Resources', code: 'HR' },
-        { id: 2, name: 'Finance', code: 'FIN' },
-        { id: 3, name: 'IT Department', code: 'IT' },
-        { id: 4, name: 'Operations', code: 'OPS' }
+        { id: 'mock-hr-001', name: 'Human Resources', code: 'HR' },
+        { id: 'mock-fin-002', name: 'Finance', code: 'FIN' },
+        { id: 'mock-it-003', name: 'IT Department', code: 'IT' },
+        { id: 'mock-ops-004', name: 'Operations', code: 'OPS' }
       ];
 
       if (isFormManager && user?.department) {
@@ -99,7 +99,7 @@ const AIFormGeneration = () => {
           setSelectedDepartment(userDeptId);
         } else {
           setDepartments([mockDepartments[0]]);
-          setSelectedDepartment(1);
+          setSelectedDepartment('mock-hr-001');
         }
       } else {
         setDepartments(mockDepartments);
@@ -340,7 +340,8 @@ const AIFormGeneration = () => {
                 value={selectedDepartment || ''}
                 onChange={(e) => {
                   const value = e.target.value;
-                  setSelectedDepartment(value ? Number(value) : null);
+                  // Keep the value as string since department IDs are UUIDs
+                  setSelectedDepartment(value || null);
                 }}
                 disabled={isFormManager || departmentsLoading}
               >

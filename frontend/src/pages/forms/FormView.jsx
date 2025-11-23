@@ -71,18 +71,33 @@ const FormView = () => {
       const response = await api.get('/submissions/', {
         params: { form: formId }
       });
-      setSubmissions(response.data);
+
+      // Handle different response formats
+      let submissionsData = [];
+      if (Array.isArray(response.data)) {
+        submissionsData = response.data;
+      } else if (response.data?.results && Array.isArray(response.data.results)) {
+        submissionsData = response.data.results;
+      } else if (response.data?.submissions && Array.isArray(response.data.submissions)) {
+        submissionsData = response.data.submissions;
+      } else {
+        console.warn('Unexpected submissions response format:', response.data);
+        // If no submissions or unexpected format, use empty array
+        submissionsData = [];
+      }
+
+      setSubmissions(submissionsData);
 
       // Calculate statistics
       const stats = {
-        total: response.data.length,
+        total: submissionsData.length,
         draft: 0,
         submitted: 0,
         approved: 0,
         rejected: 0
       };
 
-      response.data.forEach(submission => {
+      submissionsData.forEach(submission => {
         switch (submission.status) {
           case 'DRAFT':
             stats.draft++;
@@ -102,6 +117,15 @@ const FormView = () => {
       setStats(stats);
     } catch (error) {
       console.error('Failed to fetch submissions:', error);
+      // Set empty data on error
+      setSubmissions([]);
+      setStats({
+        total: 0,
+        draft: 0,
+        submitted: 0,
+        approved: 0,
+        rejected: 0
+      });
     }
   };
 

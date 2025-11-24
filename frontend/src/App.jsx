@@ -114,7 +114,7 @@ function App() {
                 path="/workflows"
                 element={
                   <RoleBasedRoute
-                    allowedRoles={['ADMIN', 'FORM_MANAGER']}
+                    allowedRoles={['ADMIN', 'MANAGER']}
                     fallback={
                       <div className="flex items-center justify-center min-h-screen bg-gray-50">
                         <div className="text-center">
@@ -136,7 +136,7 @@ function App() {
                 path="/submissions/management"
                 element={
                   <RoleBasedRoute
-                    allowedRoles={['ADMIN', 'FORM_MANAGER']}
+                    allowedRoles={['ADMIN', 'MANAGER']}
                     fallback={
                       <div className="flex items-center justify-center min-h-screen bg-gray-50">
                         <div className="text-center">
@@ -157,7 +157,7 @@ function App() {
                 path="/ai/form-generation"
                 element={
                   <RoleBasedRoute
-                    allowedRoles={['ADMIN', 'FORM_MANAGER']}
+                    allowedRoles={['ADMIN', 'MANAGER']}
                     fallback={
                       <div className="flex items-center justify-center min-h-screen bg-gray-50">
                         <div className="text-center">

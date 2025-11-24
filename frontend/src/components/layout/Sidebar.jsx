@@ -63,7 +63,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           />
         </svg>
       ),
-      roles: ['ADMIN', 'FORM_MANAGER'], // Only visible to ADMIN and FORM_MANAGER roles
+      roles: ['ADMIN', 'MANAGER'], // Only visible to ADMIN and MANAGER roles
     },
     {
       name: 'Workflows',
@@ -78,7 +78,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           />
         </svg>
       ),
-      roles: ['ADMIN', 'FORM_MANAGER'], // Only visible to ADMIN and FORM_MANAGER roles
+      roles: ['ADMIN', 'MANAGER'], // Only visible to ADMIN and MANAGER roles
     },
     {
       name: 'My Approvals',
@@ -122,7 +122,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           />
         </svg>
       ),
-      roles: ['ADMIN', 'FORM_MANAGER'], // Only visible to ADMIN and FORM_MANAGER roles
+      roles: ['ADMIN', 'MANAGER'], // Only visible to ADMIN and MANAGER roles
     },
     {
       name: 'Notifications',

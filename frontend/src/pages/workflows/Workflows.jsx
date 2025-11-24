@@ -200,10 +200,10 @@ const Workflows = () => {
     return matchesSearch;
   });
 
-  const canCreateWorkflow = user?.role === 'ADMIN' || user?.role === 'FORM_MANAGER';
+  const canCreateWorkflow = user?.role === 'ADMIN' || user?.role === 'MANAGER';
   const canEditWorkflow = (workflow) => {
     if (user?.role === 'ADMIN') return true;
-    if (user?.role === 'FORM_MANAGER' && workflow.department_name === user.department_name) return true;
+    if (user?.role === 'MANAGER' && workflow.department_name === user.department_name) return true;
     return false;
   };
 

@@ -332,7 +332,7 @@ const MyApprovals = () => {
   ];
 
   // Check if user is admin or form manager
-  if (user?.role === 'ADMIN' || user?.role === 'FORM_MANAGER') {
+  if (user?.role === 'ADMIN' || user?.role === 'MANAGER') {
     return (
       <Card>
         <Empty

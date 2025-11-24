@@ -59,14 +59,14 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         if user.role == 'ADMIN':
             # Admin can see all workflows
             return queryset
-        elif user.role == 'FORM_MANAGER':
+        elif user.role == 'MANAGER':
             # Form Manager can see workflows in their department
             return queryset.filter(form__department=user.department)
         else:
-            # Regular users can see active workflows they might interact with
+            # Regular users can see active workflows in their department
             return queryset.filter(
-                Q(status='ACTIVE') &
-                (Q(form__department=user.department) | Q(form__is_public=True))
+                status='ACTIVE',
+                form__department=user.department
             )
 
     def perform_create(self, serializer):
@@ -74,7 +74,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         form = serializer.validated_data.get('form')
 
         # Permission check
-        if user.role == 'FORM_MANAGER' and form.department != user.department:
+        if user.role == 'MANAGER' and form.department != user.department:
             raise PermissionDenied("You can only create workflows for forms in your department.")
 
         # Check if form already has a workflow
@@ -92,7 +92,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
 
         # Permission check
-        if user.role == 'FORM_MANAGER' and instance.form.department != user.department:
+        if user.role == 'MANAGER' and instance.form.department != user.department:
             raise PermissionDenied("You can only edit workflows for forms in your department.")
 
         serializer.save()
@@ -101,7 +101,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         # Permission check
-        if user.role == 'FORM_MANAGER' and instance.form.department != user.department:
+        if user.role == 'MANAGER' and instance.form.department != user.department:
             raise PermissionDenied("You can only delete workflows for forms in your department.")
 
         # Check if workflow status allows deletion
@@ -177,7 +177,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         user = request.user
 
         # Permission check
-        if user.role == 'FORM_MANAGER' and workflow.form.department != user.department:
+        if user.role == 'MANAGER' and workflow.form.department != user.department:
             raise PermissionDenied("You can only manage workflows in your department.")
 
         active_instances = workflow.instances.filter(status__in=['PENDING', 'IN_PROGRESS'])
@@ -229,7 +229,7 @@ class WorkflowStepViewSet(viewsets.ModelViewSet):
         # Filter based on workflow permissions
         if user.role == 'ADMIN':
             return queryset
-        elif user.role == 'FORM_MANAGER':
+        elif user.role == 'MANAGER':
             return queryset.filter(workflow__form__department=user.department)
         else:
             return queryset.filter(
@@ -254,7 +254,7 @@ class WorkflowStepViewSet(viewsets.ModelViewSet):
 
             # Check permissions
             user = request.user
-            if user.role == 'FORM_MANAGER' and workflow.form.department != user.department:
+            if user.role == 'MANAGER' and workflow.form.department != user.department:
                 return Response(
                     {'error': 'You can only edit workflows in your department'},
                     status=status.HTTP_403_FORBIDDEN
@@ -293,7 +293,7 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
 
         if user.role == 'ADMIN':
             return queryset
-        elif user.role == 'FORM_MANAGER':
+        elif user.role == 'MANAGER':
             return queryset.filter(workflow__form__department=user.department)
         else:
             # Users can see instances they're involved in
@@ -387,7 +387,7 @@ class WorkflowApprovalViewSet(viewsets.ModelViewSet):
             return queryset.select_related(
                 'workflow_instance', 'workflow_step', 'assigned_to', 'approved_by'
             )
-        elif user.role == 'FORM_MANAGER':
+        elif user.role == 'MANAGER':
             return queryset.filter(
                 workflow_instance__workflow__form__department=user.department
             ).select_related(
@@ -402,7 +402,7 @@ class WorkflowApprovalViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def my_pending(self, request):
         """Get pending approvals for the current user."""
-        if request.user.role in ['ADMIN', 'FORM_MANAGER']:
+        if request.user.role in ['ADMIN', 'MANAGER']:
             return Response(
                 {'error': 'Admins and Form Managers cannot have approvals'},
                 status=status.HTTP_403_FORBIDDEN

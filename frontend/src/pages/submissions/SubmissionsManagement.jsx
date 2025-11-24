@@ -346,7 +346,7 @@ const SubmissionsManagement = () => {
         {/* Statistics */}
         <Row gutter={16} style={{ marginBottom: 24 }}>
           <Col span={4}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="Total Submissions"
                 value={stats.total}
@@ -355,7 +355,7 @@ const SubmissionsManagement = () => {
             </Card>
           </Col>
           <Col span={4}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="Submitted"
                 value={stats.submitted}
@@ -365,7 +365,7 @@ const SubmissionsManagement = () => {
             </Card>
           </Col>
           <Col span={4}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="Draft"
                 value={stats.draft}
@@ -375,7 +375,7 @@ const SubmissionsManagement = () => {
             </Card>
           </Col>
           <Col span={4}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="With Workflow"
                 value={stats.withWorkflow}
@@ -385,7 +385,7 @@ const SubmissionsManagement = () => {
             </Card>
           </Col>
           <Col span={4}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="In Progress"
                 value={stats.inProgress}
@@ -395,7 +395,7 @@ const SubmissionsManagement = () => {
             </Card>
           </Col>
           <Col span={4}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="Completed"
                 value={stats.completed}

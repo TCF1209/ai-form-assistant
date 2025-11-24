@@ -363,7 +363,7 @@ const MyApprovals = () => {
       <Card>
         <Row gutter={16} style={{ marginBottom: 24 }}>
           <Col span={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="Pending Approvals"
                 value={stats.pending}
@@ -373,7 +373,7 @@ const MyApprovals = () => {
             </Card>
           </Col>
           <Col span={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="Approved"
                 value={stats.approved}
@@ -383,7 +383,7 @@ const MyApprovals = () => {
             </Card>
           </Col>
           <Col span={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="Rejected"
                 value={stats.rejected}
@@ -393,7 +393,7 @@ const MyApprovals = () => {
             </Card>
           </Col>
           <Col span={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="Total Processed"
                 value={stats.total}

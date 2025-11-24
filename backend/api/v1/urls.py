@@ -20,12 +20,29 @@ from .auth_views import (
 # Import ViewSets for user management
 from users.views import UserViewSet, DepartmentViewSet
 
+# Import ViewSets for forms and workflows
+from forms.views import FormViewSet, FormSubmissionViewSet
+from workflows.views import WorkflowViewSet, WorkflowStepViewSet, WorkflowInstanceViewSet, WorkflowApprovalViewSet, WorkflowNotificationViewSet
+
 app_name = 'api_v1'
 
-# Create router for user management
+# Create router for all API endpoints
 router = DefaultRouter()
+
+# User management
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'departments', DepartmentViewSet, basename='department')
+
+# Forms management
+router.register(r'forms', FormViewSet, basename='form')
+router.register(r'submissions', FormSubmissionViewSet, basename='submission')
+
+# Workflow management
+router.register(r'workflows', WorkflowViewSet, basename='workflow')
+router.register(r'workflow-steps', WorkflowStepViewSet, basename='workflow-step')
+router.register(r'workflow-instances', WorkflowInstanceViewSet, basename='workflow-instance')
+router.register(r'workflow-approvals', WorkflowApprovalViewSet, basename='workflow-approval')
+router.register(r'workflow-notifications', WorkflowNotificationViewSet, basename='workflow-notification')
 
 # Authentication URLs
 auth_urlpatterns = [
@@ -54,11 +71,9 @@ urlpatterns = [
     # AI Integration endpoints
     path('ai/', include('ai_integration.urls')),
 
-    # User and Department management endpoints (directly included)
+    # All API endpoints (forms, users, departments, workflows, etc.)
     path('', include(router.urls)),
 
-    # Additional app endpoints will be added here
-    # path('forms/', include('forms.urls')),
-    # path('workflows/', include('workflows.urls')),
+    # Additional app endpoints can be added here
     # path('analytics/', include('analytics.urls')),
 ]

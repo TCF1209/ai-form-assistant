@@ -250,7 +250,7 @@ const MySubmissions = () => {
       <Card>
         <Row gutter={16} style={{ marginBottom: 24 }}>
           <Col span={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="Total Submissions"
                 value={stats.total}
@@ -259,7 +259,7 @@ const MySubmissions = () => {
             </Card>
           </Col>
           <Col span={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="In Progress"
                 value={stats.inProgress}
@@ -269,7 +269,7 @@ const MySubmissions = () => {
             </Card>
           </Col>
           <Col span={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="Completed"
                 value={stats.completed}
@@ -279,7 +279,7 @@ const MySubmissions = () => {
             </Card>
           </Col>
           <Col span={6}>
-            <Card bordered={false}>
+            <Card variant="borderless">
               <Statistic
                 title="Rejected"
                 value={stats.rejected}

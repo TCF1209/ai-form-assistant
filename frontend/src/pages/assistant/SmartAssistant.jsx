@@ -908,7 +908,7 @@ const SmartAssistant = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] bg-slate-50 overflow-hidden">
+    <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
       {/* Header - Fixed at top */}
       <div className="flex-shrink-0 bg-white border-b border-slate-200 px-6 py-4">
         <div className="flex items-center gap-3">

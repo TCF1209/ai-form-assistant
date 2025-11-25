@@ -908,9 +908,9 @@ const SmartAssistant = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] bg-slate-50">
-      {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4">
+    <div className="flex flex-col h-[calc(100vh-64px)] bg-slate-50 overflow-hidden">
+      {/* Header - Fixed at top */}
+      <div className="flex-shrink-0 bg-white border-b border-slate-200 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-sky-500 flex items-center justify-center">
             <span className="text-white text-lg font-bold">AI</span>
@@ -922,8 +922,8 @@ const SmartAssistant = () => {
         </div>
       </div>
 
-      {/* Chat Messages Area */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      {/* Chat Messages Area - Scrollable */}
+      <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
         {messages.map((message, index) => (
           <ChatMessage key={index} message={message} isUser={message.isUser} />
         ))}
@@ -984,7 +984,6 @@ const SmartAssistant = () => {
               formData={formData}
               onSubmit={handleFormSubmit}
               onEdit={handleEditForm}
-              isSubmitting={isSubmitting}
             />
           </div>
         )}
@@ -992,8 +991,8 @@ const SmartAssistant = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="bg-white border-t border-slate-200 px-6 py-4">
+      {/* Input Area - Fixed at bottom */}
+      <div className="flex-shrink-0 bg-white border-t border-slate-200 px-6 py-4">
         <div className="flex items-center gap-3">
           <div className="flex-1 relative">
             <input

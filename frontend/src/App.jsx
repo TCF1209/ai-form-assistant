@@ -26,6 +26,7 @@ import MySubmissions from './pages/submissions/MySubmissions';
 import SubmissionsManagement from './pages/submissions/SubmissionsManagement';
 import Notifications from './pages/notifications/Notifications';
 import AIFormGeneration from './pages/ai/AIFormGeneration';
+import SmartAssistant from './pages/assistant/SmartAssistant';
 
 // Placeholder components for future pages
 const TasksPage = () => <div>Tasks Page - Coming Soon</div>;
@@ -189,6 +190,45 @@ function App() {
                     }
                   >
                     <AIFormGeneration />
+                  </RoleBasedRoute>
+                }
+              />
+              <Route
+                path="/assistant"
+                element={
+                  <RoleBasedRoute
+                    allowedRoles={['USER']}
+                    fallback={
+                      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+                        <div className="text-center">
+                          <svg
+                            className="mx-auto h-12 w-12 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                            />
+                          </svg>
+                          <h1 className="mt-4 text-2xl font-semibold text-gray-900">
+                            Access Denied
+                          </h1>
+                          <p className="mt-2 text-gray-600">Smart Assistant is only available for regular users.</p>
+                          <a
+                            href="/dashboard"
+                            className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                          >
+                            Go to Dashboard
+                          </a>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <SmartAssistant />
                   </RoleBasedRoute>
                 }
               />

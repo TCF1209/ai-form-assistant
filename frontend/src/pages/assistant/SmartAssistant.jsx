@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import mockAIService from '../../services/mockAIService';
+import assistantService from '../../services/assistantService';
 
 // Icons
 const SendIcon = () => (
@@ -86,7 +86,10 @@ const FormRecommendationCard = ({ form, onYes, onNo, onFillManually, onFillWithA
         </div>
         <div className="flex-1">
           <h3 className="font-bold text-slate-800 text-base">{form.name}</h3>
-          <p className="text-sm text-slate-600 mt-1">{form.description}</p>
+          <p className="text-sm text-slate-600 mt-1">{form.description || 'No description available.'}</p>
+          {form.department_name && (
+            <p className="text-xs text-sky-600 mt-1">Department: {form.department_name}</p>
+          )}
         </div>
       </div>
 
@@ -133,10 +136,30 @@ const FormRecommendationCard = ({ form, onYes, onNo, onFillManually, onFillWithA
 };
 
 // Form list component
-const FormListCard = ({ forms, onSelectForm }) => {
+const FormListCard = ({ forms, onSelectForm, loading }) => {
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg border border-slate-200 p-4 max-w-md mb-4">
+        <h3 className="font-bold text-slate-800 mb-3">Loading Forms...</h3>
+        <div className="flex justify-center py-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!forms || forms.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg border border-slate-200 p-4 max-w-md mb-4">
+        <h3 className="font-bold text-slate-800 mb-3">No Forms Available</h3>
+        <p className="text-sm text-slate-500">There are no forms available at the moment.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-lg border border-slate-200 p-4 max-w-md mb-4">
-      <h3 className="font-bold text-slate-800 mb-3">Available Forms</h3>
+      <h3 className="font-bold text-slate-800 mb-3">Available Forms ({forms.length})</h3>
       <div className="space-y-2 max-h-60 overflow-y-auto">
         {forms.map(form => (
           <button
@@ -145,7 +168,10 @@ const FormListCard = ({ forms, onSelectForm }) => {
             className="w-full text-left p-3 rounded-lg border border-slate-200 hover:border-sky-300 hover:bg-sky-50 transition-colors"
           >
             <div className="font-medium text-slate-800 text-sm">{form.name}</div>
-            <div className="text-xs text-slate-500 mt-1 line-clamp-2">{form.description}</div>
+            <div className="text-xs text-slate-500 mt-1 line-clamp-2">{form.description || 'No description'}</div>
+            {form.department_name && (
+              <div className="text-xs text-sky-600 mt-1">{form.department_name}</div>
+            )}
           </button>
         ))}
       </div>
@@ -165,9 +191,14 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
 
   const renderFieldInput = () => {
     const field = currentField;
+    const fieldType = field.field_type || field.type; // Support both backend (field_type) and mock (type)
     const commonClasses = "w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500";
 
-    switch (field.type) {
+    // Helper to get option value/label
+    const getOptionValue = (option) => typeof option === 'string' ? option : (option.value || option.label || option);
+    const getOptionLabel = (option) => typeof option === 'string' ? option : (option.label || option.value || option);
+
+    switch (fieldType) {
       case 'SELECT':
         return (
           <select
@@ -177,7 +208,7 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
           >
             <option value="">Select an option</option>
             {field.options?.map((option, idx) => (
-              <option key={idx} value={option}>{option}</option>
+              <option key={idx} value={getOptionValue(option)}>{getOptionLabel(option)}</option>
             ))}
           </select>
         );
@@ -189,15 +220,32 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
                 <input
                   type="radio"
                   name={field.name}
-                  value={option}
-                  checked={inputValue === option}
+                  value={getOptionValue(option)}
+                  checked={inputValue === getOptionValue(option)}
                   onChange={(e) => setInputValue(e.target.value)}
                   className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-slate-300"
                 />
-                <span className="ml-2 text-sm text-slate-700">{option}</span>
+                <span className="ml-2 text-sm text-slate-700">{getOptionLabel(option)}</span>
               </label>
             ))}
           </div>
+        );
+      case 'MULTISELECT':
+        return (
+          <select
+            multiple
+            value={inputValue ? inputValue.split(',') : []}
+            onChange={(e) => {
+              const values = Array.from(e.target.selectedOptions, opt => opt.value);
+              setInputValue(values.join(','));
+            }}
+            className={commonClasses}
+            size={Math.min(field.options?.length || 4, 4)}
+          >
+            {field.options?.map((option, idx) => (
+              <option key={idx} value={getOptionValue(option)}>{getOptionLabel(option)}</option>
+            ))}
+          </select>
         );
       case 'TEXTAREA':
         return (
@@ -206,7 +254,7 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
             onChange={(e) => setInputValue(e.target.value)}
             rows={3}
             className={commonClasses}
-            placeholder={`Enter ${field.label.toLowerCase()}...`}
+            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
           />
         );
       case 'DATE':
@@ -227,6 +275,15 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
             className={commonClasses}
           />
         );
+      case 'DATETIME':
+        return (
+          <input
+            type="datetime-local"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            className={commonClasses}
+          />
+        );
       case 'NUMBER':
         return (
           <input
@@ -234,7 +291,7 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             className={commonClasses}
-            placeholder={`Enter ${field.label.toLowerCase()}...`}
+            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
           />
         );
       case 'EMAIL':
@@ -244,8 +301,40 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             className={commonClasses}
-            placeholder={`Enter ${field.label.toLowerCase()}...`}
+            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
           />
+        );
+      case 'PHONE':
+        return (
+          <input
+            type="tel"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            className={commonClasses}
+            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+          />
+        );
+      case 'URL':
+        return (
+          <input
+            type="url"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            className={commonClasses}
+            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+          />
+        );
+      case 'CHECKBOX':
+        return (
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              checked={inputValue === 'true' || inputValue === true}
+              onChange={(e) => setInputValue(e.target.checked ? 'true' : 'false')}
+              className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-slate-300 rounded"
+            />
+            <span className="ml-2 text-sm text-slate-700">{field.placeholder || 'Yes'}</span>
+          </div>
         );
       case 'FILE':
         return (
@@ -256,8 +345,27 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
               className={commonClasses}
             />
             <p className="text-xs text-slate-500 mt-1">
-              Note: File upload simulation - in production, file would be uploaded
+              Note: File upload is handled separately during form submission
             </p>
+          </div>
+        );
+      case 'RATING':
+        return (
+          <div className="flex gap-2">
+            {[1, 2, 3, 4, 5].map(rating => (
+              <button
+                key={rating}
+                type="button"
+                onClick={() => setInputValue(rating.toString())}
+                className={`w-10 h-10 rounded-full border-2 transition-colors ${
+                  parseInt(inputValue) >= rating
+                    ? 'bg-yellow-400 border-yellow-500 text-yellow-800'
+                    : 'bg-white border-slate-300 hover:border-slate-400 text-slate-400'
+                }`}
+              >
+                ★
+              </button>
+            ))}
           </div>
         );
       default:
@@ -267,7 +375,7 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             className={commonClasses}
-            placeholder={`Enter ${field.label.toLowerCase()}...`}
+            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
           />
         );
     }
@@ -323,7 +431,16 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
 };
 
 // Form completion summary component
-const FormCompletionCard = ({ form, formData, onSubmit, onEdit }) => {
+const FormCompletionCard = ({ form, formData, onSubmit, onEdit, isSubmitting }) => {
+  // Helper to display field value
+  const displayValue = (field, value) => {
+    if (value === undefined || value === null || value === '') return '-';
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    if (value === 'true') return 'Yes';
+    if (value === 'false') return 'No';
+    return String(value);
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-lg border border-emerald-200 p-4 max-w-md mb-4">
       <div className="flex items-center gap-2 mb-4">
@@ -337,9 +454,9 @@ const FormCompletionCard = ({ form, formData, onSubmit, onEdit }) => {
 
       <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
         {form.fields.map(field => (
-          <div key={field.name} className="text-sm">
+          <div key={field.name || field.id} className="text-sm">
             <span className="text-slate-500">{field.label}:</span>
-            <span className="ml-2 text-slate-800">{formData[field.name] || '-'}</span>
+            <span className="ml-2 text-slate-800">{displayValue(field, formData[field.name])}</span>
           </div>
         ))}
       </div>
@@ -347,17 +464,28 @@ const FormCompletionCard = ({ form, formData, onSubmit, onEdit }) => {
       <div className="flex gap-2">
         <button
           onClick={onEdit}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
+          disabled={isSubmitting}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
         >
           <EditIcon />
           Edit
         </button>
         <button
           onClick={onSubmit}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+          disabled={isSubmitting}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50"
         >
-          <CheckIcon />
-          Submit Form
+          {isSubmitting ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              Submitting...
+            </>
+          ) : (
+            <>
+              <CheckIcon />
+              Submit Form
+            </>
+          )}
         </button>
       </div>
     </div>
@@ -405,10 +533,12 @@ const SmartAssistant = () => {
   const [currentFieldIndex, setCurrentFieldIndex] = useState(0);
   const [formData, setFormData] = useState({});
   const [showCompletionSummary, setShowCompletionSummary] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formsLoading, setFormsLoading] = useState(false);
 
   // Initialize with welcome message
   useEffect(() => {
-    const welcomeMessage = mockAIService.getWelcomeMessage();
+    const welcomeMessage = assistantService.getWelcomeMessage();
     setMessages([{ ...welcomeMessage, isUser: false }]);
   }, []);
 
@@ -451,7 +581,7 @@ const SmartAssistant = () => {
 
       setTimeout(() => {
         addMessage({
-          content: `Here's another option:\n\n**${nextForm.name}**\n\n${nextForm.description}\n\nIs this the form you're looking for?`,
+          content: `Here's another option:\n\n**${nextForm.name}**\n\n${nextForm.description || 'No description available.'}\n\nIs this the form you're looking for?`,
           isUser: false,
           timestamp: new Date().toISOString()
         });
@@ -459,7 +589,7 @@ const SmartAssistant = () => {
     } else {
       setCurrentRecommendation(null);
       setShowFormList(true);
-      setFormListData(mockAIService.getAllForms());
+      setFormsLoading(true);
 
       setTimeout(() => {
         addMessage({
@@ -468,6 +598,21 @@ const SmartAssistant = () => {
           timestamp: new Date().toISOString()
         });
       }, 500);
+
+      try {
+        const allForms = await assistantService.getAllForms();
+        setFormListData(allForms);
+      } catch (error) {
+        console.error('Failed to fetch forms:', error);
+        setFormListData([]);
+        addMessage({
+          content: "Sorry, I couldn't load the forms. Please try again.",
+          isUser: false,
+          timestamp: new Date().toISOString()
+        });
+      } finally {
+        setFormsLoading(false);
+      }
     }
   };
 
@@ -487,10 +632,9 @@ const SmartAssistant = () => {
           timestamp: new Date().toISOString()
         });
 
-        // Navigate to the form page (using mock ID for now)
+        // Navigate to the actual form submission page
         setTimeout(() => {
-          // In production, this would navigate to the actual form
-          navigate(`/forms`);
+          navigate(`/forms/${currentRecommendation.id}/submit`);
         }, 1000);
       }, 500);
     }
@@ -507,8 +651,17 @@ const SmartAssistant = () => {
       });
 
       setIsTyping(true);
-      const response = await mockAIService.startFormFilling(currentRecommendation);
+      const response = await assistantService.startFormFilling(currentRecommendation);
       setIsTyping(false);
+
+      if (response.type === 'error') {
+        addMessage({
+          content: response.content,
+          isUser: false,
+          timestamp: response.timestamp
+        });
+        return;
+      }
 
       addMessage({
         content: response.content,
@@ -516,7 +669,8 @@ const SmartAssistant = () => {
         timestamp: response.timestamp
       });
 
-      setCurrentForm(currentRecommendation);
+      // Use the form from response which has fields loaded
+      setCurrentForm(response.form || currentRecommendation);
       setCurrentFieldIndex(0);
       setFormData({});
       setIsFillingForm(true);
@@ -535,7 +689,7 @@ const SmartAssistant = () => {
     });
 
     setIsTyping(true);
-    const response = await mockAIService.processFormFillingResponse(value, {
+    const response = await assistantService.processFormFillingResponse(value, {
       fillingForm: true,
       currentForm,
       currentFieldIndex,
@@ -583,7 +737,7 @@ const SmartAssistant = () => {
   };
 
   // Handle form submission
-  const handleFormSubmit = () => {
+  const handleFormSubmit = async () => {
     addMessage({
       content: "Submitting form...",
       isUser: true,
@@ -591,16 +745,39 @@ const SmartAssistant = () => {
     });
 
     setShowCompletionSummary(false);
+    setIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
+      const result = await assistantService.submitForm(currentForm.id, formData);
+
+      if (result.success) {
+        addMessage({
+          content: `Your ${currentForm.name} has been submitted successfully! Submission number: ${result.submission?.submission_number || 'N/A'}\n\nYou can track its status in "My Submissions". Is there anything else I can help you with?`,
+          isUser: false,
+          timestamp: new Date().toISOString()
+        });
+        setCurrentForm(null);
+        setFormData({});
+      } else {
+        addMessage({
+          content: `Sorry, there was an error submitting your form: ${result.message}\n\nWould you like to try again?`,
+          isUser: false,
+          timestamp: new Date().toISOString()
+        });
+        // Show completion summary again so user can retry
+        setShowCompletionSummary(true);
+      }
+    } catch (error) {
+      console.error('Form submission error:', error);
       addMessage({
-        content: `Your ${currentForm.name} has been submitted successfully! You can track its status in "My Submissions". Is there anything else I can help you with?`,
+        content: "Sorry, there was an unexpected error submitting your form. Please try again or fill the form manually.",
         isUser: false,
         timestamp: new Date().toISOString()
       });
-      setCurrentForm(null);
-      setFormData({});
-    }, 1000);
+      setShowCompletionSummary(true);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Handle edit form
@@ -659,13 +836,14 @@ const SmartAssistant = () => {
     };
 
     addMessage(userMessage);
+    const messageText = inputValue.trim();
     setInputValue('');
     resetRecommendationState();
 
     setIsTyping(true);
 
     try {
-      const response = await mockAIService.processMessage(inputValue.trim(), {
+      const response = await assistantService.processMessage(messageText, {
         fillingForm: isFillingForm,
         currentForm,
         currentFieldIndex,
@@ -689,7 +867,10 @@ const SmartAssistant = () => {
         setFormListData(response.forms);
       } else if (response.type === 'no_match') {
         setShowFormList(true);
-        setFormListData(mockAIService.getAllForms());
+        setFormListData(response.forms || []);
+      } else if (response.type === 'no_forms' || response.type === 'error') {
+        // No forms available or error - don't show form list
+        setShowFormList(false);
       }
     } catch (error) {
       setIsTyping(false);
@@ -773,7 +954,7 @@ const SmartAssistant = () => {
             <div className="flex-shrink-0 w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center mr-3 invisible">
               <span className="text-white text-sm font-bold">AI</span>
             </div>
-            <FormListCard forms={formListData} onSelectForm={handleSelectForm} />
+            <FormListCard forms={formListData} onSelectForm={handleSelectForm} loading={formsLoading} />
           </div>
         )}
 
@@ -803,6 +984,7 @@ const SmartAssistant = () => {
               formData={formData}
               onSubmit={handleFormSubmit}
               onEdit={handleEditForm}
+              isSubmitting={isSubmitting}
             />
           </div>
         )}

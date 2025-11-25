@@ -148,6 +148,11 @@
   - [x] Form completion summary
   - [x] Voice input placeholder (for future)
   - [x] Mock AI service for offline testing
+- [x] Backend Integration
+  - [x] assistantService.js fetches real forms from backend API
+  - [x] Form submission to backend /submissions/ endpoint
+  - [x] Keyword-based form matching (mock AI, ready for OpenAI swap)
+  - [x] Navigate to actual form submission page for manual fill
 
 #### Week 9: Natural Language Analytics (Partially Complete)
 - [x] Query processing

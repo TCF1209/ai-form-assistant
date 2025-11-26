@@ -94,12 +94,12 @@ const StatCard = ({ title, value, icon, color, subtext, link }) => {
   };
 
   const content = (
-    <div className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
-      <div className="flex items-center justify-between">
+    <div className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow h-full">
+      <div className="flex items-center justify-between h-full">
         <div>
           <p className="text-sm font-medium text-slate-500">{title}</p>
           <p className="mt-2 text-3xl font-bold text-slate-800">{value}</p>
-          {subtext && <p className="mt-1 text-xs text-slate-400">{subtext}</p>}
+          <p className="mt-1 text-xs text-slate-400 min-h-[16px]">{subtext || '\u00A0'}</p>
         </div>
         <div className={`p-3 rounded-full ${colorClasses[color] || colorClasses.sky}`}>
           {icon}

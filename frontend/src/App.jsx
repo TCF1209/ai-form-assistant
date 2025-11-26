@@ -27,6 +27,7 @@ import SubmissionsManagement from './pages/submissions/SubmissionsManagement';
 import Notifications from './pages/notifications/Notifications';
 import AIFormGeneration from './pages/ai/AIFormGeneration';
 import SmartAssistant from './pages/assistant/SmartAssistant';
+import NaturalLanguageAnalytics from './pages/analytics/NaturalLanguageAnalytics';
 
 // Placeholder components for future pages
 const TasksPage = () => <div>Tasks Page - Coming Soon</div>;
@@ -229,6 +230,45 @@ function App() {
                     }
                   >
                     <SmartAssistant />
+                  </RoleBasedRoute>
+                }
+              />
+              <Route
+                path="/analytics"
+                element={
+                  <RoleBasedRoute
+                    allowedRoles={['ADMIN', 'MANAGER']}
+                    fallback={
+                      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+                        <div className="text-center">
+                          <svg
+                            className="mx-auto h-12 w-12 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                            />
+                          </svg>
+                          <h1 className="mt-4 text-2xl font-semibold text-gray-900">
+                            Access Denied
+                          </h1>
+                          <p className="mt-2 text-gray-600">Analytics Query is only available for Admins and Form Managers.</p>
+                          <a
+                            href="/dashboard"
+                            className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                          >
+                            Go to Dashboard
+                          </a>
+                        </div>
+                      </div>
+                    }
+                  >
+                    <NaturalLanguageAnalytics />
                   </RoleBasedRoute>
                 }
               />

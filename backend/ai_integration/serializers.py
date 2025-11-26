@@ -98,6 +98,10 @@ class NLQueryResponseSerializer(serializers.Serializer):
         required=False,
         help_text="Query results"
     )
+    summary = serializers.CharField(
+        required=False,
+        help_text="Human-readable summary of the results"
+    )
     error = serializers.CharField(required=False)
 
 

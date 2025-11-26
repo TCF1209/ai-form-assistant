@@ -4,7 +4,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 
 // Pages that need full-height layout without scrolling (like chat interfaces)
-const FULL_HEIGHT_PAGES = ['/assistant'];
+const FULL_HEIGHT_PAGES = ['/assistant', '/analytics'];
 
 const MainLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);

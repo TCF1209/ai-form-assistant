@@ -225,53 +225,257 @@ class NaturalLanguageQueryView(APIView):
 
     def post(self, request):
         """Process natural language query"""
+        # Check permission - only ADMIN and MANAGER can access analytics
+        if request.user.role not in ['ADMIN', 'MANAGER']:
+            return Response(
+                {"error": "Only administrators and form managers can access analytics"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         serializer = NLQueryRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        query = serializer.validated_data['query'].lower()
+
         # Build context based on user's role and department
-        context = serializer.validated_data.get('context', {})
-        context['user_role'] = request.user.role
-        if request.user.department:
-            context['department'] = request.user.department.name
+        user_role = request.user.role
+        user_department = request.user.department.name if request.user.department else None
 
-        # Get available data context
-        available_data = {
-            "forms": Form.objects.filter(status='ACTIVE').count(),
-            "submissions": FormSubmission.objects.count(),
-            "departments": request.user.department.name if request.user.department else "All",
-            "date_range": "Last 30 days"  # Default
-        }
-
-        # Process query
-        ai_service = get_openai_service()
-        query_result = ai_service.translate_nl_query(
-            serializer.validated_data['query'],
-            available_data
-        )
-
-        # Execute query based on interpretation (simplified for now)
-        if 'error' not in query_result:
-            # TODO: Implement actual database query execution based on AI interpretation
-            # For now, return mock data
-            query_result['data'] = self._execute_interpreted_query(query_result)
+        # Generate mock analytics response based on query
+        query_result = self._generate_mock_analytics(query, user_role, user_department)
 
         response_serializer = NLQueryResponseSerializer(query_result)
         return Response(response_serializer.data, status=status.HTTP_200_OK)
 
-    def _execute_interpreted_query(self, interpretation):
-        """Execute the interpreted query (placeholder implementation)"""
-        # This would be replaced with actual database queries
-        # based on the AI's interpretation
-        if interpretation.get('aggregation') == 'count':
-            return [{"count": 42, "label": "Total"}]
-        elif interpretation.get('visualization') == 'bar':
-            return [
-                {"label": "Jan", "value": 10},
-                {"label": "Feb", "value": 15},
-                {"label": "Mar", "value": 20}
+    def _generate_mock_analytics(self, query, user_role, user_department):
+        """Generate mock analytics data based on the query"""
+        import random
+        from datetime import datetime, timedelta
+
+        # Keywords to detect query intent
+        leave_keywords = ['leave', 'vacation', 'time off', 'absence', 'annual', 'medical', 'sick']
+        pending_keywords = ['pending', 'waiting', 'awaiting', 'queue', 'unprocessed']
+        department_keywords = ['department', 'team', 'division', 'unit', 'group']
+        count_keywords = ['how many', 'count', 'number', 'total', 'submitted', 'requests']
+        time_keywords = ['month', 'week', 'last', 'this', 'today', 'yesterday', 'average', 'time']
+        approval_keywords = ['approval', 'approved', 'rejected', 'review', 'processing']
+        top_keywords = ['most', 'top', 'highest', 'maximum', 'best', 'popular']
+
+        # Department names for mock data
+        departments = ['HR', 'IT', 'Finance', 'Marketing', 'Operations', 'Sales', 'Engineering']
+
+        # Filter departments based on role
+        if user_role == 'MANAGER' and user_department:
+            departments = [user_department]
+            dept_note = f" (showing data for {user_department} department only)"
+        else:
+            dept_note = " (showing data across all departments)"
+
+        # Detect query type and generate appropriate response
+        if any(kw in query for kw in leave_keywords) and any(kw in query for kw in count_keywords):
+            # Leave request count queries
+            if 'month' in query or 'last month' in query:
+                count = random.randint(15, 45)
+                return {
+                    "interpretation": f"You're asking about leave requests submitted last month{dept_note}",
+                    "filters": {
+                        "form_type": "Leave Request",
+                        "time_range": "last_month",
+                        "departments": departments
+                    },
+                    "aggregation": "count",
+                    "visualization": "number",
+                    "data": [
+                        {"label": "Leave Requests (Last Month)", "value": count, "trend": "+12%"}
+                    ],
+                    "summary": f"There were {count} leave requests submitted last month. This is 12% more than the previous month."
+                }
+            elif 'week' in query:
+                count = random.randint(5, 15)
+                return {
+                    "interpretation": f"You're asking about leave requests submitted this week{dept_note}",
+                    "filters": {
+                        "form_type": "Leave Request",
+                        "time_range": "this_week",
+                        "departments": departments
+                    },
+                    "aggregation": "count",
+                    "visualization": "number",
+                    "data": [
+                        {"label": "Leave Requests (This Week)", "value": count}
+                    ],
+                    "summary": f"There have been {count} leave requests submitted this week so far."
+                }
+            else:
+                count = random.randint(80, 150)
+                return {
+                    "interpretation": f"You're asking about total leave requests{dept_note}",
+                    "filters": {
+                        "form_type": "Leave Request",
+                        "departments": departments
+                    },
+                    "aggregation": "count",
+                    "visualization": "number",
+                    "data": [
+                        {"label": "Total Leave Requests", "value": count}
+                    ],
+                    "summary": f"There are {count} leave requests in total across the system."
+                }
+
+        elif any(kw in query for kw in pending_keywords):
+            # Pending forms queries
+            if any(kw in query for kw in department_keywords):
+                return {
+                    "interpretation": f"You're asking about pending forms by department{dept_note}",
+                    "filters": {
+                        "status": "PENDING",
+                        "departments": departments
+                    },
+                    "aggregation": "group_by_department",
+                    "visualization": "bar",
+                    "data": [
+                        {"department": dept, "pending": random.randint(3, 25)}
+                        for dept in departments
+                    ],
+                    "summary": f"Here's the breakdown of pending forms across departments."
+                }
+            else:
+                pending_count = random.randint(10, 40)
+                return {
+                    "interpretation": f"You're asking about pending forms{dept_note}",
+                    "filters": {
+                        "status": "PENDING",
+                        "departments": departments
+                    },
+                    "aggregation": "count",
+                    "visualization": "number",
+                    "data": [
+                        {"label": "Pending Forms", "value": pending_count, "urgent": random.randint(2, 8)}
+                    ],
+                    "summary": f"There are {pending_count} forms currently pending review."
+                }
+
+        elif any(kw in query for kw in top_keywords) and any(kw in query for kw in department_keywords):
+            # Department comparison queries
+            dept_data = [
+                {"department": dept, "submissions": random.randint(20, 100)}
+                for dept in departments
             ]
-        return []
+            dept_data.sort(key=lambda x: x['submissions'], reverse=True)
+            top_dept = dept_data[0]
+            return {
+                "interpretation": f"You're asking which department has the most submissions{dept_note}",
+                "filters": {
+                    "group_by": "department",
+                    "departments": departments
+                },
+                "aggregation": "count_by_department",
+                "visualization": "bar",
+                "data": dept_data,
+                "summary": f"The {top_dept['department']} department leads with {top_dept['submissions']} submissions."
+            }
+
+        elif any(kw in query for kw in approval_keywords) and any(kw in query for kw in time_keywords):
+            # Approval time analytics
+            avg_time = round(random.uniform(1.5, 4.5), 1)
+            return {
+                "interpretation": f"You're asking about average approval time{dept_note}",
+                "filters": {
+                    "metric": "approval_time",
+                    "departments": departments
+                },
+                "aggregation": "average",
+                "visualization": "number",
+                "data": [
+                    {"label": "Average Approval Time", "value": avg_time, "unit": "days"},
+                    {"label": "Fastest", "value": round(random.uniform(0.5, 1.5), 1), "unit": "days"},
+                    {"label": "Slowest", "value": round(random.uniform(5.0, 10.0), 1), "unit": "days"}
+                ],
+                "summary": f"The average approval time is {avg_time} days. Fastest approval was within a few hours, while some complex requests took up to a week."
+            }
+
+        elif 'trend' in query or 'over time' in query or 'history' in query:
+            # Trend queries
+            months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
+            return {
+                "interpretation": f"You're asking about submission trends over time{dept_note}",
+                "filters": {
+                    "time_range": "6_months",
+                    "departments": departments
+                },
+                "aggregation": "time_series",
+                "visualization": "line",
+                "data": [
+                    {"month": month, "submissions": random.randint(30, 80), "approved": random.randint(20, 60)}
+                    for month in months
+                ],
+                "summary": "Here's the submission trend over the last 6 months."
+            }
+
+        elif 'status' in query or 'breakdown' in query:
+            # Status breakdown
+            submitted = random.randint(20, 50)
+            approved = random.randint(40, 80)
+            rejected = random.randint(5, 15)
+            pending = random.randint(10, 30)
+            return {
+                "interpretation": f"You're asking about form status breakdown{dept_note}",
+                "filters": {
+                    "group_by": "status",
+                    "departments": departments
+                },
+                "aggregation": "count_by_status",
+                "visualization": "pie",
+                "data": [
+                    {"status": "Submitted", "count": submitted, "percentage": 20},
+                    {"status": "Approved", "count": approved, "percentage": 50},
+                    {"status": "Rejected", "count": rejected, "percentage": 10},
+                    {"status": "Pending", "count": pending, "percentage": 20}
+                ],
+                "summary": f"Out of all forms: {approved} approved, {submitted} submitted, {pending} pending review, and {rejected} rejected."
+            }
+
+        elif 'expense' in query or 'claim' in query:
+            # Expense related queries
+            total_amount = random.randint(5000, 25000)
+            claim_count = random.randint(15, 50)
+            return {
+                "interpretation": f"You're asking about expense claims{dept_note}",
+                "filters": {
+                    "form_type": "Expense Claim",
+                    "departments": departments
+                },
+                "aggregation": "sum",
+                "visualization": "number",
+                "data": [
+                    {"label": "Total Claims", "value": claim_count},
+                    {"label": "Total Amount", "value": total_amount, "unit": "$"},
+                    {"label": "Average Claim", "value": round(total_amount / claim_count, 2), "unit": "$"}
+                ],
+                "summary": f"There are {claim_count} expense claims totaling ${total_amount:,}."
+            }
+
+        else:
+            # Default: general statistics
+            total_submissions = random.randint(100, 300)
+            total_forms = random.randint(10, 25)
+            pending = random.randint(15, 40)
+            return {
+                "interpretation": f"Here's an overview of the forms system{dept_note}",
+                "filters": {
+                    "departments": departments
+                },
+                "aggregation": "overview",
+                "visualization": "cards",
+                "data": [
+                    {"label": "Total Submissions", "value": total_submissions, "icon": "document"},
+                    {"label": "Active Forms", "value": total_forms, "icon": "form"},
+                    {"label": "Pending Review", "value": pending, "icon": "clock"},
+                    {"label": "Approval Rate", "value": f"{random.randint(75, 95)}%", "icon": "check"}
+                ],
+                "summary": f"The system currently has {total_forms} active forms with {total_submissions} total submissions. {pending} are pending review."
+            }
 
 
 class RecommendationView(APIView):

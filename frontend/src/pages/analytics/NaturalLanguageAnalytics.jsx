@@ -372,7 +372,8 @@ const NaturalLanguageAnalytics = () => {
 
       setIsTyping(false);
 
-      if (response.type === 'error') {
+      if (response.type === 'error' || response.type === 'text') {
+        // Simple text message (errors, greetings, help, etc.)
         addMessage({
           content: response.content,
           isUser: false,

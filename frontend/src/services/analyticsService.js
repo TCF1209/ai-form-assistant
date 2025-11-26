@@ -64,7 +64,7 @@ const analyticsService = {
     await delay(500 + Math.random() * 500);
 
     try {
-      const response = await api.post('/ai_integration/query/', {
+      const response = await api.post('/ai/query/', {
         query: query,
         context: context
       });

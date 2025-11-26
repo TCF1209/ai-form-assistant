@@ -126,7 +126,7 @@ const Profile = () => {
     switch (role) {
       case 'ADMIN':
         return 'bg-red-100 text-red-700';
-      case 'FORM_MANAGER':
+      case 'MANAGER':
         return 'bg-purple-100 text-purple-700';
       default:
         return 'bg-sky-100 text-sky-700';
@@ -135,7 +135,9 @@ const Profile = () => {
 
   const formatRole = (role) => {
     if (!role) return 'User';
-    return role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+    if (role === 'ADMIN') return 'Administrator';
+    if (role === 'MANAGER') return 'Form Manager';
+    return 'User';
   };
 
   return (

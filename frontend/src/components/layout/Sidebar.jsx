@@ -97,9 +97,10 @@ const Sidebar = ({ isOpen, onClose }) => {
           name: 'My Submissions',
           href: '/submissions',
           icon: <SubmissionIcon />,
+          roles: ['USER'],
         },
         {
-          name: 'Submissions Mgmt',
+          name: 'All Submissions',
           href: '/submissions/management',
           icon: <ManagementIcon />,
           roles: ['ADMIN', 'MANAGER'],

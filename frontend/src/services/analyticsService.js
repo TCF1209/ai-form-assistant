@@ -61,7 +61,45 @@ const analyticsService = {
    */
   async processQuery(query, context = {}) {
     // Add artificial delay for better UX
-    await delay(500 + Math.random() * 500);
+    await delay(300 + Math.random() * 300);
+
+    const queryLower = query.toLowerCase().trim();
+
+    // Handle greetings and casual messages locally
+    if (/^(hi|hello|hey|halo|good morning|good afternoon|good evening)/.test(queryLower)) {
+      return {
+        type: 'text',
+        content: "Hello! I'm your Analytics Assistant. Ask me questions about your forms data, like:\n\n- \"How many leave requests last month?\"\n- \"Show pending forms by department\"\n- \"What's the average approval time?\"",
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    // Handle thanks
+    if (/^(thank|thanks|thx|ty)/.test(queryLower)) {
+      return {
+        type: 'text',
+        content: "You're welcome! Feel free to ask more questions about your data.",
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    // Handle help requests
+    if (/^(help|what can you do|\?)/.test(queryLower)) {
+      return {
+        type: 'text',
+        content: "I can help you analyze your forms data. Try asking:\n\n- \"How many leave requests were submitted last month?\"\n- \"Show me pending forms in each department\"\n- \"Which department has the most submissions?\"\n- \"What's the average approval time?\"\n- \"Show me the status breakdown\"",
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    // Query too short for analytics
+    if (query.trim().length < 5) {
+      return {
+        type: 'text',
+        content: "Please ask a more specific question about your data. For example:\n\"How many forms were submitted this week?\"",
+        timestamp: new Date().toISOString(),
+      };
+    }
 
     try {
       const response = await api.post('/ai/query/', {

@@ -478,9 +478,13 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
   };
 
   // Filter forms based on user role
+  // For Form Managers (MANAGER role), the backend already filters by department
+  // For Admins, show all forms
   const availableForms = user.role === 'ADMIN'
     ? forms
-    : forms.filter(f => f.department === user.department_id);
+    : user.role === 'MANAGER'
+      ? forms // Already filtered by backend for Form Manager's department
+      : forms.filter(f => f.department === user.department || f.department === user.department_id);
 
   // Check which forms already have workflows
   const formsWithWorkflows = new Set(

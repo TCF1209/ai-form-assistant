@@ -1,26 +1,173 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Card, Table, Button, Space, Tag, Badge, Tabs,
-  Modal, Timeline, Typography, Row, Col, Statistic,
-  Select, DatePicker, Input, message, Tooltip, Progress,
-  Descriptions, Divider
-} from 'antd';
-import {
-  FileTextOutlined, ClockCircleOutlined, CheckCircleOutlined,
-  CloseCircleOutlined, SyncOutlined, EyeOutlined,
-  PlayCircleOutlined, PauseCircleOutlined, UserOutlined,
-  CommentOutlined, TeamOutlined, ForkOutlined,
-  ExportOutlined, FilterOutlined
-} from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
-import moment from 'moment';
 
-const { Text, Title, Paragraph } = Typography;
-const { Option } = Select;
-const { RangePicker } = DatePicker;
-const { Search } = Input;
+// Icons
+const FileIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
+
+const ClockIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const CheckCircleIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const XCircleIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const EyeIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+  </svg>
+);
+
+const RefreshIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+  </svg>
+);
+
+const PlayIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const WorkflowIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+  </svg>
+);
+
+const UserIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+  </svg>
+);
+
+const XIcon = () => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
+const ChevronDownIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+  </svg>
+);
+
+// Stat Card Component
+const StatCard = ({ title, value, icon, color }) => {
+  const colorClasses = {
+    default: 'bg-slate-100 text-slate-600',
+    blue: 'bg-sky-100 text-sky-600',
+    green: 'bg-emerald-100 text-emerald-600',
+    yellow: 'bg-amber-100 text-amber-600',
+    red: 'bg-red-100 text-red-600'
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs text-slate-500 font-medium">{title}</p>
+          <p className="text-xl font-bold text-slate-800 mt-1">{value}</p>
+        </div>
+        <div className={`p-2 rounded-full ${colorClasses[color] || colorClasses.default}`}>
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Status Badge Component
+const StatusBadge = ({ status }) => {
+  const statusStyles = {
+    'DRAFT': 'bg-slate-100 text-slate-700',
+    'SUBMITTED': 'bg-sky-100 text-sky-700',
+    'PENDING': 'bg-amber-100 text-amber-700',
+    'IN_PROGRESS': 'bg-sky-100 text-sky-700',
+    'IN_REVIEW': 'bg-sky-100 text-sky-700',
+    'COMPLETED': 'bg-emerald-100 text-emerald-700',
+    'APPROVED': 'bg-emerald-100 text-emerald-700',
+    'FAILED': 'bg-red-100 text-red-700',
+    'REJECTED': 'bg-red-100 text-red-700',
+    'CANCELLED': 'bg-slate-100 text-slate-700'
+  };
+
+  return (
+    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${statusStyles[status] || statusStyles.DRAFT}`}>
+      {status}
+    </span>
+  );
+};
+
+// Progress Bar Component
+const ProgressBar = ({ percent, status }) => {
+  const getColor = () => {
+    if (status === 'COMPLETED') return 'bg-emerald-500';
+    if (status === 'FAILED') return 'bg-red-500';
+    return 'bg-sky-500';
+  };
+
+  return (
+    <div className="w-full bg-slate-200 rounded-full h-1.5">
+      <div
+        className={`h-1.5 rounded-full transition-all duration-300 ${getColor()}`}
+        style={{ width: `${percent}%` }}
+      />
+    </div>
+  );
+};
+
+// Select Component
+const Select = ({ value, onChange, options, placeholder, className = '' }) => {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`appearance-none bg-white border border-slate-300 rounded-lg px-4 py-2 pr-10 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 ${className}`}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
+      <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+        <ChevronDownIcon />
+      </div>
+    </div>
+  );
+};
+
+// Format date helper
+const formatDate = (dateString) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const formatDateTime = (dateString) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
 
 const SubmissionsManagement = () => {
   const [submissions, setSubmissions] = useState([]);
@@ -32,8 +179,7 @@ const SubmissionsManagement = () => {
   const [filters, setFilters] = useState({
     status: '',
     form: '',
-    department: '',
-    dateRange: []
+    department: ''
   });
   const [forms, setForms] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -59,19 +205,13 @@ const SubmissionsManagement = () => {
     setLoading(true);
     try {
       const params = {};
-
       if (filters.status) params.status = filters.status;
       if (filters.form) params.form = filters.form;
       if (filters.department) params.department = filters.department;
-      if (filters.dateRange && filters.dateRange.length === 2) {
-        params.start_date = filters.dateRange[0].format('YYYY-MM-DD');
-        params.end_date = filters.dateRange[1].format('YYYY-MM-DD');
-      }
 
       const response = await api.get('/submissions/', { params });
       const data = response.data.results || response.data;
 
-      // Fetch workflow instances for each submission
       const submissionsWithWorkflow = await Promise.all(
         data.map(async (submission) => {
           try {
@@ -92,7 +232,6 @@ const SubmissionsManagement = () => {
       setSubmissions(submissionsWithWorkflow);
     } catch (error) {
       console.error('Error fetching submissions:', error);
-      message.error('Failed to fetch submissions');
     } finally {
       setLoading(false);
     }
@@ -121,20 +260,17 @@ const SubmissionsManagement = () => {
       const response = await api.get('/submissions/');
       const data = response.data.results || response.data;
 
-      // Fetch workflow instances
       const instancesResponse = await api.get('/workflow-instances/');
       const instances = instancesResponse.data.results || instancesResponse.data;
 
-      const stats = {
+      setStats({
         total: data.length,
         submitted: data.filter(s => s.status === 'SUBMITTED').length,
         draft: data.filter(s => s.status === 'DRAFT').length,
         withWorkflow: instances.length,
         inProgress: instances.filter(i => i.status === 'IN_PROGRESS').length,
         completed: instances.filter(i => i.status === 'COMPLETED').length
-      };
-
-      setStats(stats);
+      });
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
@@ -167,483 +303,434 @@ const SubmissionsManagement = () => {
 
   const handleStartWorkflow = async (submission) => {
     try {
-      // Find active workflow for the form
       const workflowResponse = await api.get('/workflows/', {
-        params: {
-          form: submission.form,
-          status: 'ACTIVE'
-        }
+        params: { form: submission.form, status: 'ACTIVE' }
       });
 
       const workflows = workflowResponse.data.results || workflowResponse.data;
 
       if (workflows.length === 0) {
-        message.warning('No active workflow found for this form');
+        alert('No active workflow found for this form');
         return;
       }
 
-      // Start workflow instance
       await api.post('/workflow-instances/start/', {
         submission_id: submission.id,
         workflow_id: workflows[0].id
       });
 
-      message.success('Workflow started successfully');
       fetchSubmissions();
     } catch (error) {
       console.error('Error starting workflow:', error);
-      message.error(error.response?.data?.error || 'Failed to start workflow');
+      alert(error.response?.data?.error || 'Failed to start workflow');
     }
-  };
-
-  const getStatusColor = (status) => {
-    const colors = {
-      'DRAFT': 'default',
-      'SUBMITTED': 'processing',
-      'PENDING': 'warning',
-      'IN_PROGRESS': 'processing',
-      'COMPLETED': 'success',
-      'FAILED': 'error',
-      'CANCELLED': 'default'
-    };
-    return colors[status] || 'default';
   };
 
   const getProgressPercent = (instance) => {
     if (!instance || !instance.approvals) return 0;
-
     const total = instance.approvals.length;
     if (total === 0) return 0;
-
     const completed = instance.approvals.filter(
       a => a.status === 'APPROVED' || a.status === 'REJECTED'
     ).length;
-
     return Math.round((completed / total) * 100);
   };
 
-  const columns = [
-    {
-      title: 'Submission #',
-      dataIndex: 'submission_number',
-      key: 'submission_number',
-      fixed: 'left',
-      render: (text) => (
-        <Text strong>{text}</Text>
-      )
-    },
-    {
-      title: 'Form',
-      dataIndex: 'form_detail',
-      key: 'form',
-      render: (form) => (
-        <Space direction="vertical" size={0}>
-          <Text>{form?.name || 'N/A'}</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {form?.department_name || 'No Department'}
-          </Text>
-        </Space>
-      )
-    },
-    {
-      title: 'Submitted By',
-      dataIndex: 'submitted_by_detail',
-      key: 'submitted_by',
-      render: (user) => (
-        <Space>
-          <UserOutlined />
-          <Text>{user?.username || 'Unknown'}</Text>
-        </Space>
-      )
-    },
-    {
-      title: 'Submitted',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (date) => moment(date).format('MMM DD, YYYY HH:mm')
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status) => (
-        <Tag color={getStatusColor(status)}>
-          {status}
-        </Tag>
-      )
-    },
-    {
-      title: 'Workflow',
-      key: 'workflow',
-      render: (_, record) => {
-        const instance = record.workflow_instance;
-        if (!instance) {
-          return (
-            <Space>
-              <Tag>No Workflow</Tag>
-              {record.status === 'SUBMITTED' && (
-                <Tooltip title="Start Workflow">
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<PlayCircleOutlined />}
-                    onClick={() => handleStartWorkflow(record)}
-                  />
-                </Tooltip>
-              )}
-            </Space>
-          );
-        }
-        return (
-          <Space direction="vertical" size={4} style={{ width: '100%' }}>
-            <Tag color={getStatusColor(instance.status)}>
-              {instance.status}
-            </Tag>
-            <Progress
-              percent={getProgressPercent(instance)}
-              size="small"
-              showInfo={false}
-              status={
-                instance.status === 'COMPLETED' ? 'success' :
-                instance.status === 'FAILED' ? 'exception' :
-                'active'
-              }
-            />
-          </Space>
-        );
-      }
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Tooltip title="View Details">
-            <Button
-              type="text"
-              icon={<EyeOutlined />}
-              onClick={() => handleViewDetails(record)}
-            />
-          </Tooltip>
-          {record.workflow_instance && (
-            <Tooltip title="View Workflow">
-              <Button
-                type="text"
-                icon={<ForkOutlined />}
-                onClick={() => handleViewWorkflow(record)}
-              />
-            </Tooltip>
-          )}
-        </Space>
-      )
-    }
-  ];
+  const resetFilters = () => {
+    setFilters({ status: '', form: '', department: '' });
+  };
 
   return (
-    <>
-      <Card>
-        {/* Statistics */}
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={4}>
-            <Card variant="borderless">
-              <Statistic
-                title="Total Submissions"
-                value={stats.total}
-                prefix={<FileTextOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card variant="borderless">
-              <Statistic
-                title="Submitted"
-                value={stats.submitted}
-                prefix={<CheckCircleOutlined />}
-                valueStyle={{ color: '#3f8600' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card variant="borderless">
-              <Statistic
-                title="Draft"
-                value={stats.draft}
-                prefix={<ClockCircleOutlined />}
-                valueStyle={{ color: '#faad14' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card variant="borderless">
-              <Statistic
-                title="With Workflow"
-                value={stats.withWorkflow}
-                prefix={<ForkOutlined />}
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card variant="borderless">
-              <Statistic
-                title="In Progress"
-                value={stats.inProgress}
-                prefix={<SyncOutlined />}
-                valueStyle={{ color: '#1890ff' }}
-              />
-            </Card>
-          </Col>
-          <Col span={4}>
-            <Card variant="borderless">
-              <Statistic
-                title="Completed"
-                value={stats.completed}
-                prefix={<CheckCircleOutlined />}
-                valueStyle={{ color: '#52c41a' }}
-              />
-            </Card>
-          </Col>
-        </Row>
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Submissions Management</h1>
+          <p className="text-slate-500 mt-1">Manage and monitor all form submissions</p>
+        </div>
+        <button
+          onClick={fetchSubmissions}
+          className="flex items-center gap-2 px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
+        >
+          <RefreshIcon />
+          Refresh
+        </button>
+      </div>
 
-        {/* Filters */}
-        <Card size="small" style={{ marginBottom: 16 }}>
-          <Space wrap>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <StatCard title="Total" value={stats.total} icon={<FileIcon />} color="default" />
+        <StatCard title="Submitted" value={stats.submitted} icon={<CheckCircleIcon />} color="green" />
+        <StatCard title="Draft" value={stats.draft} icon={<ClockIcon />} color="yellow" />
+        <StatCard title="With Workflow" value={stats.withWorkflow} icon={<WorkflowIcon />} color="blue" />
+        <StatCard title="In Progress" value={stats.inProgress} icon={<RefreshIcon />} color="blue" />
+        <StatCard title="Completed" value={stats.completed} icon={<CheckCircleIcon />} color="green" />
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-lg p-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <Select
+            value={filters.status}
+            onChange={(value) => setFilters({ ...filters, status: value })}
+            placeholder="Filter by Status"
+            options={[
+              { value: 'DRAFT', label: 'Draft' },
+              { value: 'SUBMITTED', label: 'Submitted' }
+            ]}
+          />
+
+          <Select
+            value={filters.form}
+            onChange={(value) => setFilters({ ...filters, form: value })}
+            placeholder="Filter by Form"
+            options={forms.map(form => ({ value: form.id, label: form.name }))}
+          />
+
+          {user.role === 'ADMIN' && (
             <Select
-              placeholder="Filter by Status"
-              style={{ width: 150 }}
-              allowClear
-              value={filters.status}
-              onChange={(value) => setFilters({ ...filters, status: value })}
-            >
-              <Option value="DRAFT">Draft</Option>
-              <Option value="SUBMITTED">Submitted</Option>
-            </Select>
-
-            <Select
-              placeholder="Filter by Form"
-              style={{ width: 200 }}
-              allowClear
-              value={filters.form}
-              onChange={(value) => setFilters({ ...filters, form: value })}
-            >
-              {forms.map(form => (
-                <Option key={form.id} value={form.id}>
-                  {form.name}
-                </Option>
-              ))}
-            </Select>
-
-            {user.role === 'ADMIN' && (
-              <Select
-                placeholder="Filter by Department"
-                style={{ width: 200 }}
-                allowClear
-                value={filters.department}
-                onChange={(value) => setFilters({ ...filters, department: value })}
-              >
-                {departments.map(dept => (
-                  <Option key={dept.id} value={dept.id}>
-                    {dept.name}
-                  </Option>
-                ))}
-              </Select>
-            )}
-
-            <RangePicker
-              onChange={(dates) => setFilters({ ...filters, dateRange: dates })}
+              value={filters.department}
+              onChange={(value) => setFilters({ ...filters, department: value })}
+              placeholder="Filter by Department"
+              options={departments.map(dept => ({ value: dept.id, label: dept.name }))}
             />
+          )}
 
-            <Button
-              icon={<SyncOutlined />}
-              onClick={() => {
-                setFilters({ status: '', form: '', department: '', dateRange: [] });
-                fetchSubmissions();
-              }}
-            >
-              Reset
-            </Button>
-          </Space>
-        </Card>
+          <button
+            onClick={resetFilters}
+            className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <RefreshIcon />
+            Reset
+          </button>
+        </div>
+      </div>
 
-        {/* Table */}
-        <Table
-          columns={columns}
-          dataSource={submissions}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            pageSize: 10,
-            showTotal: (total) => `Total ${total} submissions`
-          }}
-          scroll={{ x: 1200 }}
-        />
-      </Card>
+      {/* Submissions Table */}
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
+          </div>
+        ) : submissions.length === 0 ? (
+          <div className="text-center py-12">
+            <FileIcon className="w-12 h-12 text-slate-300 mx-auto" />
+            <p className="text-slate-500 mt-4">No submissions found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Submission #</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Form</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Submitted By</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Workflow</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {submissions.map((submission) => (
+                  <tr key={submission.id} className="hover:bg-slate-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="font-medium text-slate-800">{submission.submission_number}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div>
+                        <p className="text-slate-800">{submission.form_detail?.name || 'N/A'}</p>
+                        <p className="text-sm text-slate-500">{submission.form_detail?.department_name || 'No Department'}</p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <UserIcon />
+                        <span className="text-slate-700">{submission.submitted_by_detail?.username || 'Unknown'}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-slate-600">
+                      {formatDateTime(submission.created_at)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <StatusBadge status={submission.status} />
+                    </td>
+                    <td className="px-6 py-4">
+                      {submission.workflow_instance ? (
+                        <div className="space-y-1.5 w-32">
+                          <StatusBadge status={submission.workflow_instance.status} />
+                          <ProgressBar
+                            percent={getProgressPercent(submission.workflow_instance)}
+                            status={submission.workflow_instance.status}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-400 text-sm">No Workflow</span>
+                          {submission.status === 'SUBMITTED' && (
+                            <button
+                              onClick={() => handleStartWorkflow(submission)}
+                              className="p-1 text-sky-500 hover:bg-sky-50 rounded transition-colors"
+                              title="Start Workflow"
+                            >
+                              <PlayIcon />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleViewDetails(submission)}
+                          className="p-2 text-sky-500 hover:bg-sky-50 rounded-lg transition-colors"
+                          title="View Details"
+                        >
+                          <EyeIcon />
+                        </button>
+                        {submission.workflow_instance && (
+                          <button
+                            onClick={() => handleViewWorkflow(submission)}
+                            className="p-2 text-sky-500 hover:bg-sky-50 rounded-lg transition-colors"
+                            title="View Workflow"
+                          >
+                            <WorkflowIcon />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {submissions.length > 0 && (
+          <div className="px-6 py-4 border-t border-slate-200">
+            <p className="text-sm text-slate-500">Total {submissions.length} submissions</p>
+          </div>
+        )}
+      </div>
 
       {/* Detail Modal */}
-      <Modal
-        title="Submission Details"
-        open={detailModal}
-        onCancel={() => {
-          setDetailModal(false);
-          setSelectedSubmission(null);
-          setWorkflowInstance(null);
-        }}
-        width={900}
-        footer={[
-          <Button key="close" onClick={() => setDetailModal(false)}>
-            Close
-          </Button>
-        ]}
-      >
-        {selectedSubmission && (
-          <Space direction="vertical" style={{ width: '100%' }} size="large">
-            <Descriptions title="Submission Information" bordered>
-              <Descriptions.Item label="Submission Number" span={3}>
-                {selectedSubmission.submission_number}
-              </Descriptions.Item>
-              <Descriptions.Item label="Form">
-                {selectedSubmission.form_detail?.name}
-              </Descriptions.Item>
-              <Descriptions.Item label="Department">
-                {selectedSubmission.form_detail?.department_name || 'N/A'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                <Tag color={getStatusColor(selectedSubmission.status)}>
-                  {selectedSubmission.status}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Submitted By" span={2}>
-                {selectedSubmission.submitted_by_detail?.username}
-              </Descriptions.Item>
-              <Descriptions.Item label="Submitted At">
-                {moment(selectedSubmission.created_at).format('MMM DD, YYYY HH:mm')}
-              </Descriptions.Item>
-            </Descriptions>
+      {detailModal && selectedSubmission && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div className="fixed inset-0 bg-slate-500 bg-opacity-75 transition-opacity" onClick={() => setDetailModal(false)} />
 
-            {workflowInstance && (
-              <Descriptions title="Workflow Information" bordered>
-                <Descriptions.Item label="Workflow">
-                  {workflowInstance.workflow_detail?.name}
-                </Descriptions.Item>
-                <Descriptions.Item label="Type">
-                  {workflowInstance.workflow_detail?.type}
-                </Descriptions.Item>
-                <Descriptions.Item label="Status">
-                  <Tag color={getStatusColor(workflowInstance.status)}>
-                    {workflowInstance.status}
-                  </Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="Progress" span={3}>
-                  <Progress
-                    percent={getProgressPercent(workflowInstance)}
-                    status={
-                      workflowInstance.status === 'COMPLETED' ? 'success' :
-                      workflowInstance.status === 'FAILED' ? 'exception' :
-                      'active'
-                    }
-                  />
-                </Descriptions.Item>
-              </Descriptions>
-            )}
+            <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full mx-auto z-10">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <h3 className="text-lg font-semibold text-slate-800">Submission Details</h3>
+                <button
+                  onClick={() => {
+                    setDetailModal(false);
+                    setSelectedSubmission(null);
+                    setWorkflowInstance(null);
+                  }}
+                  className="p-2 hover:bg-slate-100 rounded-lg"
+                >
+                  <XIcon />
+                </button>
+              </div>
 
-            <Card size="small" title="Submitted Data">
-              <pre style={{ maxHeight: 200, overflow: 'auto' }}>
-                {JSON.stringify(selectedSubmission.data, null, 2)}
-              </pre>
-            </Card>
-          </Space>
-        )}
-      </Modal>
+              {/* Modal Content */}
+              <div className="px-6 py-4 space-y-6 max-h-[70vh] overflow-y-auto">
+                {/* Submission Info */}
+                <div className="bg-slate-50 rounded-lg p-4">
+                  <h4 className="font-medium text-slate-800 mb-4">Submission Information</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-slate-500">Submission Number</p>
+                      <p className="font-medium text-slate-800">{selectedSubmission.submission_number}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500">Form</p>
+                      <p className="font-medium text-slate-800">{selectedSubmission.form_detail?.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500">Department</p>
+                      <p className="font-medium text-slate-800">{selectedSubmission.form_detail?.department_name || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500">Status</p>
+                      <StatusBadge status={selectedSubmission.status} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500">Submitted By</p>
+                      <p className="font-medium text-slate-800">{selectedSubmission.submitted_by_detail?.username}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500">Submitted At</p>
+                      <p className="font-medium text-slate-800">{formatDateTime(selectedSubmission.created_at)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Workflow Info */}
+                {workflowInstance && (
+                  <div className="bg-slate-50 rounded-lg p-4">
+                    <h4 className="font-medium text-slate-800 mb-4">Workflow Information</h4>
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      <div>
+                        <p className="text-sm text-slate-500">Workflow</p>
+                        <p className="font-medium text-slate-800">{workflowInstance.workflow_detail?.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Type</p>
+                        <p className="font-medium text-slate-800">{workflowInstance.workflow_detail?.type}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Status</p>
+                        <StatusBadge status={workflowInstance.status} />
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500 mb-2">Progress</p>
+                      <ProgressBar
+                        percent={getProgressPercent(workflowInstance)}
+                        status={workflowInstance.status}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Submitted Data */}
+                <div className="bg-slate-50 rounded-lg p-4">
+                  <h4 className="font-medium text-slate-800 mb-4">Submitted Data</h4>
+                  <pre className="bg-white p-4 rounded-lg text-sm overflow-auto max-h-48 border border-slate-200">
+                    {JSON.stringify(selectedSubmission.data, null, 2)}
+                  </pre>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-4 border-t border-slate-200 flex justify-end">
+                <button
+                  onClick={() => {
+                    setDetailModal(false);
+                    setSelectedSubmission(null);
+                    setWorkflowInstance(null);
+                  }}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Workflow Modal */}
-      <Modal
-        title="Workflow Progress"
-        open={workflowModal}
-        onCancel={() => {
-          setWorkflowModal(false);
-          setSelectedSubmission(null);
-          setWorkflowInstance(null);
-        }}
-        width={800}
-        footer={[
-          <Button key="close" onClick={() => setWorkflowModal(false)}>
-            Close
-          </Button>
-        ]}
-      >
-        {workflowInstance && (
-          <Space direction="vertical" style={{ width: '100%' }} size="large">
-            <Card size="small">
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Text type="secondary">Workflow:</Text>
-                  <br />
-                  <Text strong>{workflowInstance.workflow_detail?.name}</Text>
-                </Col>
-                <Col span={12}>
-                  <Text type="secondary">Status:</Text>
-                  <br />
-                  <Tag color={getStatusColor(workflowInstance.status)}>
-                    {workflowInstance.status}
-                  </Tag>
-                </Col>
-              </Row>
-            </Card>
+      {workflowModal && workflowInstance && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div className="fixed inset-0 bg-slate-500 bg-opacity-75 transition-opacity" onClick={() => setWorkflowModal(false)} />
 
-            <Timeline mode="left">
-              {workflowInstance.approvals?.map((approval, index) => (
-                <Timeline.Item
-                  key={approval.id}
-                  color={
-                    approval.status === 'APPROVED' ? 'green' :
-                    approval.status === 'REJECTED' ? 'red' :
-                    approval.status === 'PENDING' ? 'blue' :
-                    'gray'
-                  }
-                  dot={
-                    approval.status === 'APPROVED' ? <CheckCircleOutlined /> :
-                    approval.status === 'REJECTED' ? <CloseCircleOutlined /> :
-                    approval.status === 'PENDING' ? <ClockCircleOutlined /> :
-                    null
-                  }
-                  label={moment(approval.assigned_at).format('MMM DD, HH:mm')}
+            <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-auto z-10">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <h3 className="text-lg font-semibold text-slate-800">Workflow Progress</h3>
+                <button
+                  onClick={() => {
+                    setWorkflowModal(false);
+                    setSelectedSubmission(null);
+                    setWorkflowInstance(null);
+                  }}
+                  className="p-2 hover:bg-slate-100 rounded-lg"
                 >
-                  <Space direction="vertical" size={0}>
-                    <Space>
-                      <Text strong>{approval.step_detail?.name}</Text>
-                      <Tag color={getStatusColor(approval.status)}>
-                        {approval.status}
-                      </Tag>
-                    </Space>
-                    {approval.assigned_to_detail && (
-                      <Text type="secondary">
-                        <UserOutlined /> Assigned to: {approval.assigned_to_detail.username}
-                      </Text>
-                    )}
-                    {approval.approved_by_detail && (
-                      <Text type="secondary">
-                        <UserOutlined /> {approval.status === 'APPROVED' ? 'Approved' : 'Rejected'} by: {approval.approved_by_detail.username}
-                      </Text>
-                    )}
-                    {approval.completed_at && (
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        Completed: {moment(approval.completed_at).format('MMM DD, YYYY HH:mm')}
-                      </Text>
-                    )}
-                    {approval.comments && (
-                      <Text type="secondary">
-                        <CommentOutlined /> {approval.comments}
-                      </Text>
-                    )}
-                  </Space>
-                </Timeline.Item>
-              ))}
-            </Timeline>
-          </Space>
-        )}
-      </Modal>
-    </>
+                  <XIcon />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="px-6 py-4 max-h-[70vh] overflow-y-auto">
+                {/* Workflow Info */}
+                <div className="bg-slate-50 rounded-lg p-4 mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="font-medium text-slate-800">{workflowInstance.workflow_detail?.name}</p>
+                      <p className="text-sm text-slate-500">{workflowInstance.workflow_detail?.type}</p>
+                    </div>
+                    <StatusBadge status={workflowInstance.status} />
+                  </div>
+                  <ProgressBar
+                    percent={getProgressPercent(workflowInstance)}
+                    status={workflowInstance.status}
+                  />
+                </div>
+
+                {/* Timeline */}
+                <div className="space-y-4">
+                  {workflowInstance.approvals?.map((approval, index) => (
+                    <div key={approval.id} className="flex gap-4">
+                      <div className="flex flex-col items-center">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          approval.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-600' :
+                          approval.status === 'REJECTED' ? 'bg-red-100 text-red-600' :
+                          approval.status === 'PENDING' ? 'bg-sky-100 text-sky-600' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>
+                          {approval.status === 'APPROVED' ? <CheckCircleIcon /> :
+                           approval.status === 'REJECTED' ? <XCircleIcon /> :
+                           <ClockIcon />}
+                        </div>
+                        {index < workflowInstance.approvals.length - 1 && (
+                          <div className="w-0.5 flex-1 bg-slate-200 my-2" />
+                        )}
+                      </div>
+                      <div className="flex-1 pb-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-slate-800">{approval.step_detail?.name}</span>
+                          <StatusBadge status={approval.status} />
+                        </div>
+                        {approval.assigned_to_detail && (
+                          <p className="text-sm text-slate-500 flex items-center gap-1">
+                            <UserIcon /> Assigned to: {approval.assigned_to_detail.username}
+                          </p>
+                        )}
+                        {approval.approved_by_detail && (
+                          <p className="text-sm text-slate-500 flex items-center gap-1">
+                            <UserIcon /> {approval.status === 'APPROVED' ? 'Approved' : 'Rejected'} by: {approval.approved_by_detail.username}
+                          </p>
+                        )}
+                        {approval.completed_at && (
+                          <p className="text-xs text-slate-400 mt-1">
+                            Completed: {formatDateTime(approval.completed_at)}
+                          </p>
+                        )}
+                        {approval.comments && (
+                          <div className="mt-2 p-2 bg-white rounded border border-slate-200">
+                            <p className="text-sm text-slate-600">{approval.comments}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-4 border-t border-slate-200 flex justify-end">
+                <button
+                  onClick={() => {
+                    setWorkflowModal(false);
+                    setSelectedSubmission(null);
+                    setWorkflowInstance(null);
+                  }}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

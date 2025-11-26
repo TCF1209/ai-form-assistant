@@ -28,14 +28,7 @@ import Notifications from './pages/notifications/Notifications';
 import AIFormGeneration from './pages/ai/AIFormGeneration';
 import SmartAssistant from './pages/assistant/SmartAssistant';
 import NaturalLanguageAnalytics from './pages/analytics/NaturalLanguageAnalytics';
-
-// Placeholder components for future pages
-const TasksPage = () => <div>Tasks Page - Coming Soon</div>;
-const CalendarPage = () => <div>Calendar Page - Coming Soon</div>;
-const DocumentsPage = () => <div>Documents Page - Coming Soon</div>;
-const ChatPage = () => <div>Chat Page - Coming Soon</div>;
-const ProfilePage = () => <div>Profile Page - Coming Soon</div>;
-const SettingsPage = () => <div>Settings Page - Coming Soon</div>;
+import Profile from './pages/Profile/Profile';
 const NotFoundPage = () => (
   <div className="flex items-center justify-center min-h-screen">
     <div className="text-center">
@@ -272,12 +265,7 @@ function App() {
                   </RoleBasedRoute>
                 }
               />
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/calendar" element={<CalendarPage />} />
-              <Route path="/documents" element={<DocumentsPage />} />
-              <Route path="/chat" element={<ChatPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/profile" element={<Profile />} />
             </Route>
 
             {/* Default redirect */}

@@ -240,239 +240,325 @@ class NaturalLanguageQueryView(APIView):
 
         # Build context based on user's role and department
         user_role = request.user.role
-        user_department = request.user.department.name if request.user.department else None
+        user_department = request.user.department if request.user.department else None
 
-        # Generate mock analytics response based on query
-        query_result = self._generate_mock_analytics(query, user_role, user_department)
+        # Generate analytics response using real database queries
+        query_result = self._process_analytics_query(query, user_role, user_department)
 
         response_serializer = NLQueryResponseSerializer(query_result)
         return Response(response_serializer.data, status=status.HTTP_200_OK)
 
-    def _generate_mock_analytics(self, query, user_role, user_department):
-        """Generate mock analytics data based on the query"""
-        import random
-        from datetime import datetime, timedelta
+    def _get_base_queryset(self, user_role, user_department):
+        """Get base queryset filtered by user's access level"""
+        queryset = FormSubmission.objects.all()
+        if user_role == 'MANAGER' and user_department:
+            queryset = queryset.filter(form__department=user_department)
+        return queryset
+
+    def _get_forms_queryset(self, user_role, user_department):
+        """Get forms queryset filtered by user's access level"""
+        queryset = Form.objects.all()
+        if user_role == 'MANAGER' and user_department:
+            queryset = queryset.filter(department=user_department)
+        return queryset
+
+    def _process_analytics_query(self, query, user_role, user_department):
+        """Process analytics query using real database data"""
+        from django.db.models import Count, Avg, Q
+        from django.db.models.functions import TruncMonth
+        from django.utils import timezone
+        from datetime import timedelta
+        from users.models import Department
+
+        # Get department info for display
+        dept_name = user_department.name if user_department else None
+        if user_role == 'MANAGER' and dept_name:
+            dept_note = f" (showing data for {dept_name} department only)"
+        else:
+            dept_note = " (showing data across all departments)"
 
         # Keywords to detect query intent
         leave_keywords = ['leave', 'vacation', 'time off', 'absence', 'annual', 'medical', 'sick']
-        pending_keywords = ['pending', 'waiting', 'awaiting', 'queue', 'unprocessed']
+        pending_keywords = ['pending', 'waiting', 'awaiting', 'queue', 'unprocessed', 'in review', 'in_review']
         department_keywords = ['department', 'team', 'division', 'unit', 'group']
         count_keywords = ['how many', 'count', 'number', 'total', 'submitted', 'requests']
         time_keywords = ['month', 'week', 'last', 'this', 'today', 'yesterday', 'average', 'time']
         approval_keywords = ['approval', 'approved', 'rejected', 'review', 'processing']
         top_keywords = ['most', 'top', 'highest', 'maximum', 'best', 'popular']
 
-        # Department names for mock data
-        departments = ['HR', 'IT', 'Finance', 'Marketing', 'Operations', 'Sales', 'Engineering']
+        base_qs = self._get_base_queryset(user_role, user_department)
+        forms_qs = self._get_forms_queryset(user_role, user_department)
+        now = timezone.now()
 
-        # Filter departments based on role
-        if user_role == 'MANAGER' and user_department:
-            departments = [user_department]
-            dept_note = f" (showing data for {user_department} department only)"
-        else:
-            dept_note = " (showing data across all departments)"
-
-        # Detect query type and generate appropriate response
+        # Detect query type and process with real data
         if any(kw in query for kw in leave_keywords) and any(kw in query for kw in count_keywords):
             # Leave request count queries
+            leave_qs = base_qs.filter(
+                Q(form__name__icontains='leave') |
+                Q(form__code__icontains='leave')
+            )
+
             if 'month' in query or 'last month' in query:
-                count = random.randint(15, 45)
+                last_month_start = (now.replace(day=1) - timedelta(days=1)).replace(day=1)
+                last_month_end = now.replace(day=1) - timedelta(days=1)
+                count = leave_qs.filter(
+                    submitted_at__gte=last_month_start,
+                    submitted_at__lte=last_month_end
+                ).count()
+
+                # Get previous month for comparison
+                prev_month_start = (last_month_start - timedelta(days=1)).replace(day=1)
+                prev_count = leave_qs.filter(
+                    submitted_at__gte=prev_month_start,
+                    submitted_at__lt=last_month_start
+                ).count()
+
+                trend = ""
+                if prev_count > 0:
+                    change = ((count - prev_count) / prev_count) * 100
+                    trend = f"+{change:.0f}%" if change > 0 else f"{change:.0f}%"
+
                 return {
                     "interpretation": f"You're asking about leave requests submitted last month{dept_note}",
-                    "filters": {
-                        "form_type": "Leave Request",
-                        "time_range": "last_month",
-                        "departments": departments
-                    },
+                    "filters": {"form_type": "Leave Request", "time_range": "last_month"},
                     "aggregation": "count",
                     "visualization": "number",
-                    "data": [
-                        {"label": "Leave Requests (Last Month)", "value": count, "trend": "+12%"}
-                    ],
-                    "summary": f"There were {count} leave requests submitted last month. This is 12% more than the previous month."
+                    "data": [{"label": "Leave Requests (Last Month)", "value": count, "trend": trend}],
+                    "summary": f"There were {count} leave requests submitted last month." + (f" This is {trend} compared to the previous month." if trend else "")
                 }
             elif 'week' in query:
-                count = random.randint(5, 15)
+                week_start = now - timedelta(days=now.weekday())
+                count = leave_qs.filter(submitted_at__gte=week_start).count()
                 return {
                     "interpretation": f"You're asking about leave requests submitted this week{dept_note}",
-                    "filters": {
-                        "form_type": "Leave Request",
-                        "time_range": "this_week",
-                        "departments": departments
-                    },
+                    "filters": {"form_type": "Leave Request", "time_range": "this_week"},
                     "aggregation": "count",
                     "visualization": "number",
-                    "data": [
-                        {"label": "Leave Requests (This Week)", "value": count}
-                    ],
+                    "data": [{"label": "Leave Requests (This Week)", "value": count}],
                     "summary": f"There have been {count} leave requests submitted this week so far."
                 }
             else:
-                count = random.randint(80, 150)
+                count = leave_qs.count()
                 return {
                     "interpretation": f"You're asking about total leave requests{dept_note}",
-                    "filters": {
-                        "form_type": "Leave Request",
-                        "departments": departments
-                    },
+                    "filters": {"form_type": "Leave Request"},
                     "aggregation": "count",
                     "visualization": "number",
-                    "data": [
-                        {"label": "Total Leave Requests", "value": count}
-                    ],
-                    "summary": f"There are {count} leave requests in total across the system."
+                    "data": [{"label": "Total Leave Requests", "value": count}],
+                    "summary": f"There are {count} leave requests in total."
                 }
 
         elif any(kw in query for kw in pending_keywords):
-            # Pending forms queries
+            # Pending/In Review forms queries
+            pending_statuses = ['SUBMITTED', 'IN_REVIEW']
+
             if any(kw in query for kw in department_keywords):
+                # Group by department
+                dept_data = []
+                departments = Department.objects.filter(is_active=True)
+                if user_role == 'MANAGER' and user_department:
+                    departments = departments.filter(id=user_department.id)
+
+                for dept in departments:
+                    count = FormSubmission.objects.filter(
+                        form__department=dept,
+                        status__in=pending_statuses
+                    ).count()
+                    if count > 0:
+                        dept_data.append({"department": dept.name, "pending": count})
+
+                dept_data.sort(key=lambda x: x['pending'], reverse=True)
+
                 return {
                     "interpretation": f"You're asking about pending forms by department{dept_note}",
-                    "filters": {
-                        "status": "PENDING",
-                        "departments": departments
-                    },
+                    "filters": {"status": "PENDING"},
                     "aggregation": "group_by_department",
                     "visualization": "bar",
-                    "data": [
-                        {"department": dept, "pending": random.randint(3, 25)}
-                        for dept in departments
-                    ],
-                    "summary": f"Here's the breakdown of pending forms across departments."
+                    "data": dept_data if dept_data else [{"department": "No data", "pending": 0}],
+                    "summary": f"Here's the breakdown of pending forms across {len(dept_data)} departments."
                 }
             else:
-                pending_count = random.randint(10, 40)
+                pending_count = base_qs.filter(status__in=pending_statuses).count()
+                in_review = base_qs.filter(status='IN_REVIEW').count()
                 return {
                     "interpretation": f"You're asking about pending forms{dept_note}",
-                    "filters": {
-                        "status": "PENDING",
-                        "departments": departments
-                    },
+                    "filters": {"status": "PENDING"},
                     "aggregation": "count",
                     "visualization": "number",
                     "data": [
-                        {"label": "Pending Forms", "value": pending_count, "urgent": random.randint(2, 8)}
+                        {"label": "Pending Forms", "value": pending_count},
+                        {"label": "In Review", "value": in_review}
                     ],
-                    "summary": f"There are {pending_count} forms currently pending review."
+                    "summary": f"There are {pending_count} forms currently pending review ({in_review} are actively being reviewed)."
                 }
 
         elif any(kw in query for kw in top_keywords) and any(kw in query for kw in department_keywords):
             # Department comparison queries
-            dept_data = [
-                {"department": dept, "submissions": random.randint(20, 100)}
-                for dept in departments
-            ]
+            dept_data = []
+            departments = Department.objects.filter(is_active=True)
+
+            for dept in departments:
+                count = FormSubmission.objects.filter(form__department=dept).count()
+                dept_data.append({"department": dept.name, "submissions": count})
+
             dept_data.sort(key=lambda x: x['submissions'], reverse=True)
-            top_dept = dept_data[0]
+
+            if dept_data:
+                top_dept = dept_data[0]
+                summary = f"The {top_dept['department']} department leads with {top_dept['submissions']} submissions."
+            else:
+                summary = "No submission data available."
+
             return {
                 "interpretation": f"You're asking which department has the most submissions{dept_note}",
-                "filters": {
-                    "group_by": "department",
-                    "departments": departments
-                },
+                "filters": {"group_by": "department"},
                 "aggregation": "count_by_department",
                 "visualization": "bar",
-                "data": dept_data,
-                "summary": f"The {top_dept['department']} department leads with {top_dept['submissions']} submissions."
+                "data": dept_data if dept_data else [{"department": "No data", "submissions": 0}],
+                "summary": summary
             }
 
         elif any(kw in query for kw in approval_keywords) and any(kw in query for kw in time_keywords):
-            # Approval time analytics
-            avg_time = round(random.uniform(1.5, 4.5), 1)
+            # Approval time analytics - calculate from submitted_at to updated_at for approved forms
+            approved_qs = base_qs.filter(status='APPROVED', submitted_at__isnull=False)
+
+            times = []
+            for sub in approved_qs:
+                if sub.submitted_at and sub.updated_at:
+                    diff = (sub.updated_at - sub.submitted_at).total_seconds() / 86400  # days
+                    times.append(diff)
+
+            if times:
+                avg_time = round(sum(times) / len(times), 1)
+                min_time = round(min(times), 1)
+                max_time = round(min(max(times), 30), 1)  # Cap at 30 days for display
+            else:
+                avg_time, min_time, max_time = 0, 0, 0
+
             return {
                 "interpretation": f"You're asking about average approval time{dept_note}",
-                "filters": {
-                    "metric": "approval_time",
-                    "departments": departments
-                },
+                "filters": {"metric": "approval_time"},
                 "aggregation": "average",
                 "visualization": "number",
                 "data": [
                     {"label": "Average Approval Time", "value": avg_time, "unit": "days"},
-                    {"label": "Fastest", "value": round(random.uniform(0.5, 1.5), 1), "unit": "days"},
-                    {"label": "Slowest", "value": round(random.uniform(5.0, 10.0), 1), "unit": "days"}
+                    {"label": "Fastest", "value": min_time, "unit": "days"},
+                    {"label": "Slowest", "value": max_time, "unit": "days"}
                 ],
-                "summary": f"The average approval time is {avg_time} days. Fastest approval was within a few hours, while some complex requests took up to a week."
+                "summary": f"The average approval time is {avg_time} days. Fastest: {min_time} days, Slowest: {max_time} days." if times else "No approved submissions to calculate approval time."
             }
 
         elif 'trend' in query or 'over time' in query or 'history' in query:
-            # Trend queries
-            months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
+            # Trend queries - last 6 months
+            trend_data = []
+            for i in range(5, -1, -1):
+                month_date = now - timedelta(days=i*30)
+                month_start = month_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                if i > 0:
+                    next_month = (month_date + timedelta(days=32)).replace(day=1)
+                else:
+                    next_month = now + timedelta(days=1)
+
+                month_name = month_start.strftime('%b')
+                submissions = base_qs.filter(
+                    submitted_at__gte=month_start,
+                    submitted_at__lt=next_month
+                ).count()
+                approved = base_qs.filter(
+                    submitted_at__gte=month_start,
+                    submitted_at__lt=next_month,
+                    status='APPROVED'
+                ).count()
+                trend_data.append({"month": month_name, "submissions": submissions, "approved": approved})
+
             return {
                 "interpretation": f"You're asking about submission trends over time{dept_note}",
-                "filters": {
-                    "time_range": "6_months",
-                    "departments": departments
-                },
+                "filters": {"time_range": "6_months"},
                 "aggregation": "time_series",
                 "visualization": "line",
-                "data": [
-                    {"month": month, "submissions": random.randint(30, 80), "approved": random.randint(20, 60)}
-                    for month in months
-                ],
+                "data": trend_data,
                 "summary": "Here's the submission trend over the last 6 months."
             }
 
         elif 'status' in query or 'breakdown' in query:
             # Status breakdown
-            submitted = random.randint(20, 50)
-            approved = random.randint(40, 80)
-            rejected = random.randint(5, 15)
-            pending = random.randint(10, 30)
+            status_counts = base_qs.values('status').annotate(count=Count('id'))
+            total = sum(s['count'] for s in status_counts) or 1
+
+            status_map = {
+                'DRAFT': 'Draft',
+                'SUBMITTED': 'Submitted',
+                'IN_REVIEW': 'In Review',
+                'APPROVED': 'Approved',
+                'REJECTED': 'Rejected',
+                'CANCELLED': 'Cancelled'
+            }
+
+            data = []
+            for s in status_counts:
+                data.append({
+                    "status": status_map.get(s['status'], s['status']),
+                    "count": s['count'],
+                    "percentage": round((s['count'] / total) * 100)
+                })
+
+            # Sort by count
+            data.sort(key=lambda x: x['count'], reverse=True)
+
+            approved = next((d['count'] for d in data if d['status'] == 'Approved'), 0)
+            submitted = next((d['count'] for d in data if d['status'] == 'Submitted'), 0)
+
             return {
                 "interpretation": f"You're asking about form status breakdown{dept_note}",
-                "filters": {
-                    "group_by": "status",
-                    "departments": departments
-                },
+                "filters": {"group_by": "status"},
                 "aggregation": "count_by_status",
                 "visualization": "pie",
-                "data": [
-                    {"status": "Submitted", "count": submitted, "percentage": 20},
-                    {"status": "Approved", "count": approved, "percentage": 50},
-                    {"status": "Rejected", "count": rejected, "percentage": 10},
-                    {"status": "Pending", "count": pending, "percentage": 20}
-                ],
-                "summary": f"Out of all forms: {approved} approved, {submitted} submitted, {pending} pending review, and {rejected} rejected."
+                "data": data if data else [{"status": "No Data", "count": 0, "percentage": 0}],
+                "summary": f"Out of {total} total submissions: {approved} approved, {submitted} awaiting review."
             }
 
         elif 'expense' in query or 'claim' in query:
             # Expense related queries
-            total_amount = random.randint(5000, 25000)
-            claim_count = random.randint(15, 50)
+            expense_qs = base_qs.filter(
+                Q(form__name__icontains='expense') |
+                Q(form__code__icontains='expense') |
+                Q(form__name__icontains='claim') |
+                Q(form__code__icontains='claim')
+            )
+            claim_count = expense_qs.count()
+
             return {
                 "interpretation": f"You're asking about expense claims{dept_note}",
-                "filters": {
-                    "form_type": "Expense Claim",
-                    "departments": departments
-                },
-                "aggregation": "sum",
+                "filters": {"form_type": "Expense Claim"},
+                "aggregation": "count",
                 "visualization": "number",
                 "data": [
                     {"label": "Total Claims", "value": claim_count},
-                    {"label": "Total Amount", "value": total_amount, "unit": "$"},
-                    {"label": "Average Claim", "value": round(total_amount / claim_count, 2), "unit": "$"}
+                    {"label": "Approved", "value": expense_qs.filter(status='APPROVED').count()},
+                    {"label": "Pending", "value": expense_qs.filter(status__in=['SUBMITTED', 'IN_REVIEW']).count()}
                 ],
-                "summary": f"There are {claim_count} expense claims totaling ${total_amount:,}."
+                "summary": f"There are {claim_count} expense claims in the system."
             }
 
         else:
-            # Default: general statistics
-            total_submissions = random.randint(100, 300)
-            total_forms = random.randint(10, 25)
-            pending = random.randint(15, 40)
+            # Default: general statistics from real data
+            total_submissions = base_qs.count()
+            total_forms = forms_qs.filter(status='ACTIVE').count()
+            pending = base_qs.filter(status__in=['SUBMITTED', 'IN_REVIEW']).count()
+            approved = base_qs.filter(status='APPROVED').count()
+
+            approval_rate = round((approved / total_submissions * 100)) if total_submissions > 0 else 0
+
             return {
                 "interpretation": f"Here's an overview of the forms system{dept_note}",
-                "filters": {
-                    "departments": departments
-                },
+                "filters": {},
                 "aggregation": "overview",
                 "visualization": "cards",
                 "data": [
                     {"label": "Total Submissions", "value": total_submissions, "icon": "document"},
                     {"label": "Active Forms", "value": total_forms, "icon": "form"},
                     {"label": "Pending Review", "value": pending, "icon": "clock"},
-                    {"label": "Approval Rate", "value": f"{random.randint(75, 95)}%", "icon": "check"}
+                    {"label": "Approval Rate", "value": f"{approval_rate}%", "icon": "check"}
                 ],
                 "summary": f"The system currently has {total_forms} active forms with {total_submissions} total submissions. {pending} are pending review."
             }

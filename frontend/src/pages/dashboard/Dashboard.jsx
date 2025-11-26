@@ -213,7 +213,7 @@ const Dashboard = () => {
       } else if (user?.role === 'MANAGER') {
         // Form Manager-specific data
         const [submissionsRes, workflowsRes] = await Promise.all([
-          api.get('/submissions/management/').catch(() => ({ data: { results: [] } })),
+          api.get('/submissions/').catch(() => ({ data: { results: [] } })),
           api.get('/workflows/').catch(() => ({ data: { results: [] } })),
         ]);
 
@@ -235,7 +235,7 @@ const Dashboard = () => {
         const [usersRes, departmentsRes, submissionsRes, workflowsRes] = await Promise.all([
           api.get('/users/stats/').catch(() => ({ data: {} })),
           api.get('/departments/stats/').catch(() => ({ data: {} })),
-          api.get('/submissions/management/').catch(() => ({ data: { results: [] } })),
+          api.get('/submissions/').catch(() => ({ data: { results: [] } })),
           api.get('/workflows/').catch(() => ({ data: { results: [] } })),
         ]);
 

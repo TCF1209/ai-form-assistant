@@ -227,40 +227,42 @@ const Forms = () => {
         <p className="text-slate-600 mt-2">
           {isAdmin && 'View and delete forms from all departments'}
           {isFormManager && 'Create and manage forms in your department'}
-          {isUser && 'Submit forms and track your submissions'}
+          {isUser && 'Browse and submit available forms'}
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-slate-200 mb-6">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab('forms')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'forms'
-                ? 'border-sky-500 text-sky-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-            }`}
-          >
-            Available Forms
-          </button>
-          <button
-            onClick={() => setActiveTab('submissions')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'submissions'
-                ? 'border-sky-500 text-sky-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-            }`}
-          >
-            My Submissions
-            {submissions.length > 0 && (
-              <span className="ml-2 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-xs">
-                {submissions.length}
-              </span>
-            )}
-          </button>
-        </nav>
-      </div>
+      {/* Tabs - Only show for Admin/Manager who manage submissions here */}
+      {!isUser && (
+        <div className="border-b border-slate-200 mb-6">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('forms')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'forms'
+                  ? 'border-sky-500 text-sky-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              Available Forms
+            </button>
+            <button
+              onClick={() => setActiveTab('submissions')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'submissions'
+                  ? 'border-sky-500 text-sky-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              All Submissions
+              {submissions.length > 0 && (
+                <span className="ml-2 bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-xs">
+                  {submissions.length}
+                </span>
+              )}
+            </button>
+          </nav>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow mb-6">
@@ -340,7 +342,7 @@ const Forms = () => {
       </div>
 
       {/* Content */}
-      {activeTab === 'forms' ? (
+      {(activeTab === 'forms' || isUser) ? (
         // Forms List
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">

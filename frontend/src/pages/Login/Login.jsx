@@ -75,9 +75,16 @@ const Login = () => {
     const result = await login(formData);
 
     if (result.success) {
-      // Redirect to intended page or dashboard
-      const from = location.state?.from?.pathname || '/dashboard';
-      navigate(from, { replace: true });
+      // Check if user came from intentional logout
+      const fromLogout = sessionStorage.getItem('fromLogout');
+      if (fromLogout) {
+        sessionStorage.removeItem('fromLogout');
+        navigate('/dashboard', { replace: true });
+      } else {
+        // Redirect to intended page or dashboard
+        const from = location.state?.from?.pathname || '/dashboard';
+        navigate(from, { replace: true });
+      }
     } else {
       setErrors({
         general: result.error?.detail || result.error?.non_field_errors?.[0] || 'Login failed. Please check your credentials.',

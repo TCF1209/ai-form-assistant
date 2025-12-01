@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../hooks/useTheme';
 
 const Header = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -22,6 +23,8 @@ const Header = ({ onMenuClick }) => {
   }, []);
 
   const handleLogout = async () => {
+    // Set flag before logout to indicate intentional logout
+    sessionStorage.setItem('fromLogout', 'true');
     await logout();
     setDropdownOpen(false);
   };

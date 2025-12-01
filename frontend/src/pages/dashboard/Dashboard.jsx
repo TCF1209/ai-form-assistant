@@ -323,8 +323,8 @@ const Dashboard = () => {
                 <ActivityItem
                   key={submission.id}
                   icon={<FileTextIcon />}
-                  title={submission.form_name || 'Form Submission'}
-                  description={`Submitted to ${submission.form_department || 'Department'}`}
+                  title={submission.form_detail?.name || 'Form Submission'}
+                  description={`Submitted to ${submission.form_detail?.department_name || 'Department'}`}
                   time={formatTimeAgo(submission.submitted_at || submission.created_at)}
                   status={submission.status}
                 />
@@ -349,9 +349,9 @@ const Dashboard = () => {
                 <ActivityItem
                   key={approval.id}
                   icon={<ApprovalIcon />}
-                  title={approval.workflow_instance_detail?.form_submission_detail?.form_name || 'Approval Request'}
-                  description={`From ${approval.workflow_instance_detail?.form_submission_detail?.submitted_by_name || 'User'}`}
-                  time={formatTimeAgo(approval.created_at)}
+                  title={approval.submission_detail?.form_name || approval.step_detail?.name || 'Approval Request'}
+                  description={`From ${approval.submission_detail?.submitted_by || 'User'}`}
+                  time={formatTimeAgo(approval.assigned_at || approval.created_at)}
                   status="Pending"
                 />
               ))
@@ -448,8 +448,8 @@ const Dashboard = () => {
                 <ActivityItem
                   key={submission.id}
                   icon={<FileTextIcon />}
-                  title={submission.form_name || 'Form Submission'}
-                  description={`By ${submission.submitted_by_name || 'User'}`}
+                  title={submission.form_detail?.name || 'Form Submission'}
+                  description={`By ${submission.submitted_by_detail?.full_name || 'User'}`}
                   time={formatTimeAgo(submission.submitted_at || submission.created_at)}
                   status={submission.status}
                 />
@@ -571,8 +571,8 @@ const Dashboard = () => {
                 <ActivityItem
                   key={submission.id}
                   icon={<FileTextIcon />}
-                  title={submission.form_name || 'Form Submission'}
-                  description={`By ${submission.submitted_by_name || 'User'} • ${submission.form_department || 'Department'}`}
+                  title={submission.form_detail?.name || 'Form Submission'}
+                  description={`By ${submission.submitted_by_detail?.full_name || 'User'} • ${submission.form_detail?.department_name || 'Department'}`}
                   time={formatTimeAgo(submission.submitted_at || submission.created_at)}
                   status={submission.status}
                 />

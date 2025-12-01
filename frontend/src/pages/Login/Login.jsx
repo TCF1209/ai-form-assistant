@@ -107,13 +107,7 @@ const Login = () => {
             Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-slate-500">
-            Or{' '}
-            <Link
-              to="/register"
-              className="font-medium text-sky-500 hover:text-sky-600"
-            >
-              create a new account
-            </Link>
+            AI Office Assistant Portal
           </p>
         </div>
 

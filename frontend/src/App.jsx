@@ -13,7 +13,6 @@ import RoleBasedRoute from './components/Auth/RoleBasedRoute';
 
 // Pages
 import Login from './pages/Login/Login';
-import Register from './pages/Register/Register';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 import Dashboard from './pages/dashboard/Dashboard';
@@ -52,7 +51,6 @@ function App() {
             {/* Public Routes with Auth Layout */}
             <Route element={<AuthLayout />}>
               <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
             </Route>

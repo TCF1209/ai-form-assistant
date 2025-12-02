@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import formService from '../../services/formService';
 import { message } from 'antd';
+import { validateFormPrompt, getFormSuggestions } from '../../utils/inputValidation';
 
 const AIFormGeneration = () => {
   const { user } = useAuth();
@@ -25,6 +26,11 @@ const AIFormGeneration = () => {
     fields: []
   });
   const [generationHistory, setGenerationHistory] = useState([]);
+  const [validationError, setValidationError] = useState('');
+  const [validationWarning, setValidationWarning] = useState('');
+
+  // Quick suggestions for form types
+  const formSuggestions = getFormSuggestions();
 
   // Role-based access control
   const isAdmin = user?.role === 'ADMIN';
@@ -407,14 +413,71 @@ const AIFormGeneration = () => {
                 Describe Your Form <span className="text-red-500">*</span>
               </label>
               <textarea
-                className="w-full px-4 py-3 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
+                className={`w-full px-4 py-3 border rounded-md focus:ring-sky-500 focus:border-sky-500 ${
+                  validationError ? 'border-red-300 bg-red-50' : 'border-slate-300'
+                }`}
                 rows={6}
                 placeholder="Example: Create a leave application form with fields for employee name, leave dates, reason, and approval workflow..."
                 value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  setPrompt(newValue);
+                  // Real-time validation
+                  if (newValue.trim()) {
+                    const validation = validateFormPrompt(newValue);
+                    setValidationError(validation.error || '');
+                    setValidationWarning(validation.warning || '');
+                  } else {
+                    setValidationError('');
+                    setValidationWarning('');
+                  }
+                }}
                 maxLength={500}
               />
-              <p className="text-sm text-slate-500 mt-1">{prompt.length}/500 characters</p>
+              <div className="flex justify-between items-start mt-1">
+                <div className="flex-1">
+                  {validationError && (
+                    <p className="text-sm text-red-600 flex items-center">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      {validationError}
+                    </p>
+                  )}
+                  {validationWarning && !validationError && (
+                    <p className="text-sm text-amber-600 flex items-center">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      {validationWarning}
+                    </p>
+                  )}
+                </div>
+                <p className="text-sm text-slate-500">{prompt.length}/500 characters</p>
+              </div>
+            </div>
+
+            {/* Quick Suggestions */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Quick Suggestions
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {formSuggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => {
+                      setPrompt(suggestion.prompt);
+                      setValidationError('');
+                      setValidationWarning('');
+                    }}
+                    className="px-3 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-colors"
+                  >
+                    {suggestion.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Tips Section */}
@@ -442,20 +505,26 @@ const AIFormGeneration = () => {
                   message.warning('Please select a department');
                   return;
                 }
-                if (!prompt.trim()) {
-                  message.warning('Please describe the form you want to create');
+
+                // Run validation before submitting
+                const validation = validateFormPrompt(prompt);
+                if (!validation.valid) {
+                  setValidationError(validation.error);
+                  message.error(validation.error);
                   return;
                 }
-                if (prompt.trim().length < 10) {
-                  message.warning('Please provide more details about the form (at least 10 characters)');
-                  return;
+
+                // Show warning but allow to proceed
+                if (validation.warning) {
+                  message.info(validation.warning);
                 }
+
                 setCurrentStep(1);
                 generateFormWithAI();
               }}
-              disabled={!selectedDepartment || !prompt.trim() || loading || departmentsLoading}
+              disabled={!selectedDepartment || !prompt.trim() || loading || departmentsLoading || !!validationError}
               className={`w-full py-3 px-4 rounded-md font-medium transition-colors ${
-                selectedDepartment && prompt.trim() && !loading && !departmentsLoading
+                selectedDepartment && prompt.trim() && !loading && !departmentsLoading && !validationError
                   ? 'bg-sky-500 hover:bg-sky-600 text-white shadow-sm'
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'
               }`}

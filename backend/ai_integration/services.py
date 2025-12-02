@@ -84,33 +84,46 @@ class OpenAIService:
             return cached_result
 
         system_prompt = """You are an expert form designer. Generate a complete form structure from the description.
-        Return a JSON object with the following structure:
+
+IMPORTANT VALIDATION RULES:
+1. If the input contains inappropriate language, profanity, or offensive content, return:
+   {"error": "inappropriate_content", "message": "Please provide an appropriate form description without offensive language."}
+
+2. If the input is gibberish, random characters, or meaningless text (like "asdfgh", "qwerty", etc.), return:
+   {"error": "invalid_input", "message": "Please provide a valid description of the form you want to create."}
+
+3. If the input is a greeting or casual message (like "hello", "hi", "how are you"), return:
+   {"error": "not_form_related", "message": "Please describe what kind of form you would like to create. For example: 'Create a leave application form' or 'Create an IT support ticket form'."}
+
+4. If the input is unclear but seems like a legitimate attempt, make reasonable assumptions and generate a basic form.
+
+For valid form requests, return a JSON object with this structure:
+{
+    "title": "Form Title",
+    "description": "Brief form description",
+    "fields": [
         {
-            "title": "Form Title",
-            "description": "Brief form description",
-            "fields": [
-                {
-                    "name": "field_name",
-                    "label": "Field Label",
-                    "type": "text|number|email|date|select|checkbox|radio|file|textarea",
-                    "required": true/false,
-                    "validation": {
-                        "min": number (for number fields),
-                        "max": number (for number fields),
-                        "minLength": number (for text fields),
-                        "maxLength": number (for text fields),
-                        "pattern": "regex pattern" (optional)
-                    },
-                    "options": ["option1", "option2"] (for select/radio/checkbox),
-                    "placeholder": "placeholder text",
-                    "helpText": "help text for the field"
-                }
-            ],
-            "workflow": {
-                "requiresApproval": true/false,
-                "approvalSteps": ["step1", "step2"]
-            }
-        }"""
+            "name": "field_name",
+            "label": "Field Label",
+            "type": "text|number|email|date|select|checkbox|radio|file|textarea",
+            "required": true/false,
+            "validation": {
+                "min": number (for number fields),
+                "max": number (for number fields),
+                "minLength": number (for text fields),
+                "maxLength": number (for text fields),
+                "pattern": "regex pattern" (optional)
+            },
+            "options": ["option1", "option2"] (for select/radio/checkbox),
+            "placeholder": "placeholder text",
+            "helpText": "help text for the field"
+        }
+    ],
+    "workflow": {
+        "requiresApproval": true/false,
+        "approvalSteps": ["step1", "step2"]
+    }
+}"""
 
         user_prompt = f"Create a form based on this description: {description}"
         if context:
@@ -350,6 +363,15 @@ class FormGenerationService:
         Returns:
             Complete form configuration ready for creation
         """
+        # Backend validation (second line of defense)
+        validation_result = self._validate_description(description)
+        if not validation_result['valid']:
+            return {
+                "success": False,
+                "error": validation_result['error'],
+                "error_type": "validation_error"
+            }
+
         context = {"department": department} if department else {}
 
         # Get AI-generated structure
@@ -358,7 +380,23 @@ class FormGenerationService:
         if not ai_structure:
             return {
                 "success": False,
-                "error": "Failed to generate form structure"
+                "error": "Failed to generate form structure. Please try again."
+            }
+
+        # Check if AI returned an error response (for invalid inputs)
+        if ai_structure.get("error"):
+            return {
+                "success": False,
+                "error": ai_structure.get("message", "Invalid input"),
+                "error_type": ai_structure.get("error")
+            }
+
+        # Validate that we have required fields
+        if not ai_structure.get("fields") or len(ai_structure.get("fields", [])) == 0:
+            return {
+                "success": False,
+                "error": "Could not generate form fields from the description. Please provide more details.",
+                "error_type": "insufficient_input"
             }
 
         # Convert AI structure to our form model format
@@ -393,6 +431,51 @@ class FormGenerationService:
             "form_data": form_data,
             "ai_confidence": 0.9  # Placeholder for confidence scoring
         }
+
+    def _validate_description(self, description: str) -> Dict:
+        """
+        Backend validation for form description
+
+        Args:
+            description: The user's form description
+
+        Returns:
+            Dict with 'valid' boolean and optional 'error' message
+        """
+        import re
+
+        # Check minimum length
+        if not description or len(description.strip()) < 5:
+            return {
+                'valid': False,
+                'error': 'Description is too short. Please provide more details.'
+            }
+
+        # Check maximum length
+        if len(description) > 1000:
+            return {
+                'valid': False,
+                'error': 'Description is too long. Please keep it under 1000 characters.'
+            }
+
+        # Basic profanity check (backend defense)
+        profanity_list = ['fuck', 'shit', 'ass', 'damn', 'bitch', 'bastard']
+        description_lower = description.lower()
+        for word in profanity_list:
+            if re.search(rf'\b{word}\b', description_lower):
+                return {
+                    'valid': False,
+                    'error': 'Please use appropriate language in your description.'
+                }
+
+        # Check for gibberish (consonant clusters)
+        if re.search(r'[bcdfghjklmnpqrstvwxyz]{7,}', description_lower):
+            return {
+                'valid': False,
+                'error': 'Your input appears to be invalid. Please provide a proper description.'
+            }
+
+        return {'valid': True}
 
     def _map_field_type(self, ai_type: str) -> str:
         """Map AI field types to our system's field types"""

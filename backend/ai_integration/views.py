@@ -42,7 +42,7 @@ class AIFormGenerationViewSet(viewsets.ViewSet):
     def generate(self, request):
         """Generate a form from natural language description"""
         # Check if user has permission to create forms
-        if not request.user.role in ['ADMIN', 'FORM_MANAGER']:
+        if not request.user.role in ['ADMIN', 'MANAGER', 'FORM_MANAGER']:
             return Response(
                 {"error": "Only administrators and form managers can generate forms"},
                 status=status.HTTP_403_FORBIDDEN

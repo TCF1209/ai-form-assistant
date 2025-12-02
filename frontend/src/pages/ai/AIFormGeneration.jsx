@@ -150,25 +150,66 @@ const AIFormGeneration = () => {
     localStorage.setItem('ai_form_generation_history', JSON.stringify(updatedHistory));
   };
 
-  // Mock AI form generation
+  // Real AI form generation using OpenAI API
   const generateFormWithAI = async () => {
     setLoading(true);
 
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Get department name for context
+      const dept = departments.find(d => d.id === selectedDepartment);
 
-      // Mock generated form based on prompt
-      const mockForm = generateMockForm(prompt, selectedDepartment);
+      // Call the real AI backend endpoint
+      const response = await api.post('/ai/form-generation/generate/', {
+        description: prompt,
+        department: dept?.name || ''
+      });
 
-      setGeneratedForm(mockForm);
-      setFormData(mockForm);
-      saveToHistory(prompt, selectedDepartment);
-      message.success('Form generated successfully! Review and customize as needed.');
-      setCurrentStep(2);
+      if (response.data.success && response.data.form_data) {
+        // Transform the AI response to our form format
+        const aiFormData = response.data.form_data;
+        const generatedFormData = {
+          name: aiFormData.title || 'AI Generated Form',
+          code: `${dept?.code || 'FORM'}_AI_${Date.now()}`,
+          description: aiFormData.description || `AI-generated form based on: "${prompt}"`,
+          department_id: selectedDepartment,
+          fields: (aiFormData.fields || []).map(field => ({
+            name: field.name,
+            label: field.label,
+            type: field.field_type || field.type || 'text',
+            required: field.required || false,
+            placeholder: field.placeholder || '',
+            help_text: field.help_text || '',
+            options: field.options || [],
+            validation_rules: field.validation_rules || {}
+          }))
+        };
+
+        setGeneratedForm(generatedFormData);
+        setFormData(generatedFormData);
+        saveToHistory(prompt, selectedDepartment);
+        message.success('Form generated successfully with AI! Review and customize as needed.');
+        setCurrentStep(2);
+      } else {
+        throw new Error(response.data.error || 'Failed to generate form');
+      }
     } catch (error) {
-      saveToHistory(prompt, selectedDepartment, 'failed');
-      message.error('Failed to generate form. Please try again.');
+      console.error('AI Form Generation Error:', error);
+
+      // Check if it's an API error with a message
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to generate form';
+
+      // If OpenAI is not configured, fall back to mock data
+      if (errorMessage.includes('not configured') || errorMessage.includes('API key') || error.response?.status === 503) {
+        message.warning('AI service not available. Using template-based generation.');
+        const mockForm = generateMockForm(prompt, selectedDepartment);
+        setGeneratedForm(mockForm);
+        setFormData(mockForm);
+        saveToHistory(prompt, selectedDepartment);
+        setCurrentStep(2);
+      } else {
+        saveToHistory(prompt, selectedDepartment, 'failed');
+        message.error(`Failed to generate form: ${errorMessage}`);
+      }
     } finally {
       setLoading(false);
     }

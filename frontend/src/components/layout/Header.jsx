@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { useTheme } from '../../hooks/useTheme';
 import api from '../../services/api';
 
 // Format time ago helper
@@ -19,7 +18,6 @@ const formatTimeAgo = (dateString) => {
 
 const Header = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -118,13 +116,13 @@ const Header = ({ onMenuClick }) => {
   };
 
   return (
-    <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 transition-colors">
+    <header className="bg-white border-b border-slate-200">
       <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
         {/* Left side - Menu button */}
         <div className="flex items-center">
           <button
             onClick={onMenuClick}
-            className="lg:hidden text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            className="lg:hidden text-slate-500 hover:text-slate-700"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -139,38 +137,11 @@ const Header = ({ onMenuClick }) => {
 
         {/* Right side - Actions */}
         <div className="flex items-center space-x-4">
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="p-2 text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {theme === 'dark' ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-                />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-                />
-              </svg>
-            )}
-          </button>
-
           {/* Notifications */}
           <div className="relative" ref={notificationRef}>
             <button
               onClick={() => setNotificationOpen(!notificationOpen)}
-              className="p-2 text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors relative"
+              className="p-2 text-slate-500 hover:text-sky-500 rounded-lg hover:bg-slate-100 transition-colors relative"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -190,14 +161,14 @@ const Header = ({ onMenuClick }) => {
 
             {/* Notification Dropdown */}
             {notificationOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 z-50 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden">
                 {/* Header */}
-                <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Notifications</h3>
+                <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
                   {unreadCount > 0 && (
                     <button
                       onClick={markAllAsRead}
-                      className="text-xs text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300"
+                      className="text-xs text-sky-500 hover:text-sky-600"
                     >
                       Mark all as read
                     </button>
@@ -212,41 +183,41 @@ const Header = ({ onMenuClick }) => {
                     </div>
                   ) : notifications.length === 0 ? (
                     <div className="text-center py-8">
-                      <svg className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-12 h-12 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                       </svg>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">No notifications yet</p>
+                      <p className="text-sm text-slate-500">No notifications yet</p>
                     </div>
                   ) : (
                     notifications.map((notification) => (
                       <div
                         key={notification.id}
                         onClick={() => handleNotificationClick(notification)}
-                        className={`px-4 py-3 cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 border-b border-slate-100 dark:border-slate-700 last:border-b-0 ${
-                          !notification.is_read ? 'bg-sky-50/50 dark:bg-sky-900/20' : ''
+                        className={`px-4 py-3 cursor-pointer transition-colors hover:bg-slate-50 border-b border-slate-100 last:border-b-0 ${
+                          !notification.is_read ? 'bg-sky-50/50' : ''
                         }`}
                       >
                         <div className="flex items-start gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <p className={`text-sm truncate ${!notification.is_read ? 'font-medium text-slate-800 dark:text-slate-200' : 'text-slate-600 dark:text-slate-400'}`}>
+                              <p className={`text-sm truncate ${!notification.is_read ? 'font-medium text-slate-800' : 'text-slate-600'}`}>
                                 {notification.subject}
                               </p>
                               {!notification.is_read && (
                                 <span className="w-2 h-2 bg-sky-500 rounded-full flex-shrink-0"></span>
                               )}
                             </div>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                            <p className="text-xs text-slate-500 truncate mt-0.5">
                               {notification.message}
                             </p>
-                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                            <p className="text-xs text-slate-400 mt-1">
                               {formatTimeAgo(notification.created_at)}
                             </p>
                           </div>
                           {!notification.is_read && (
                             <button
                               onClick={(e) => markAsRead(notification.id, e)}
-                              className="p-1 text-slate-400 hover:text-sky-500 dark:text-slate-500 dark:hover:text-sky-400 rounded"
+                              className="p-1 text-slate-400 hover:text-sky-500 rounded"
                               title="Mark as read"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -261,11 +232,11 @@ const Header = ({ onMenuClick }) => {
                 </div>
 
                 {/* Footer */}
-                <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                <div className="px-4 py-3 border-t border-slate-200 bg-slate-50">
                   <Link
                     to="/notifications"
                     onClick={() => setNotificationOpen(false)}
-                    className="text-sm text-sky-500 hover:text-sky-600 dark:text-sky-400 dark:hover:text-sky-300 font-medium block text-center"
+                    className="text-sm text-sky-500 hover:text-sky-600 font-medium block text-center"
                   >
                     View all notifications
                   </Link>
@@ -278,13 +249,13 @@ const Header = ({ onMenuClick }) => {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              className="flex items-center space-x-2 p-2 rounded-lg hover:bg-slate-100 transition-colors"
             >
               <div className="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center text-white font-semibold">
                 {user?.first_name?.[0] || user?.email?.[0] || 'U'}
               </div>
               <svg
-                className={`w-4 h-4 text-slate-500 dark:text-slate-400 transition-transform ${
+                className={`w-4 h-4 text-slate-500 transition-transform ${
                   dropdownOpen ? 'transform rotate-180' : ''
                 }`}
                 fill="none"
@@ -302,12 +273,12 @@ const Header = ({ onMenuClick }) => {
 
             {/* Dropdown Menu */}
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 py-1 z-50">
-                <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-700">
-                  <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50">
+                <div className="px-4 py-2 border-b border-slate-200">
+                  <p className="text-sm font-medium text-slate-800">
                     {user?.first_name || 'User'}
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  <p className="text-xs text-slate-500 truncate">
                     {user?.email}
                   </p>
                 </div>
@@ -315,7 +286,7 @@ const Header = ({ onMenuClick }) => {
                 <Link
                   to="/profile"
                   onClick={() => setDropdownOpen(false)}
-                  className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
                 >
                   <div className="flex items-center">
                     <svg
@@ -338,7 +309,7 @@ const Header = ({ onMenuClick }) => {
                 <Link
                   to="/settings"
                   onClick={() => setDropdownOpen(false)}
-                  className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 transition-colors"
                 >
                   <div className="flex items-center">
                     <svg
@@ -366,7 +337,7 @@ const Header = ({ onMenuClick }) => {
 
                 <button
                   onClick={handleLogout}
-                  className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-slate-100 transition-colors"
                 >
                   <div className="flex items-center">
                     <svg

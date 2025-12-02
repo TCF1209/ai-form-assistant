@@ -18,7 +18,7 @@ const MainLayout = () => {
   const isFullHeightPage = FULL_HEIGHT_PAGES.some(path => location.pathname.startsWith(path));
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-900 transition-colors">
+    <div className="flex h-screen bg-slate-50">
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
@@ -28,7 +28,7 @@ const MainLayout = () => {
         <Header onMenuClick={toggleSidebar} />
 
         {/* Page Content */}
-        <main className={`flex-1 bg-slate-50 dark:bg-slate-900 transition-colors ${isFullHeightPage ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden'}`}>
+        <main className={`flex-1 bg-slate-50 ${isFullHeightPage ? 'overflow-hidden' : 'overflow-y-auto overflow-x-hidden'}`}>
           {isFullHeightPage ? (
             <Outlet />
           ) : (

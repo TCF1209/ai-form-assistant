@@ -177,12 +177,12 @@ const Notifications = () => {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-sky-100 dark:bg-sky-900/30 rounded-lg">
-            <BellIcon className="text-sky-500 dark:text-sky-400" />
+          <div className="p-2 bg-sky-100 rounded-lg">
+            <BellIcon className="text-sky-500" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Notifications</h1>
-            <p className="text-slate-500 dark:text-slate-400">Stay updated with your workflow activities</p>
+            <h1 className="text-2xl font-bold text-slate-800">Notifications</h1>
+            <p className="text-slate-500">Stay updated with your workflow activities</p>
           </div>
         </div>
         {unreadCount > 0 && (
@@ -197,16 +197,16 @@ const Notifications = () => {
       </div>
 
       {/* Main Card */}
-      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden">
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
         {/* Tabs */}
-        <div className="border-b border-slate-200 dark:border-slate-700">
+        <div className="border-b border-slate-200">
           <div className="flex">
             <button
               onClick={() => setActiveTab('all')}
               className={`px-6 py-4 text-sm font-medium transition-colors ${
                 activeTab === 'all'
-                  ? 'text-sky-600 dark:text-sky-400 border-b-2 border-sky-500'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                  ? 'text-sky-600 border-b-2 border-sky-500'
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               All Notifications
@@ -215,8 +215,8 @@ const Notifications = () => {
               onClick={() => setActiveTab('unread')}
               className={`px-6 py-4 text-sm font-medium transition-colors flex items-center gap-2 ${
                 activeTab === 'unread'
-                  ? 'text-sky-600 dark:text-sky-400 border-b-2 border-sky-500'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                  ? 'text-sky-600 border-b-2 border-sky-500'
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               Unread
@@ -230,18 +230,18 @@ const Notifications = () => {
         </div>
 
         {/* Notifications List */}
-        <div className="divide-y divide-slate-100 dark:divide-slate-700">
+        <div className="divide-y divide-slate-100">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
             </div>
           ) : notifications.length === 0 ? (
             <div className="text-center py-12">
-              <div className="w-16 h-16 mx-auto bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mb-4">
-                <BellIcon className="text-slate-400 dark:text-slate-500" />
+              <div className="w-16 h-16 mx-auto bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                <BellIcon className="text-slate-400" />
               </div>
-              <p className="text-slate-500 dark:text-slate-400">No notifications</p>
-              <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+              <p className="text-slate-500">No notifications</p>
+              <p className="text-sm text-slate-400 mt-1">
                 {activeTab === 'unread' ? 'All caught up!' : 'You have no notifications yet'}
               </p>
             </div>
@@ -252,8 +252,8 @@ const Notifications = () => {
                 <div
                   key={notification.id}
                   onClick={() => handleNotificationClick(notification)}
-                  className={`p-4 cursor-pointer transition-colors hover:bg-slate-50 dark:hover:bg-slate-700 ${
-                    !notification.is_read ? 'bg-sky-50/50 dark:bg-sky-900/20' : ''
+                  className={`p-4 cursor-pointer transition-colors hover:bg-slate-50 ${
+                    !notification.is_read ? 'bg-sky-50/50' : ''
                   }`}
                 >
                   <div className="flex items-start gap-4">
@@ -265,7 +265,7 @@ const Notifications = () => {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`font-medium ${!notification.is_read ? 'text-slate-800 dark:text-slate-200' : 'text-slate-600 dark:text-slate-400'}`}>
+                        <span className={`font-medium ${!notification.is_read ? 'text-slate-800' : 'text-slate-600'}`}>
                           {notification.subject}
                         </span>
                         <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${config.badgeColor}`}>
@@ -275,8 +275,8 @@ const Notifications = () => {
                           <span className="w-2 h-2 bg-sky-500 rounded-full"></span>
                         )}
                       </div>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">{notification.message}</p>
-                      <div className="flex items-center gap-4 text-xs text-slate-400 dark:text-slate-500">
+                      <p className="text-sm text-slate-600 mb-2">{notification.message}</p>
+                      <div className="flex items-center gap-4 text-xs text-slate-400">
                         <span className="flex items-center gap-1">
                           <ClockIcon className="w-3 h-3" />
                           {formatTimeAgo(notification.created_at)}
@@ -297,7 +297,7 @@ const Notifications = () => {
                           e.stopPropagation();
                           markAsRead(notification.id);
                         }}
-                        className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                        className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors"
                         title="Mark as read"
                       >
                         <CheckIcon />
@@ -312,8 +312,8 @@ const Notifications = () => {
 
         {/* Footer */}
         {notifications.length > 0 && (
-          <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-            <p className="text-sm text-slate-500 dark:text-slate-400 text-center">
+          <div className="px-4 py-3 border-t border-slate-200 bg-slate-50">
+            <p className="text-sm text-slate-500 text-center">
               Showing {notifications.length} notification{notifications.length !== 1 ? 's' : ''}
             </p>
           </div>

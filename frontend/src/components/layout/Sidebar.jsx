@@ -199,20 +199,20 @@ const Sidebar = ({ isOpen, onClose }) => {
       <aside
         className={`
           fixed lg:static inset-y-0 left-0 z-30
-          w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700
-          transform transition-all duration-300 ease-in-out
+          w-64 bg-white border-r border-slate-200
+          transform transition-transform duration-300 ease-in-out
           ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-slate-200 dark:border-slate-700">
-            <span className="text-xl font-bold text-slate-800 dark:text-slate-100">
+          <div className="flex items-center justify-between h-16 px-6 border-b border-slate-200">
+            <span className="text-xl font-bold text-slate-800">
               AI Office
             </span>
             <button
               onClick={onClose}
-              className="lg:hidden text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+              className="lg:hidden text-slate-500 hover:text-slate-700"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -230,7 +230,7 @@ const Sidebar = ({ isOpen, onClose }) => {
             {visibleSections.map((section, sectionIndex) => (
               <div key={section.title} className={sectionIndex > 0 ? 'mt-6' : ''}>
                 {/* Section Title */}
-                <h3 className="px-3 mb-2 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                <h3 className="px-3 mb-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   {section.title}
                 </h3>
                 {/* Section Items */}
@@ -245,12 +245,12 @@ const Sidebar = ({ isOpen, onClose }) => {
                         transition-colors duration-200
                         ${
                           isActive(item.href)
-                            ? 'bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 border-l-2 border-sky-500'
-                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100'
+                            ? 'bg-sky-50 text-sky-600 border-l-2 border-sky-500'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                         }
                       `}
                     >
-                      <span className={`mr-3 ${isActive(item.href) ? 'text-sky-500 dark:text-sky-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                      <span className={`mr-3 ${isActive(item.href) ? 'text-sky-500' : 'text-slate-400'}`}>
                         {item.icon}
                       </span>
                       {item.name}
@@ -262,7 +262,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           </nav>
 
           {/* User Profile (Bottom) */}
-          <div className="px-3 py-4 border-t border-slate-200 dark:border-slate-700">
+          <div className="px-3 py-4 border-t border-slate-200">
             <Link
               to="/profile"
               className={`
@@ -270,8 +270,8 @@ const Sidebar = ({ isOpen, onClose }) => {
                 transition-colors duration-200
                 ${
                   isActive('/profile')
-                    ? 'bg-sky-50 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                    ? 'bg-sky-50 text-sky-600'
+                    : 'text-slate-600 hover:bg-slate-50'
                 }
               `}
             >
@@ -282,7 +282,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                 <p className="text-sm font-medium truncate">
                   {user?.first_name || user?.username || 'User'}
                 </p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 truncate">
+                <p className="text-xs text-slate-400 truncate">
                   {user?.role === 'ADMIN' ? 'Administrator' : user?.role === 'MANAGER' ? 'Form Manager' : 'User'}
                 </p>
               </div>

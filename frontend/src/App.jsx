@@ -1,7 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
-import { ThemeProvider } from './contexts/ThemeContext';
 
 // Layouts
 import MainLayout from './components/layout/MainLayout';
@@ -33,8 +32,8 @@ import Profile from './pages/Profile/Profile';
 const NotFoundPage = () => (
   <div className="flex items-center justify-center min-h-screen">
     <div className="text-center">
-      <h1 className="text-6xl font-bold text-gray-900 dark:text-white">404</h1>
-      <p className="mt-4 text-xl text-gray-600 dark:text-gray-400">Page not found</p>
+      <h1 className="text-6xl font-bold text-gray-900">404</h1>
+      <p className="mt-4 text-xl text-gray-600">Page not found</p>
       <a href="/dashboard" className="mt-4 inline-block text-blue-600 hover:text-blue-700">
         Go to Dashboard
       </a>
@@ -44,9 +43,8 @@ const NotFoundPage = () => (
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <Router>
+    <AuthProvider>
+      <Router>
           <Routes>
             {/* Public Routes with Auth Layout */}
             <Route element={<AuthLayout />}>
@@ -276,9 +274,8 @@ function App() {
             {/* 404 Not Found */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
-        </Router>
-      </AuthProvider>
-    </ThemeProvider>
+      </Router>
+    </AuthProvider>
   );
 }
 

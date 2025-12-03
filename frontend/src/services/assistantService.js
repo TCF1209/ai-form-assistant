@@ -592,6 +592,123 @@ const assistantService = {
     this._formsCacheTime = null;
     userProfileCache = null;
     profileCacheTime = null;
+  },
+
+  // ============================================
+  // Chat History Methods
+  // ============================================
+
+  /**
+   * Load chat history from backend
+   * @returns {Promise<Object>} - Current session with messages
+   */
+  async loadChatHistory() {
+    try {
+      const response = await api.get('/ai/chat/current/');
+      return {
+        success: true,
+        session: response.data,
+        messages: response.data.messages || []
+      };
+    } catch (error) {
+      console.error('Failed to load chat history:', error);
+      return {
+        success: false,
+        session: null,
+        messages: []
+      };
+    }
+  },
+
+  /**
+   * Save a single message to chat history
+   * @param {string} content - Message content
+   * @param {string} messageType - 'USER' or 'ASSISTANT'
+   * @param {Object} metadata - Optional metadata
+   */
+  async saveMessage(content, messageType = 'USER', metadata = {}) {
+    try {
+      await api.post('/ai/chat/add_message/', {
+        content,
+        message_type: messageType,
+        metadata
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to save message:', error);
+      return { success: false };
+    }
+  },
+
+  /**
+   * Save multiple messages at once
+   * @param {Array} messages - Array of message objects
+   */
+  async saveMessages(messages) {
+    try {
+      const formattedMessages = messages.map(msg => ({
+        content: msg.content,
+        message_type: msg.isUser ? 'USER' : 'ASSISTANT',
+        metadata: msg.metadata || {}
+      }));
+
+      await api.post('/ai/chat/add_messages/', {
+        messages: formattedMessages
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to save messages:', error);
+      return { success: false };
+    }
+  },
+
+  /**
+   * Clear chat history and start a new session
+   */
+  async clearChatHistory() {
+    try {
+      const response = await api.post('/ai/chat/clear/');
+      return {
+        success: true,
+        sessionId: response.data.session_id
+      };
+    } catch (error) {
+      console.error('Failed to clear chat history:', error);
+      return { success: false };
+    }
+  },
+
+  /**
+   * Get all past chat sessions
+   */
+  async getChatSessions() {
+    try {
+      const response = await api.get('/ai/chat/history/');
+      return {
+        success: true,
+        sessions: response.data
+      };
+    } catch (error) {
+      console.error('Failed to get chat sessions:', error);
+      return { success: false, sessions: [] };
+    }
+  },
+
+  /**
+   * Switch to a different chat session
+   * @param {string} sessionId - Session ID to activate
+   */
+  async switchSession(sessionId) {
+    try {
+      const response = await api.post(`/ai/chat/${sessionId}/activate/`);
+      return {
+        success: true,
+        session: response.data
+      };
+    } catch (error) {
+      console.error('Failed to switch session:', error);
+      return { success: false };
+    }
   }
 };
 

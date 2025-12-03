@@ -10,7 +10,8 @@ from .views import (
     NaturalLanguageQueryView,
     RecommendationView,
     WorkflowOptimizationView,
-    AIHealthCheckView
+    AIHealthCheckView,
+    ChatHistoryViewSet
 )
 
 app_name = 'ai_integration'
@@ -19,6 +20,7 @@ app_name = 'ai_integration'
 router = DefaultRouter()
 router.register(r'form-generation', AIFormGenerationViewSet, basename='form-generation')
 router.register(r'assistant', ConversationalAssistantViewSet, basename='assistant')
+router.register(r'chat', ChatHistoryViewSet, basename='chat')
 
 # Define URL patterns
 urlpatterns = [

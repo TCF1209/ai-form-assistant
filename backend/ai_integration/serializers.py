@@ -165,3 +165,40 @@ class AIHealthCheckSerializer(serializers.Serializer):
     model = serializers.CharField(required=False)
     cache_enabled = serializers.BooleanField()
     error = serializers.CharField(required=False)
+
+
+# ============================================
+# Chat History Serializers
+# ============================================
+
+class ChatMessageSerializer(serializers.Serializer):
+    """Serializer for individual chat messages"""
+    id = serializers.UUIDField(read_only=True)
+    message_type = serializers.ChoiceField(choices=['USER', 'ASSISTANT', 'SYSTEM'])
+    content = serializers.CharField()
+    metadata = serializers.DictField(required=False, default=dict)
+    created_at = serializers.DateTimeField(read_only=True)
+
+
+class ChatSessionSerializer(serializers.Serializer):
+    """Serializer for chat sessions"""
+    id = serializers.UUIDField(read_only=True)
+    title = serializers.CharField(required=False, allow_blank=True)
+    is_active = serializers.BooleanField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
+    messages = ChatMessageSerializer(many=True, read_only=True)
+    message_count = serializers.SerializerMethodField()
+
+    def get_message_count(self, obj):
+        return obj.messages.count() if hasattr(obj, 'messages') else 0
+
+
+class ChatMessageCreateSerializer(serializers.Serializer):
+    """Serializer for creating a new chat message"""
+    message_type = serializers.ChoiceField(
+        choices=['USER', 'ASSISTANT', 'SYSTEM'],
+        default='USER'
+    )
+    content = serializers.CharField(max_length=5000)
+    metadata = serializers.DictField(required=False, default=dict)

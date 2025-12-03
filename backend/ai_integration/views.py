@@ -23,8 +23,12 @@ from .serializers import (
     RecommendationSerializer,
     WorkflowOptimizationRequestSerializer,
     WorkflowOptimizationResponseSerializer,
-    AIHealthCheckSerializer
+    AIHealthCheckSerializer,
+    ChatSessionSerializer,
+    ChatMessageSerializer,
+    ChatMessageCreateSerializer
 )
+from .models import ChatSession, ChatMessage
 from .services import (
     get_openai_service,
     get_form_generation_service,
@@ -865,3 +869,155 @@ class AIHealthCheckView(APIView):
             serializer.data,
             status=status.HTTP_200_OK if health_data["status"] == "healthy" else status.HTTP_503_SERVICE_UNAVAILABLE
         )
+
+
+class ChatHistoryViewSet(viewsets.ViewSet):
+    """ViewSet for managing chat history"""
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        """Get or create the current active chat session with all messages"""
+        # Get or create active session for the user
+        session, created = ChatSession.objects.get_or_create(
+            user=request.user,
+            is_active=True,
+            defaults={'title': 'Smart Assistant Chat'}
+        )
+
+        # Get all messages for this session
+        serializer = ChatSessionSerializer(session)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def add_message(self, request):
+        """Add a message to the current chat session"""
+        serializer = ChatMessageCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get or create active session
+        session, created = ChatSession.objects.get_or_create(
+            user=request.user,
+            is_active=True,
+            defaults={'title': 'Smart Assistant Chat'}
+        )
+
+        # Create the message
+        message = ChatMessage.objects.create(
+            session=session,
+            message_type=serializer.validated_data['message_type'],
+            content=serializer.validated_data['content'],
+            metadata=serializer.validated_data.get('metadata', {})
+        )
+
+        # Update session title based on first user message
+        if created or not session.title or session.title == 'Smart Assistant Chat':
+            user_messages = session.messages.filter(message_type='USER')
+            if user_messages.count() == 1:
+                first_msg = user_messages.first().content[:50]
+                session.title = first_msg + ('...' if len(user_messages.first().content) > 50 else '')
+                session.save()
+
+        # Update session's updated_at timestamp
+        session.save()
+
+        return Response(ChatMessageSerializer(message).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def add_messages(self, request):
+        """Add multiple messages at once (for batch saving)"""
+        messages_data = request.data.get('messages', [])
+
+        if not messages_data:
+            return Response(
+                {"error": "No messages provided"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get or create active session
+        session, created = ChatSession.objects.get_or_create(
+            user=request.user,
+            is_active=True,
+            defaults={'title': 'Smart Assistant Chat'}
+        )
+
+        created_messages = []
+        for msg_data in messages_data:
+            serializer = ChatMessageCreateSerializer(data=msg_data)
+            if serializer.is_valid():
+                message = ChatMessage.objects.create(
+                    session=session,
+                    message_type=serializer.validated_data['message_type'],
+                    content=serializer.validated_data['content'],
+                    metadata=serializer.validated_data.get('metadata', {})
+                )
+                created_messages.append(message)
+
+        # Update session title if needed
+        if created or not session.title or session.title == 'Smart Assistant Chat':
+            user_messages = session.messages.filter(message_type='USER')
+            if user_messages.exists():
+                first_msg = user_messages.first().content[:50]
+                session.title = first_msg + ('...' if len(user_messages.first().content) > 50 else '')
+                session.save()
+
+        session.save()  # Update timestamp
+
+        return Response({
+            "created_count": len(created_messages),
+            "messages": ChatMessageSerializer(created_messages, many=True).data
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def clear(self, request):
+        """Clear chat history and start a new session"""
+        # Deactivate current session
+        ChatSession.objects.filter(user=request.user, is_active=True).update(is_active=False)
+
+        # Create a new active session
+        new_session = ChatSession.objects.create(
+            user=request.user,
+            is_active=True,
+            title='Smart Assistant Chat'
+        )
+
+        return Response({
+            "message": "Chat history cleared",
+            "session_id": str(new_session.id)
+        })
+
+    @action(detail=False, methods=['get'])
+    def history(self, request):
+        """Get all past chat sessions for the user"""
+        sessions = ChatSession.objects.filter(user=request.user).order_by('-updated_at')[:20]
+        serializer = ChatSessionSerializer(sessions, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def session(self, request, pk=None):
+        """Get a specific chat session by ID"""
+        try:
+            session = ChatSession.objects.get(pk=pk, user=request.user)
+            serializer = ChatSessionSerializer(session)
+            return Response(serializer.data)
+        except ChatSession.DoesNotExist:
+            return Response(
+                {"error": "Session not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=True, methods=['post'])
+    def activate(self, request, pk=None):
+        """Activate a specific chat session (switch to it)"""
+        try:
+            session = ChatSession.objects.get(pk=pk, user=request.user)
+            session.is_active = True
+            session.save()  # This will deactivate other sessions
+            serializer = ChatSessionSerializer(session)
+            return Response(serializer.data)
+        except ChatSession.DoesNotExist:
+            return Response(
+                {"error": "Session not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )

@@ -641,6 +641,9 @@ const SmartAssistant = () => {
     resetRecommendationState();
   };
 
+  // State for fields needing input (excluding auto-filled fields)
+  const [fieldsNeedingInput, setFieldsNeedingInput] = useState([]);
+
   // Handle fill with AI
   const handleFillWithAI = async () => {
     if (currentRecommendation) {
@@ -670,17 +673,34 @@ const SmartAssistant = () => {
       });
 
       // Use the form from response which has fields loaded
-      setCurrentForm(response.form || currentRecommendation);
+      const formToUse = response.form || currentRecommendation;
+      setCurrentForm(formToUse);
+
+      // Handle auto-filled data
+      const autoFilledData = response.autoFilledData || {};
+      const fieldsToFill = response.fieldsNeedingInput || formToUse.fields || [];
+
+      setFormData(autoFilledData);
+      setFieldsNeedingInput(fieldsToFill);
       setCurrentFieldIndex(0);
-      setFormData({});
-      setIsFillingForm(true);
+
+      // Only enter filling mode if there are fields that need input
+      if (fieldsToFill.length > 0) {
+        setIsFillingForm(true);
+      } else {
+        // All fields auto-filled, show completion summary
+        setShowCompletionSummary(true);
+      }
+
       resetRecommendationState();
     }
   };
 
   // Handle form field submission during AI filling
   const handleFieldSubmit = async (value) => {
-    const currentField = currentForm.fields[currentFieldIndex];
+    // Use fieldsNeedingInput if available, otherwise fall back to all fields
+    const fieldsToUse = fieldsNeedingInput.length > 0 ? fieldsNeedingInput : currentForm.fields;
+    const currentField = fieldsToUse[currentFieldIndex];
 
     addMessage({
       content: value || '(empty)',
@@ -693,7 +713,8 @@ const SmartAssistant = () => {
       fillingForm: true,
       currentForm,
       currentFieldIndex,
-      formData
+      formData,
+      fieldsNeedingInput: fieldsToUse
     });
     setIsTyping(false);
 
@@ -966,7 +987,7 @@ const SmartAssistant = () => {
             </div>
             <FormFillingCard
               form={currentForm}
-              currentField={currentForm.fields[currentFieldIndex]}
+              currentField={(fieldsNeedingInput.length > 0 ? fieldsNeedingInput : currentForm.fields)[currentFieldIndex]}
               onSubmitField={handleFieldSubmit}
               onCancel={handleCancelFilling}
             />

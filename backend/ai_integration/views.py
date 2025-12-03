@@ -118,6 +118,172 @@ class ConversationalAssistantViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=['post'])
+    def search_forms(self, request):
+        """AI-powered form search based on user query"""
+        query = request.data.get('query', '').strip()
+
+        if not query:
+            return Response(
+                {"error": "Query is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get all active forms accessible to the user
+        forms = Form.objects.filter(status='ACTIVE')
+
+        # If user has a department, prioritize their department's forms
+        user_department = request.user.department
+
+        if not forms.exists():
+            return Response({
+                "forms": [],
+                "message": "No forms available",
+                "ai_response": "There are no forms available at the moment."
+            })
+
+        # Prepare forms data for AI analysis
+        forms_data = []
+        for form in forms:
+            forms_data.append({
+                "id": str(form.id),
+                "name": form.title,
+                "description": form.description or "",
+                "department": form.department.name if form.department else "General",
+                "code": form.code
+            })
+
+        # Use OpenAI to find the best matching form
+        ai_service = get_openai_service()
+
+        if ai_service.client:
+            # AI-powered search
+            system_prompt = """You are a form search assistant. Based on the user's query, find the most relevant form(s) from the available forms.
+
+Return a JSON object with:
+{
+    "best_match_id": "form_id or null if no good match",
+    "confidence": 0.0-1.0,
+    "reasoning": "Brief explanation of why this form matches",
+    "alternative_ids": ["other", "relevant", "form_ids"],
+    "response_message": "A friendly message to the user about what you found"
+}
+
+If the query is a greeting or not related to forms, return:
+{
+    "best_match_id": null,
+    "confidence": 0,
+    "reasoning": "Query is not a form search request",
+    "alternative_ids": [],
+    "response_message": "Appropriate response to the user"
+}"""
+
+            user_prompt = f"""User query: "{query}"
+
+Available forms:
+{forms_data}
+
+User's department: {user_department.name if user_department else 'Not specified'}"""
+
+            try:
+                import json
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+
+                response = ai_service._make_api_call(messages, temperature=0.3)
+
+                if response:
+                    ai_result = json.loads(response)
+
+                    # Build response with actual form data
+                    result_forms = []
+
+                    if ai_result.get('best_match_id'):
+                        best_form = forms.filter(id=ai_result['best_match_id']).first()
+                        if best_form:
+                            result_forms.append({
+                                "id": str(best_form.id),
+                                "name": best_form.title,
+                                "description": best_form.description,
+                                "department_name": best_form.department.name if best_form.department else None,
+                                "code": best_form.code,
+                                "is_best_match": True
+                            })
+
+                    # Add alternatives
+                    for alt_id in ai_result.get('alternative_ids', [])[:3]:
+                        alt_form = forms.filter(id=alt_id).first()
+                        if alt_form and str(alt_form.id) != ai_result.get('best_match_id'):
+                            result_forms.append({
+                                "id": str(alt_form.id),
+                                "name": alt_form.title,
+                                "description": alt_form.description,
+                                "department_name": alt_form.department.name if alt_form.department else None,
+                                "code": alt_form.code,
+                                "is_best_match": False
+                            })
+
+                    return Response({
+                        "forms": result_forms,
+                        "ai_response": ai_result.get('response_message', ''),
+                        "confidence": ai_result.get('confidence', 0),
+                        "reasoning": ai_result.get('reasoning', '')
+                    })
+            except Exception as e:
+                logger.error(f"AI search error: {e}")
+                # Fall back to keyword search
+
+        # Fallback: Simple keyword matching
+        query_lower = query.lower()
+        scored_forms = []
+
+        for form in forms:
+            score = 0
+            form_text = f"{form.title} {form.description or ''} {form.code}".lower()
+
+            for word in query_lower.split():
+                if len(word) > 2 and word in form_text:
+                    score += 10
+
+            if score > 0:
+                scored_forms.append({
+                    "id": str(form.id),
+                    "name": form.title,
+                    "description": form.description,
+                    "department_name": form.department.name if form.department else None,
+                    "code": form.code,
+                    "score": score
+                })
+
+        scored_forms.sort(key=lambda x: x['score'], reverse=True)
+
+        return Response({
+            "forms": scored_forms[:5],
+            "ai_response": f"I found {len(scored_forms)} form(s) matching your search." if scored_forms else "I couldn't find a specific form. Here are all available forms.",
+            "confidence": 0.7 if scored_forms else 0
+        })
+
+    @action(detail=False, methods=['get'])
+    def user_profile(self, request):
+        """Get user profile data for auto-fill"""
+        user = request.user
+
+        profile_data = {
+            "name": f"{user.first_name} {user.last_name}".strip() or user.username,
+            "first_name": user.first_name or "",
+            "last_name": user.last_name or "",
+            "email": user.email or "",
+            "employee_id": getattr(user, 'employee_id', '') or "",
+            "department": user.department.name if user.department else "",
+            "department_id": str(user.department.id) if user.department else "",
+            "phone": getattr(user, 'phone', '') or "",
+            "position": getattr(user, 'position', '') or "",
+        }
+
+        return Response(profile_data)
+
+    @action(detail=False, methods=['post'])
     def start_session(self, request):
         """Start a new conversation session for form filling"""
         serializer = ConversationStartRequestSerializer(data=request.data)

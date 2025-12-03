@@ -1,118 +1,78 @@
 /**
  * Assistant Service for Smart Assistant
- * Connects to real backend for forms while using mock AI for conversations
- * Will be upgraded to use OpenAI when API key is available
+ * Connects to real OpenAI-powered backend for AI form search and assistance
  */
 
 import api from './api';
 
-// Keyword mappings for form recommendations (mock AI logic)
-const KEYWORD_MAPPINGS = {
-  leave: ['leave', 'time off', 'vacation', 'holiday', 'absence', 'day off', 'off work'],
-  medical: ['medical', 'sick', 'health', 'doctor', 'hospital', 'illness', 'unwell', 'mc', 'clinic'],
-  annual: ['annual', 'vacation', 'holiday', 'rest', 'break'],
-  emergency: ['emergency', 'urgent', 'family', 'death', 'accident', 'crisis', 'immediate'],
-  expense: ['expense', 'claim', 'reimbursement', 'money', 'cost', 'payment', 'receipt'],
-  travel: ['travel', 'trip', 'business trip', 'transportation', 'flight', 'hotel', 'accommodation'],
-  equipment: ['equipment', 'laptop', 'computer', 'monitor', 'keyboard', 'mouse', 'hardware', 'device', 'phone'],
-  training: ['training', 'course', 'learn', 'certification', 'skill', 'workshop', 'seminar', 'education'],
-  overtime: ['overtime', 'ot', 'extra hours', 'work late', 'additional hours'],
-  request: ['request', 'apply', 'application', 'submit', 'need', 'want'],
+// Auto-fill field mappings - maps form field names to user profile fields
+const AUTO_FILL_MAPPINGS = {
+  // Name variations
+  'name': 'name',
+  'full_name': 'name',
+  'fullname': 'name',
+  'employee_name': 'name',
+  'applicant_name': 'name',
+  'your_name': 'name',
+  'first_name': 'first_name',
+  'firstname': 'first_name',
+  'last_name': 'last_name',
+  'lastname': 'last_name',
+
+  // Email variations
+  'email': 'email',
+  'email_address': 'email',
+  'e_mail': 'email',
+  'your_email': 'email',
+
+  // Employee ID variations
+  'employee_id': 'employee_id',
+  'employeeid': 'employee_id',
+  'emp_id': 'employee_id',
+  'staff_id': 'employee_id',
+  'id_number': 'employee_id',
+
+  // Department variations
+  'department': 'department',
+  'dept': 'department',
+  'department_name': 'department',
+
+  // Phone variations
+  'phone': 'phone',
+  'phone_number': 'phone',
+  'contact_number': 'phone',
+  'mobile': 'phone',
+  'telephone': 'phone',
+
+  // Position variations
+  'position': 'position',
+  'job_title': 'position',
+  'title': 'position',
+  'role': 'position',
 };
 
 // Welcome messages
 const welcomeMessages = [
-  "Welcome to the Smart Form Assistant! I'm here to help you quickly find and complete forms.",
+  "Welcome to the Smart Form Assistant! I'm powered by AI to help you find and complete forms quickly.",
+  "",
   "I can help you with:",
-  "- Finding the right form for your needs",
-  "- Guiding you through the form filling process",
-  "- Answering questions about form requirements",
+  "• Finding the right form based on what you need",
+  "• Auto-filling your information from your profile",
+  "• Guiding you through the form step by step",
   "",
   "Try saying something like:",
-  "- \"I want to apply for medical leave\"",
-  "- \"I need to submit an expense claim\"",
-  "- \"Show me all available forms\""
+  "• \"I want to apply for leave\"",
+  "• \"I need to submit an expense claim\"",
+  "• \"Show me all available forms\""
 ];
 
-// AI response templates
-const responseTemplates = {
-  formFound: (form) => `I found a form that might help you:\n\n**${form.name}**\n\n${form.description || 'No description available.'}\n\nIs this the form you're looking for?`,
-  multipleFormsFound: (count) => `I found ${count} forms that might match your needs. Let me show you the most relevant one first.`,
-  noFormFound: "I couldn't find a specific form matching your request. Would you like me to show you all available forms?",
-  showAllForms: "Here are all the available forms you can access:",
-  fillAssist: (form, field) => {
-    const prompts = {
-      'TEXT': `Please enter your ${field.label.toLowerCase()}.`,
-      'EMAIL': `Please enter a valid email address for ${field.label.toLowerCase()}.`,
-      'DATE': `Please select the ${field.label.toLowerCase()}.`,
-      'NUMBER': `Please enter the ${field.label.toLowerCase()} (numbers only).`,
-      'TEXTAREA': `Please provide details for ${field.label.toLowerCase()}.`,
-      'SELECT': `Please choose an option for ${field.label.toLowerCase()}.`,
-      'RADIO': `Please select one option for ${field.label.toLowerCase()}.`,
-      'FILE': `Please upload your ${field.label.toLowerCase()}.`,
-      'TIME': `Please select the ${field.label.toLowerCase()}.`,
-      'PHONE': `Please enter a phone number for ${field.label.toLowerCase()}.`,
-      'URL': `Please enter a URL for ${field.label.toLowerCase()}.`,
-      'CHECKBOX': `Do you want to check ${field.label.toLowerCase()}? (yes/no)`,
-      'MULTISELECT': `Please select one or more options for ${field.label.toLowerCase()}.`,
-    };
-    return prompts[field.field_type] || `Please fill in the ${field.label.toLowerCase()}.`;
-  },
-  confirmFill: (form) => `Great! I'll help you fill out the "${form.name}" form step by step. Let's begin!`,
-  fieldComplete: "Got it! Moving on to the next question.",
-  allFieldsComplete: "Excellent! You've provided all the required information. Let me prepare your form submission.",
-  greeting: "Hello! How can I help you today? I can help you find forms, submit requests, or answer questions about our form system.",
-  thanks: "You're welcome! Is there anything else I can help you with?",
-  goodbye: "Goodbye! Feel free to come back anytime you need help with forms.",
-  error: "I'm sorry, I encountered an error. Please try again.",
-  noForms: "There are no forms available at the moment. Please contact your administrator.",
-};
-
-// Simulate typing delay
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// Cache for user profile
+let userProfileCache = null;
+let profileCacheTime = null;
+const PROFILE_CACHE_EXPIRY = 10 * 60 * 1000; // 10 minutes
 
 /**
- * Calculate relevance score between query and form
- */
-const calculateRelevance = (query, form) => {
-  const queryLower = query.toLowerCase();
-  const queryWords = queryLower.split(/\s+/);
-
-  let score = 0;
-
-  // Check against keyword mappings
-  Object.entries(KEYWORD_MAPPINGS).forEach(([category, keywords]) => {
-    keywords.forEach(keyword => {
-      if (queryLower.includes(keyword)) {
-        // Check if form name or description contains the category
-        const formText = `${form.name} ${form.description || ''}`.toLowerCase();
-        if (formText.includes(category) || formText.includes(keyword)) {
-          score += 15;
-        }
-      }
-    });
-  });
-
-  // Check form name directly
-  queryWords.forEach(word => {
-    if (word.length > 2) { // Skip short words
-      if (form.name.toLowerCase().includes(word)) {
-        score += 10;
-      }
-      if (form.description && form.description.toLowerCase().includes(word)) {
-        score += 5;
-      }
-      if (form.code && form.code.toLowerCase().includes(word)) {
-        score += 3;
-      }
-    }
-  });
-
-  return score;
-};
-
-/**
- * Assistant Service - connects to real backend
+ * Assistant Service - connects to real OpenAI-powered backend
  */
 const assistantService = {
   // Cache for forms
@@ -132,8 +92,54 @@ const assistantService = {
   },
 
   /**
+   * Fetch user profile for auto-fill
+   */
+  async fetchUserProfile(forceRefresh = false) {
+    // Check cache
+    if (!forceRefresh && userProfileCache && profileCacheTime) {
+      const elapsed = Date.now() - profileCacheTime;
+      if (elapsed < PROFILE_CACHE_EXPIRY) {
+        return userProfileCache;
+      }
+    }
+
+    try {
+      const response = await api.get('/ai/assistant/user_profile/');
+      userProfileCache = response.data;
+      profileCacheTime = Date.now();
+      return userProfileCache;
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error);
+      return null;
+    }
+  },
+
+  /**
+   * AI-powered form search
+   */
+  async searchFormsWithAI(query) {
+    try {
+      const response = await api.post('/ai/assistant/search_forms/', { query });
+      return {
+        success: true,
+        forms: response.data.forms || [],
+        aiResponse: response.data.ai_response || '',
+        confidence: response.data.confidence || 0,
+        reasoning: response.data.reasoning || ''
+      };
+    } catch (error) {
+      console.error('AI form search failed:', error);
+      return {
+        success: false,
+        forms: [],
+        aiResponse: 'Sorry, I had trouble searching for forms. Please try again.',
+        confidence: 0
+      };
+    }
+  },
+
+  /**
    * Fetch all available forms from backend
-   * Only fetches ACTIVE forms (as per backend logic for USER role)
    */
   async fetchForms(forceRefresh = false) {
     // Check cache
@@ -146,42 +152,31 @@ const assistantService = {
 
     try {
       const response = await api.get('/forms/');
-      // Handle both array and paginated response
       const forms = response.data.results || response.data;
 
       // Transform forms to include fields info
       const formsWithFields = await Promise.all(
         forms.map(async (form) => {
           try {
-            // Fetch fields for each form
             const fieldsResponse = await api.get(`/forms/${form.id}/fields/`);
             const fields = fieldsResponse.data || [];
-
             return {
               ...form,
               fields: fields.sort((a, b) => a.order - b.order),
             };
           } catch (err) {
             console.error(`Failed to fetch fields for form ${form.id}:`, err);
-            return {
-              ...form,
-              fields: [],
-            };
+            return { ...form, fields: [] };
           }
         })
       );
 
-      // Cache the result
       this._formsCache = formsWithFields;
       this._formsCacheTime = Date.now();
-
       return formsWithFields;
     } catch (error) {
       console.error('Failed to fetch forms:', error);
-      // Return cached data if available, even if expired
-      if (this._formsCache) {
-        return this._formsCache;
-      }
+      if (this._formsCache) return this._formsCache;
       throw error;
     }
   },
@@ -207,22 +202,57 @@ const assistantService = {
   },
 
   /**
+   * Auto-fill form fields from user profile
+   */
+  async getAutoFilledFields(formFields) {
+    const userProfile = await this.fetchUserProfile();
+    if (!userProfile) return {};
+
+    const autoFilledData = {};
+
+    formFields.forEach(field => {
+      const fieldNameLower = field.name.toLowerCase();
+
+      // Check direct mapping
+      if (AUTO_FILL_MAPPINGS[fieldNameLower]) {
+        const profileKey = AUTO_FILL_MAPPINGS[fieldNameLower];
+        if (userProfile[profileKey]) {
+          autoFilledData[field.name] = userProfile[profileKey];
+        }
+      } else {
+        // Check if field name contains any of the mapping keys
+        for (const [key, profileKey] of Object.entries(AUTO_FILL_MAPPINGS)) {
+          if (fieldNameLower.includes(key) || key.includes(fieldNameLower)) {
+            if (userProfile[profileKey]) {
+              autoFilledData[field.name] = userProfile[profileKey];
+              break;
+            }
+          }
+        }
+      }
+    });
+
+    return autoFilledData;
+  },
+
+  /**
+   * Get fields that need user input (not auto-filled)
+   */
+  getFieldsNeedingInput(formFields, autoFilledData) {
+    return formFields.filter(field => !autoFilledData[field.name]);
+  },
+
+  /**
    * Process user message and return AI response
-   * Uses mock AI logic for now (keyword matching)
-   * @param {string} message - User's message
-   * @param {object} context - Conversation context
    */
   async processMessage(message, context = {}) {
-    // Simulate AI processing delay
-    await delay(300 + Math.random() * 500);
-
     const messageLower = message.toLowerCase().trim();
 
     // Check for greetings
     if (/^(hi|hello|hey|good morning|good afternoon|good evening)/i.test(messageLower)) {
       return {
-        type: 'text',
-        content: responseTemplates.greeting,
+        type: 'greeting',
+        content: "Hello! I'm here to help you find and fill out forms. What would you like to do today?",
         timestamp: new Date().toISOString(),
       };
     }
@@ -230,8 +260,8 @@ const assistantService = {
     // Check for thanks
     if (/^(thank|thanks|thx|ty|appreciate)/i.test(messageLower)) {
       return {
-        type: 'text',
-        content: responseTemplates.thanks,
+        type: 'thanks',
+        content: "You're welcome! Is there anything else I can help you with?",
         timestamp: new Date().toISOString(),
       };
     }
@@ -239,88 +269,194 @@ const assistantService = {
     // Check for goodbye
     if (/^(bye|goodbye|see you|exit|quit)/i.test(messageLower)) {
       return {
-        type: 'text',
-        content: responseTemplates.goodbye,
-        timestamp: new Date().toISOString(),
-      };
-    }
-
-    // If in form filling mode, process field response
-    if (context.fillingForm && context.currentForm && context.currentFieldIndex !== undefined) {
-      return this.processFormFillingResponse(message, context);
-    }
-
-    // Fetch forms from backend
-    let forms;
-    try {
-      forms = await this.fetchForms();
-    } catch (error) {
-      return {
-        type: 'error',
-        content: responseTemplates.error + ' Unable to fetch forms.',
-        timestamp: new Date().toISOString(),
-      };
-    }
-
-    if (!forms || forms.length === 0) {
-      return {
-        type: 'no_forms',
-        content: responseTemplates.noForms,
+        type: 'goodbye',
+        content: "Goodbye! Feel free to come back anytime you need help with forms.",
         timestamp: new Date().toISOString(),
       };
     }
 
     // Check for "show all forms" request
     if (/show\s*(all|me)?\s*forms?|list\s*forms?|available\s*forms?|what\s*forms?/i.test(messageLower)) {
-      return {
-        type: 'form_list',
-        content: responseTemplates.showAllForms,
-        forms: forms,
-        timestamp: new Date().toISOString(),
-      };
+      try {
+        const forms = await this.fetchForms();
+        return {
+          type: 'form_list',
+          content: "Here are all the available forms you can access:",
+          forms: forms,
+          timestamp: new Date().toISOString(),
+        };
+      } catch (error) {
+        return {
+          type: 'error',
+          content: "Sorry, I couldn't load the forms. Please try again.",
+          timestamp: new Date().toISOString(),
+        };
+      }
     }
 
-    // Search for matching forms using keyword matching
-    const scoredForms = forms.map(form => ({
-      ...form,
-      score: calculateRelevance(message, form)
-    })).filter(form => form.score > 0).sort((a, b) => b.score - a.score);
+    // Use AI-powered search
+    const searchResult = await this.searchFormsWithAI(message);
 
-    if (scoredForms.length > 0) {
-      const bestMatch = scoredForms[0];
-      const alternatives = scoredForms.slice(1, 4); // Up to 3 alternatives
+    if (searchResult.success && searchResult.forms.length > 0) {
+      const bestMatch = searchResult.forms.find(f => f.is_best_match) || searchResult.forms[0];
+      const alternatives = searchResult.forms.filter(f => f !== bestMatch);
+
+      // Fetch full form data with fields
+      try {
+        const formWithFields = await this.getFormById(bestMatch.id);
+        bestMatch.fields = formWithFields.fields;
+      } catch (e) {
+        console.error('Failed to fetch form fields:', e);
+      }
 
       return {
         type: 'form_recommendation',
-        content: scoredForms.length > 1
-          ? responseTemplates.multipleFormsFound(scoredForms.length)
-          : responseTemplates.formFound(bestMatch),
+        content: searchResult.aiResponse || `I found a form that might help you:\n\n**${bestMatch.name}**\n\n${bestMatch.description || 'No description available.'}\n\nIs this the form you're looking for?`,
         recommendedForm: bestMatch,
         alternatives: alternatives,
+        confidence: searchResult.confidence,
         timestamp: new Date().toISOString(),
       };
     }
 
-    // No match found - show all forms
+    // No forms found or low confidence - show all forms
+    if (searchResult.confidence < 0.3 || searchResult.forms.length === 0) {
+      try {
+        const allForms = await this.fetchForms();
+        return {
+          type: 'no_match',
+          content: searchResult.aiResponse || "I couldn't find a specific form matching your request. Here are all available forms:",
+          forms: allForms,
+          timestamp: new Date().toISOString(),
+        };
+      } catch (error) {
+        return {
+          type: 'error',
+          content: "Sorry, I couldn't load the forms. Please try again.",
+          timestamp: new Date().toISOString(),
+        };
+      }
+    }
+
     return {
-      type: 'no_match',
-      content: responseTemplates.noFormFound,
-      forms: forms,
+      type: 'text',
+      content: searchResult.aiResponse || "I'm not sure what you're looking for. Could you describe the form you need?",
       timestamp: new Date().toISOString(),
     };
+  },
+
+  /**
+   * Start form filling process with auto-fill
+   */
+  async startFormFilling(form) {
+    // Ensure we have fields
+    let formWithFields = form;
+    if (!form.fields || form.fields.length === 0) {
+      try {
+        formWithFields = await this.getFormById(form.id);
+      } catch (error) {
+        return {
+          type: 'error',
+          content: 'Unable to load form fields. Please try again.',
+          timestamp: new Date().toISOString(),
+        };
+      }
+    }
+
+    if (!formWithFields.fields || formWithFields.fields.length === 0) {
+      return {
+        type: 'error',
+        content: 'This form has no fields to fill. Please contact your administrator.',
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    // Get auto-filled data from user profile
+    const autoFilledData = await this.getAutoFilledFields(formWithFields.fields);
+    const autoFilledCount = Object.keys(autoFilledData).length;
+    const fieldsNeedingInput = this.getFieldsNeedingInput(formWithFields.fields, autoFilledData);
+
+    // Build response message
+    let message = `Great! I'll help you fill out the "${formWithFields.title || formWithFields.name}" form.\n\n`;
+
+    if (autoFilledCount > 0) {
+      message += `✅ I've auto-filled ${autoFilledCount} field(s) from your profile:\n`;
+      for (const [fieldName, value] of Object.entries(autoFilledData)) {
+        const field = formWithFields.fields.find(f => f.name === fieldName);
+        message += `• ${field?.label || fieldName}: ${value}\n`;
+      }
+      message += '\nYou can edit these if needed.\n\n';
+    }
+
+    if (fieldsNeedingInput.length > 0) {
+      const firstField = fieldsNeedingInput[0];
+      message += `Now, let's fill in the remaining fields.\n\n`;
+      message += this._getFieldPrompt(firstField);
+    } else {
+      message += `All fields have been auto-filled! Please review and submit.`;
+    }
+
+    return {
+      type: 'start_filling',
+      content: message,
+      form: formWithFields,
+      autoFilledData: autoFilledData,
+      fieldsNeedingInput: fieldsNeedingInput,
+      currentFieldIndex: 0,
+      currentField: fieldsNeedingInput[0] || null,
+      timestamp: new Date().toISOString(),
+    };
+  },
+
+  /**
+   * Get prompt for a field
+   */
+  _getFieldPrompt(field) {
+    const fieldType = field.field_type || field.type;
+    const prompts = {
+      'TEXT': `Please enter your ${field.label.toLowerCase()}.`,
+      'SHORT_TEXT': `Please enter your ${field.label.toLowerCase()}.`,
+      'LONG_TEXT': `Please provide details for ${field.label.toLowerCase()}.`,
+      'EMAIL': `Please enter a valid email address for ${field.label.toLowerCase()}.`,
+      'DATE': `Please select the ${field.label.toLowerCase()}.`,
+      'NUMBER': `Please enter the ${field.label.toLowerCase()} (numbers only).`,
+      'TEXTAREA': `Please provide details for ${field.label.toLowerCase()}.`,
+      'SELECT': `Please choose an option for ${field.label.toLowerCase()}.`,
+      'DROPDOWN': `Please choose an option for ${field.label.toLowerCase()}.`,
+      'RADIO': `Please select one option for ${field.label.toLowerCase()}.`,
+      'FILE': `Please upload your ${field.label.toLowerCase()}.`,
+      'TIME': `Please select the ${field.label.toLowerCase()}.`,
+      'PHONE': `Please enter a phone number for ${field.label.toLowerCase()}.`,
+      'URL': `Please enter a URL for ${field.label.toLowerCase()}.`,
+      'CHECKBOX': `Do you want to check ${field.label.toLowerCase()}? (yes/no)`,
+      'MULTISELECT': `Please select one or more options for ${field.label.toLowerCase()}.`,
+    };
+    return prompts[fieldType] || `Please fill in the ${field.label.toLowerCase()}.`;
   },
 
   /**
    * Process response during form filling mode
    */
   async processFormFillingResponse(message, context) {
-    const { currentForm, currentFieldIndex, formData } = context;
-    const currentField = currentForm.fields[currentFieldIndex];
+    const { currentForm, currentFieldIndex, formData, fieldsNeedingInput } = context;
+
+    // Use fieldsNeedingInput if available, otherwise use all fields
+    const fields = fieldsNeedingInput || currentForm.fields;
+    const currentField = fields[currentFieldIndex];
+
+    if (!currentField) {
+      return {
+        type: 'form_complete',
+        content: "All fields have been filled! Please review your responses and submit.",
+        formData: formData,
+        timestamp: new Date().toISOString(),
+      };
+    }
 
     // Store the response
     const newFormData = { ...formData };
 
-    // Basic validation based on field type
+    // Basic validation
     let isValid = true;
     let errorMessage = '';
     let processedValue = message.trim();
@@ -329,7 +465,9 @@ const assistantService = {
       isValid = false;
       errorMessage = `${currentField.label} is required. Please provide a value.`;
     } else if (processedValue) {
-      switch (currentField.field_type) {
+      const fieldType = currentField.field_type || currentField.type;
+
+      switch (fieldType) {
         case 'EMAIL':
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
           if (!emailRegex.test(processedValue)) {
@@ -351,12 +489,11 @@ const assistantService = {
           }
           break;
         case 'CHECKBOX':
-          // Convert yes/no to boolean
           processedValue = /^(yes|y|true|1|check|checked)$/i.test(processedValue);
           break;
         case 'SELECT':
+        case 'DROPDOWN':
         case 'RADIO':
-          // Validate against options if available
           if (currentField.options && currentField.options.length > 0) {
             const validOption = currentField.options.find(opt => {
               const optValue = typeof opt === 'string' ? opt : opt.value || opt.label;
@@ -388,13 +525,13 @@ const assistantService = {
     // Store the validated value
     newFormData[currentField.name] = processedValue;
 
-    // Find next required field or any remaining field
+    // Move to next field
     const nextFieldIndex = currentFieldIndex + 1;
-    if (nextFieldIndex < currentForm.fields.length) {
-      const nextField = currentForm.fields[nextFieldIndex];
+    if (nextFieldIndex < fields.length) {
+      const nextField = fields[nextFieldIndex];
       return {
         type: 'next_field',
-        content: responseTemplates.fieldComplete + '\n\n' + responseTemplates.fillAssist(currentForm, nextField),
+        content: `Got it! ${this._getFieldPrompt(nextField)}`,
         nextFieldIndex,
         formData: newFormData,
         nextField,
@@ -405,47 +542,8 @@ const assistantService = {
     // All fields complete
     return {
       type: 'form_complete',
-      content: responseTemplates.allFieldsComplete,
+      content: "Excellent! You've provided all the required information. Let me prepare your form submission.",
       formData: newFormData,
-      timestamp: new Date().toISOString(),
-    };
-  },
-
-  /**
-   * Start form filling process
-   */
-  async startFormFilling(form) {
-    await delay(300 + Math.random() * 300);
-
-    // Ensure we have fields
-    let formWithFields = form;
-    if (!form.fields || form.fields.length === 0) {
-      try {
-        formWithFields = await this.getFormById(form.id);
-      } catch (error) {
-        return {
-          type: 'error',
-          content: 'Unable to load form fields. Please try again.',
-          timestamp: new Date().toISOString(),
-        };
-      }
-    }
-
-    if (!formWithFields.fields || formWithFields.fields.length === 0) {
-      return {
-        type: 'error',
-        content: 'This form has no fields to fill. Please contact your administrator.',
-        timestamp: new Date().toISOString(),
-      };
-    }
-
-    const firstField = formWithFields.fields[0];
-    return {
-      type: 'start_filling',
-      content: responseTemplates.confirmFill(formWithFields) + '\n\n' + responseTemplates.fillAssist(formWithFields, firstField),
-      form: formWithFields,
-      currentFieldIndex: 0,
-      currentField: firstField,
       timestamp: new Date().toISOString(),
     };
   },
@@ -476,49 +574,10 @@ const assistantService = {
   },
 
   /**
-   * Save form as draft
-   */
-  async saveDraft(formId, formData) {
-    try {
-      const response = await api.post('/submissions/', {
-        form: formId,
-        status: 'DRAFT',
-        data: formData,
-      });
-      return {
-        success: true,
-        submission: response.data,
-        message: 'Draft saved successfully!',
-      };
-    } catch (error) {
-      console.error('Failed to save draft:', error);
-      return {
-        success: false,
-        message: error.response?.data?.detail || 'Failed to save draft. Please try again.',
-        error: error,
-      };
-    }
-  },
-
-  /**
    * Get all forms (alias for fetchForms)
    */
   async getAllForms() {
     return this.fetchForms();
-  },
-
-  /**
-   * Search forms by query
-   */
-  async searchForms(query) {
-    const forms = await this.fetchForms();
-    return forms
-      .map(form => ({
-        ...form,
-        score: calculateRelevance(query, form)
-      }))
-      .filter(form => form.score > 0)
-      .sort((a, b) => b.score - a.score);
   },
 
   /**
@@ -527,6 +586,8 @@ const assistantService = {
   clearCache() {
     this._formsCache = null;
     this._formsCacheTime = null;
+    userProfileCache = null;
+    profileCacheTime = null;
   }
 };
 

@@ -120,6 +120,7 @@ const assistantService = {
   async searchFormsWithAI(query) {
     try {
       const response = await api.post('/ai/assistant/search_forms/', { query });
+      console.log('AI Search Response:', response.data); // Debug logging
       return {
         success: true,
         forms: response.data.forms || [],
@@ -275,8 +276,10 @@ const assistantService = {
       };
     }
 
-    // Check for "show all forms" request
-    if (/show\s*(all|me)?\s*forms?|list\s*forms?|available\s*forms?|what\s*forms?/i.test(messageLower)) {
+    // Check for "show all forms" request - must be explicit request to list all forms
+    // More specific patterns to avoid matching questions like "what form should I use"
+    if (/^(show\s*(all|me)?\s*forms?|list\s*(all\s*)?forms?|available\s*forms?|what\s*forms?\s*(are\s*)?(there|available|do\s*you\s*have))$/i.test(messageLower.trim()) ||
+        /^(show|list|display|view)\s*(all|me)?\s*(the\s*)?(available\s*)?forms?$/i.test(messageLower.trim())) {
       try {
         const forms = await this.fetchForms();
         return {
@@ -297,7 +300,8 @@ const assistantService = {
     // Use AI-powered search
     const searchResult = await this.searchFormsWithAI(message);
 
-    if (searchResult.success && searchResult.forms.length > 0) {
+    // Check if we have a high-confidence match
+    if (searchResult.success && searchResult.forms.length > 0 && searchResult.confidence >= 0.5) {
       const bestMatch = searchResult.forms.find(f => f.is_best_match) || searchResult.forms[0];
       const alternatives = searchResult.forms.filter(f => f !== bestMatch);
 
@@ -319,8 +323,8 @@ const assistantService = {
       };
     }
 
-    // No forms found or low confidence - show all forms
-    if (searchResult.confidence < 0.3 || searchResult.forms.length === 0) {
+    // Low confidence or no match - show all forms
+    if (!searchResult.success || searchResult.forms.length === 0 || searchResult.confidence < 0.5) {
       try {
         const allForms = await this.fetchForms();
         return {

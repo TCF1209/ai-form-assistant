@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import assistantService from '../../services/assistantService';
+import { validateAssistantMessage, getAssistantSuggestions } from '../../utils/inputValidation';
 
 // Icons
 const SendIcon = () => (
@@ -850,14 +851,36 @@ const SmartAssistant = () => {
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
+    const messageText = inputValue.trim();
+
+    // Validate input before processing
+    const validation = validateAssistantMessage(messageText);
+
+    if (!validation.valid) {
+      // Show user's message first
+      addMessage({
+        content: messageText,
+        isUser: true,
+        timestamp: new Date().toISOString()
+      });
+      setInputValue('');
+
+      // Show validation error as AI response
+      addMessage({
+        content: validation.error,
+        isUser: false,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
     const userMessage = {
-      content: inputValue.trim(),
+      content: messageText,
       isUser: true,
       timestamp: new Date().toISOString()
     };
 
     addMessage(userMessage);
-    const messageText = inputValue.trim();
     setInputValue('');
     resetRecommendationState();
 
@@ -1014,6 +1037,27 @@ const SmartAssistant = () => {
 
       {/* Input Area - Fixed at bottom */}
       <div className="flex-shrink-0 bg-white border-t border-slate-200 px-6 py-4">
+        {/* Quick suggestions - show only when starting fresh */}
+        {messages.length <= 1 && !isFillingForm && (
+          <div className="mb-3">
+            <p className="text-xs text-slate-500 mb-2">Quick suggestions:</p>
+            <div className="flex flex-wrap gap-2">
+              {getAssistantSuggestions().slice(0, 4).map((suggestion, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setInputValue(suggestion);
+                    inputRef.current?.focus();
+                  }}
+                  className="px-3 py-1.5 text-sm bg-sky-50 text-sky-700 rounded-full hover:bg-sky-100 transition-colors border border-sky-200"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           <div className="flex-1 relative">
             <input

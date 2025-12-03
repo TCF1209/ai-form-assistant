@@ -203,9 +203,18 @@ const AIFormGeneration = () => {
 
       // Check if it's an API error with a message
       const errorMessage = error.response?.data?.error || error.message || 'Failed to generate form';
+      const errorType = error.response?.data?.error_type;
 
+      // Handle validation errors from backend (400 status)
+      if (error.response?.status === 400) {
+        // This is a validation error - show the message and go back to step 0
+        setCurrentStep(0);
+        setValidationError(errorMessage);
+        message.error(errorMessage);
+        saveToHistory(prompt, selectedDepartment, 'failed');
+      }
       // If OpenAI is not configured, fall back to mock data
-      if (errorMessage.includes('not configured') || errorMessage.includes('API key') || error.response?.status === 503) {
+      else if (errorMessage.includes('not configured') || errorMessage.includes('API key') || error.response?.status === 503) {
         message.warning('AI service not available. Using template-based generation.');
         const mockForm = generateMockForm(prompt, selectedDepartment);
         setGeneratedForm(mockForm);
@@ -213,6 +222,7 @@ const AIFormGeneration = () => {
         saveToHistory(prompt, selectedDepartment);
         setCurrentStep(2);
       } else {
+        setCurrentStep(0);
         saveToHistory(prompt, selectedDepartment, 'failed');
         message.error(`Failed to generate form: ${errorMessage}`);
       }

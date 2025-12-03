@@ -146,7 +146,7 @@ class ConversationalAssistantViewSet(viewsets.ViewSet):
         for form in forms:
             forms_data.append({
                 "id": str(form.id),
-                "name": form.title,
+                "name": form.name,
                 "description": form.description or "",
                 "department": form.department.name if form.department else "General",
                 "code": form.code
@@ -204,7 +204,7 @@ User's department: {user_department.name if user_department else 'Not specified'
                         if best_form:
                             result_forms.append({
                                 "id": str(best_form.id),
-                                "name": best_form.title,
+                                "name": best_form.name,
                                 "description": best_form.description,
                                 "department_name": best_form.department.name if best_form.department else None,
                                 "code": best_form.code,
@@ -217,7 +217,7 @@ User's department: {user_department.name if user_department else 'Not specified'
                         if alt_form and str(alt_form.id) != ai_result.get('best_match_id'):
                             result_forms.append({
                                 "id": str(alt_form.id),
-                                "name": alt_form.title,
+                                "name": alt_form.name,
                                 "description": alt_form.description,
                                 "department_name": alt_form.department.name if alt_form.department else None,
                                 "code": alt_form.code,
@@ -240,7 +240,7 @@ User's department: {user_department.name if user_department else 'Not specified'
 
         for form in forms:
             score = 0
-            form_text = f"{form.title} {form.description or ''} {form.code}".lower()
+            form_text = f"{form.name} {form.description or ''} {form.code}".lower()
 
             for word in query_lower.split():
                 if len(word) > 2 and word in form_text:
@@ -249,7 +249,7 @@ User's department: {user_department.name if user_department else 'Not specified'
             if score > 0:
                 scored_forms.append({
                     "id": str(form.id),
-                    "name": form.title,
+                    "name": form.name,
                     "description": form.description,
                     "department_name": form.department.name if form.department else None,
                     "code": form.code,

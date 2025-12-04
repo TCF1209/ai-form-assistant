@@ -168,7 +168,7 @@ const PieChart = ({ data, title, labelKey, valueKey }) => {
   );
 };
 
-// Line Chart Component (simple implementation)
+// Line Chart Component (improved with proper scaling and continuous lines)
 const LineChart = ({ data, title, xKey, yKey }) => {
   if (!data || data.length === 0) {
     return (
@@ -179,78 +179,126 @@ const LineChart = ({ data, title, xKey, yKey }) => {
     );
   }
 
-  const maxValue = Math.max(...data.map(d => d[yKey] || 0));
-  const minValue = 0;
-  const range = maxValue - minValue || 1;
+  // Chart dimensions with padding
+  const padding = { top: 20, right: 20, bottom: 30, left: 40 };
+  const chartWidth = 400;
   const chartHeight = 200;
-  const chartWidth = 100; // percentage
+  const innerWidth = chartWidth - padding.left - padding.right;
+  const innerHeight = chartHeight - padding.top - padding.bottom;
+
+  const maxValue = Math.max(...data.map(d => d[yKey] || 0), 1);
+  const minValue = 0;
 
   // Calculate points for the line
   const points = data.map((item, index) => {
-    const x = (index / (data.length - 1 || 1)) * chartWidth;
-    const y = chartHeight - ((item[yKey] - minValue) / range) * chartHeight;
-    return { x, y, value: item[yKey], label: item[xKey] };
+    const x = padding.left + (index / Math.max(data.length - 1, 1)) * innerWidth;
+    const y = padding.top + innerHeight - ((item[yKey] || 0) / maxValue) * innerHeight;
+    return { x, y, value: item[yKey] || 0, label: item[xKey] };
   });
 
-  // Create SVG path
-  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  // Create SVG path - ensure continuous line
+  const pathD = points.length > 0
+    ? points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ')
+    : '';
+
+  // Area path for fill
+  const areaPath = points.length > 0
+    ? `${pathD} L ${points[points.length - 1].x.toFixed(2)} ${padding.top + innerHeight} L ${padding.left} ${padding.top + innerHeight} Z`
+    : '';
+
+  // Y-axis labels
+  const yAxisLabels = [0, Math.round(maxValue / 2), maxValue];
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <h3 className="text-lg font-semibold text-slate-800 mb-4">{title}</h3>
       <div className="relative">
-        <svg viewBox={`0 0 ${chartWidth} ${chartHeight + 20}`} className="w-full h-48">
+        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-52" preserveAspectRatio="xMidYMid meet">
           {/* Grid lines */}
-          {[0, 25, 50, 75, 100].map((percent) => (
+          {[0, 0.25, 0.5, 0.75, 1].map((percent, i) => (
             <line
-              key={percent}
-              x1="0"
-              y1={chartHeight - (percent / 100) * chartHeight}
-              x2={chartWidth}
-              y2={chartHeight - (percent / 100) * chartHeight}
+              key={i}
+              x1={padding.left}
+              y1={padding.top + innerHeight * (1 - percent)}
+              x2={chartWidth - padding.right}
+              y2={padding.top + innerHeight * (1 - percent)}
               stroke="#e2e8f0"
-              strokeWidth="0.5"
+              strokeWidth="1"
             />
           ))}
-          {/* Line */}
-          <path
-            d={pathD}
-            fill="none"
-            stroke="#0ea5e9"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+
+          {/* Y-axis labels */}
+          {yAxisLabels.map((val, i) => (
+            <text
+              key={i}
+              x={padding.left - 8}
+              y={padding.top + innerHeight - (val / maxValue) * innerHeight + 4}
+              textAnchor="end"
+              className="text-xs fill-slate-400"
+              fontSize="10"
+            >
+              {val}
+            </text>
+          ))}
+
           {/* Area fill */}
-          <path
-            d={`${pathD} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`}
-            fill="url(#gradient)"
-            opacity="0.2"
-          />
+          {areaPath && (
+            <path
+              d={areaPath}
+              fill="url(#lineGradient)"
+              opacity="0.3"
+            />
+          )}
+
+          {/* Line */}
+          {pathD && (
+            <path
+              d={pathD}
+              fill="none"
+              stroke="#0ea5e9"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
           {/* Points */}
           {points.map((p, i) => (
-            <circle
-              key={i}
-              cx={p.x}
-              cy={p.y}
-              r="3"
-              fill="#0ea5e9"
-              stroke="white"
-              strokeWidth="2"
-            />
+            <g key={i}>
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r="4"
+                fill="#0ea5e9"
+                stroke="white"
+                strokeWidth="2"
+              />
+              {/* Value label on hover - show for all points */}
+              <text
+                x={p.x}
+                y={p.y - 10}
+                textAnchor="middle"
+                className="text-xs fill-slate-600 font-medium"
+                fontSize="9"
+              >
+                {p.value}
+              </text>
+            </g>
           ))}
+
           {/* Gradient definition */}
           <defs>
-            <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#0ea5e9" />
+            <linearGradient id="lineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.4" />
               <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0" />
             </linearGradient>
           </defs>
         </svg>
+
         {/* X-axis labels */}
-        <div className="flex justify-between mt-2 text-xs text-slate-500">
+        <div className="flex justify-between px-10 text-xs text-slate-500">
           {data.map((item, index) => (
-            <span key={index} className="truncate max-w-[60px]" title={item[xKey]}>
+            <span key={index} className="truncate max-w-[50px] text-center" title={item[xKey]}>
               {item[xKey]}
             </span>
           ))}
@@ -298,14 +346,27 @@ const Reports = () => {
         return submittedDate >= startDate;
       });
 
-      // Calculate summary
+      // Debug: log first submission to see actual status format
+      if (filteredSubmissions.length > 0) {
+        console.log('Sample submission:', filteredSubmissions[0]);
+        console.log('All statuses:', filteredSubmissions.map(s => s.status));
+      }
+
+      // Calculate summary - handle both uppercase and potential variations
+      const getStatusCount = (statusValues) => {
+        return filteredSubmissions.filter(s => {
+          const status = (s.status || '').toUpperCase();
+          return statusValues.map(v => v.toUpperCase()).includes(status);
+        }).length;
+      };
+
       const summary = {
         totalSubmissions: filteredSubmissions.length,
-        approvedSubmissions: filteredSubmissions.filter(s => s.status === 'APPROVED').length,
-        pendingSubmissions: filteredSubmissions.filter(s => s.status === 'SUBMITTED' || s.status === 'IN_REVIEW').length,
-        rejectedSubmissions: filteredSubmissions.filter(s => s.status === 'REJECTED').length,
+        approvedSubmissions: getStatusCount(['APPROVED']),
+        pendingSubmissions: getStatusCount(['SUBMITTED', 'IN_REVIEW', 'PENDING']),
+        rejectedSubmissions: getStatusCount(['REJECTED']),
         totalForms: forms.length,
-        activeForms: forms.filter(f => f.status === 'ACTIVE').length,
+        activeForms: forms.filter(f => (f.status || '').toUpperCase() === 'ACTIVE').length,
       };
 
       // Calculate approval rate

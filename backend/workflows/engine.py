@@ -254,6 +254,11 @@ class WorkflowEngine:
             instance.completed_at = timezone.now()
             instance.save()
 
+            # Update the submission status to APPROVED
+            submission = instance.submission
+            submission.status = 'APPROVED'
+            submission.save()
+
             # Send completion notifications
             self._send_notifications(instance, 'COMPLETED')
 
@@ -286,6 +291,11 @@ class WorkflowEngine:
             instance.status = 'FAILED'
             instance.completed_at = timezone.now()
             instance.save()
+
+            # Update the submission status to REJECTED
+            submission = instance.submission
+            submission.status = 'REJECTED'
+            submission.save()
 
             # Send rejection notifications
             self._send_notifications(instance, 'REJECTED')

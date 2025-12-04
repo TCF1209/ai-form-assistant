@@ -202,7 +202,7 @@ const AnalyticsResultCard = ({ result }) => {
     switch (result.visualization) {
       case 'number':
         return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {result.data.map((item, index) => (
               <MetricCard
                 key={index}
@@ -219,21 +219,21 @@ const AnalyticsResultCard = ({ result }) => {
       case 'bar':
       case 'line':
         return (
-          <div className="mb-4">
+          <div>
             <BarChart data={result.data} />
           </div>
         );
 
       case 'pie':
         return (
-          <div className="mb-4">
+          <div>
             <StatusBreakdown data={result.data} />
           </div>
         );
 
       case 'cards':
         return (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {result.data.map((item, index) => (
               <MetricCard
                 key={index}
@@ -248,7 +248,7 @@ const AnalyticsResultCard = ({ result }) => {
       default:
         // Table view
         return (
-          <div className="bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden mb-4">
+          <div className="bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-slate-50">
                 <tr>
@@ -276,32 +276,32 @@ const AnalyticsResultCard = ({ result }) => {
     }
   };
 
+  // Check if we have data to show visualization
+  const hasVisualization = result.data && result.data.length > 0 && result.visualization !== 'text';
+
   return (
     <div className="mb-4">
-      {/* AI Avatar Row */}
+      {/* AI Avatar Row - Now shows summary instead of interpretation */}
       <div className="flex justify-start mb-3">
         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center mr-3">
           <ChartBarIcon />
         </div>
         <div className="bg-white px-4 py-3 rounded-2xl rounded-bl-md shadow-md max-w-[70%]">
-          <div className="text-sm text-slate-800">{result.interpretation}</div>
+          <div className="text-sm text-slate-800 whitespace-pre-wrap">
+            {result.summary || result.interpretation || "Here are your results."}
+          </div>
           <div className="text-xs text-slate-400 mt-1">
             {new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
         </div>
       </div>
 
-      {/* Visualization */}
-      <div className="ml-11">
-        {renderVisualization()}
-
-        {/* Summary */}
-        {result.summary && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 text-sm text-emerald-800">
-            {result.summary}
-          </div>
-        )}
-      </div>
+      {/* Visualization - Only show if we have data */}
+      {hasVisualization && (
+        <div className="ml-11">
+          {renderVisualization()}
+        </div>
+      )}
     </div>
   );
 };

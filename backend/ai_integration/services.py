@@ -373,6 +373,8 @@ Analyze the user's query and return a JSON object with this structure:
     "query_type": "count|list|trend|comparison|breakdown|average|overview",
     "is_greeting": false,
     "is_help_request": false,
+    "is_casual_message": false,
+    "is_gibberish": false,
     "entity": "submissions|forms|departments|workflows",
     "filters": {
         "status": ["APPROVED", "REJECTED"] or null,
@@ -385,19 +387,26 @@ Analyze the user's query and return a JSON object with this structure:
     "visualization": "number|bar|pie|line|table|cards",
     "sort": "asc|desc" or null,
     "limit": number or null,
-    "interpretation": "Brief description of what user is asking for"
+    "interpretation": "A user-friendly description of what they're asking. This will be shown to the user, so make it natural and helpful."
 }
 
-Special cases:
-- If query is a greeting (hi, hello, hey, etc.), set is_greeting: true
-- If query is asking for help or what can be done, set is_help_request: true
-- If query is unclear but seems analytics-related, make your best interpretation
+Special cases - set the appropriate flag to true:
+- is_greeting: User says hi, hello, hey, good morning, etc.
+- is_help_request: User asks what you can do, how to use, help, etc.
+- is_casual_message: User says thank you, thanks, ok, alright, bye, no more questions, etc.
+- is_gibberish: User types random characters or meaningless text like "asdfgh", "xxxxx", etc.
+
+IMPORTANT for interpretation field:
+- Write it as if you're talking to the user naturally
+- For analytics queries: "Showing leave requests from last month" NOT "User is asking about leave requests"
+- For casual messages: Leave interpretation empty or null, the system will handle the response
 
 Examples:
-- "How many leave requests last month?" → query_type: "count", entity: "submissions", filters: {form_type: "leave", time_range: "last_month"}
-- "Show pending forms by department" → query_type: "breakdown", group_by: "department", filters: {status: ["SUBMITTED", "IN_REVIEW"]}
-- "What's the approval rate?" → query_type: "average", entity: "submissions", aggregation: "count", filters: {status: ["APPROVED"]}
-- "Trend of submissions" → query_type: "trend", visualization: "line", group_by: "month"
+- "How many leave requests last month?" → query_type: "count", filters: {form_type: "leave", time_range: "last_month"}, interpretation: "Counting leave requests from last month"
+- "Show pending forms by department" → query_type: "breakdown", group_by: "department", filters: {status: ["SUBMITTED", "IN_REVIEW"]}, interpretation: "Breaking down pending forms by department"
+- "How many forms this month?" → query_type: "count", filters: {time_range: "this_month"}, interpretation: "Counting all form submissions this month"
+- "thank you" → is_casual_message: true, interpretation: null
+- "asdfghj" → is_gibberish: true, interpretation: null
 """
 
         user_prompt = f"""User query: "{query}"

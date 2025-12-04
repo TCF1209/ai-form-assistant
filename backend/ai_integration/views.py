@@ -427,10 +427,10 @@ class NaturalLanguageQueryView(APIView):
         intent = ai_service.parse_analytics_intent(query, available_context)
         logger.info(f"Analytics query intent: {intent}")
 
-        # Handle special cases (greetings, help requests)
+        # Handle special cases (greetings, help requests, casual messages, gibberish)
         if intent.get('is_greeting'):
             return Response({
-                "interpretation": "Hello! I'm your analytics assistant.",
+                "interpretation": "",
                 "filters": {},
                 "aggregation": None,
                 "visualization": "text",
@@ -440,7 +440,7 @@ class NaturalLanguageQueryView(APIView):
 
         if intent.get('is_help_request'):
             return Response({
-                "interpretation": "Here's what I can help you with",
+                "interpretation": "",
                 "filters": {},
                 "aggregation": None,
                 "visualization": "text",
@@ -448,8 +448,39 @@ class NaturalLanguageQueryView(APIView):
                 "summary": "I can answer questions about your forms and submissions. Here are some examples:\n\n• \"How many leave requests last month?\" - Count specific form types\n• \"Show pending forms by department\" - Break down by categories\n• \"What's the average approval time?\" - Calculate metrics\n• \"Show submission trends\" - View data over time\n• \"Status breakdown\" - See distribution of statuses"
             })
 
+        if intent.get('is_casual_message'):
+            return Response({
+                "interpretation": "",
+                "filters": {},
+                "aggregation": None,
+                "visualization": "text",
+                "data": [],
+                "summary": "You're welcome! Feel free to ask me any questions about your forms data anytime."
+            })
+
+        if intent.get('is_gibberish'):
+            return Response({
+                "interpretation": "",
+                "filters": {},
+                "aggregation": None,
+                "visualization": "text",
+                "data": [],
+                "summary": "I didn't quite understand that. Try asking something like:\n\n• \"How many submissions this month?\"\n• \"Show pending forms by department\"\n• \"What's our approval rate?\""
+            })
+
         # Step 2: Execute database query based on AI intent
-        query_result = self._execute_query(intent, user_role, user_department)
+        try:
+            query_result = self._execute_query(intent, user_role, user_department)
+        except Exception as e:
+            logger.error(f"Error executing analytics query: {e}")
+            return Response({
+                "interpretation": "",
+                "filters": {},
+                "aggregation": None,
+                "visualization": "text",
+                "data": [],
+                "summary": "Sorry, I encountered an error processing your query. Please try rephrasing your question."
+            })
 
         # Step 3: AI formats the response (if AI is available)
         if ai_service.client and not intent.get('error'):
@@ -464,9 +495,13 @@ class NaturalLanguageQueryView(APIView):
                 logger.error(f"Error formatting AI response: {e}")
                 # Keep the default summary from _execute_query
 
-        # Add interpretation from AI
-        if intent.get('interpretation'):
-            query_result['interpretation'] = intent['interpretation']
+        # Use interpretation from AI only if it's user-friendly (not internal description)
+        interpretation = intent.get('interpretation', '')
+        if interpretation and not interpretation.lower().startswith('user '):
+            query_result['interpretation'] = interpretation
+        else:
+            # Clear interpretation if it's an internal message
+            query_result['interpretation'] = ""
 
         response_serializer = NLQueryResponseSerializer(query_result)
         return Response(response_serializer.data, status=status.HTTP_200_OK)

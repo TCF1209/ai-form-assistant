@@ -345,6 +345,181 @@ For valid form requests, return a JSON object with this structure:
                 "error": "Failed to parse optimization results"
             }
 
+    def parse_analytics_intent(self, query: str, available_context: Dict) -> Dict:
+        """
+        Parse natural language analytics query to understand user intent
+
+        Step 1 of the Hybrid Approach: AI interprets what the user is asking for
+
+        Args:
+            query: Natural language query from user
+            available_context: Context about available data (forms, departments, etc.)
+
+        Returns:
+            Dict with structured intent that backend can use to query database
+        """
+        system_prompt = """You are an analytics query interpreter for a form management system.
+Your job is to understand what the user is asking and return a structured intent that can be used to query a database.
+
+IMPORTANT: You must return ONLY a valid JSON object, no other text.
+
+The system has:
+- Form submissions with statuses: DRAFT, SUBMITTED, IN_REVIEW, APPROVED, REJECTED, CANCELLED
+- Forms belonging to departments
+- Time-based data (submitted_at, updated_at dates)
+
+Analyze the user's query and return a JSON object with this structure:
+{
+    "query_type": "count|list|trend|comparison|breakdown|average|overview",
+    "is_greeting": false,
+    "is_help_request": false,
+    "entity": "submissions|forms|departments|workflows",
+    "filters": {
+        "status": ["APPROVED", "REJECTED"] or null,
+        "form_type": "leave|expense|it_support|travel|etc" or null,
+        "department": "department_name" or null,
+        "time_range": "today|this_week|last_week|this_month|last_month|this_year|last_6_months" or null
+    },
+    "group_by": "status|department|form|month|week" or null,
+    "aggregation": "count|sum|average" or null,
+    "visualization": "number|bar|pie|line|table|cards",
+    "sort": "asc|desc" or null,
+    "limit": number or null,
+    "interpretation": "Brief description of what user is asking for"
+}
+
+Special cases:
+- If query is a greeting (hi, hello, hey, etc.), set is_greeting: true
+- If query is asking for help or what can be done, set is_help_request: true
+- If query is unclear but seems analytics-related, make your best interpretation
+
+Examples:
+- "How many leave requests last month?" → query_type: "count", entity: "submissions", filters: {form_type: "leave", time_range: "last_month"}
+- "Show pending forms by department" → query_type: "breakdown", group_by: "department", filters: {status: ["SUBMITTED", "IN_REVIEW"]}
+- "What's the approval rate?" → query_type: "average", entity: "submissions", aggregation: "count", filters: {status: ["APPROVED"]}
+- "Trend of submissions" → query_type: "trend", visualization: "line", group_by: "month"
+"""
+
+        user_prompt = f"""User query: "{query}"
+
+Available context:
+- Departments: {json.dumps(available_context.get('departments', []))}
+- Form types: {json.dumps(available_context.get('form_types', []))}
+- User role: {available_context.get('user_role', 'USER')}
+- User department: {available_context.get('user_department', 'Not specified')}
+
+Parse this query and return the structured intent as JSON."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        response = self._make_api_call(messages, temperature=0.1)
+
+        if not response:
+            return {
+                "query_type": "overview",
+                "is_greeting": False,
+                "is_help_request": False,
+                "entity": "submissions",
+                "filters": {},
+                "interpretation": "Unable to parse query, showing overview",
+                "error": "AI service unavailable"
+            }
+
+        try:
+            # Clean up response - remove markdown code blocks if present
+            clean_response = response.strip()
+            if clean_response.startswith('```json'):
+                clean_response = clean_response[7:]
+            if clean_response.startswith('```'):
+                clean_response = clean_response[3:]
+            if clean_response.endswith('```'):
+                clean_response = clean_response[:-3]
+            clean_response = clean_response.strip()
+
+            return json.loads(clean_response)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse analytics intent: {e}, response: {response}")
+            return {
+                "query_type": "overview",
+                "is_greeting": False,
+                "is_help_request": False,
+                "entity": "submissions",
+                "filters": {},
+                "interpretation": "Could not parse query",
+                "error": "Failed to parse AI response"
+            }
+
+    def format_analytics_response(self, query: str, data: Dict, intent: Dict) -> str:
+        """
+        Format analytics results into a natural language summary
+
+        Step 3 of the Hybrid Approach: AI formats the response in natural language
+
+        Args:
+            query: Original user query
+            data: The actual data retrieved from database
+            intent: The parsed intent from step 1
+
+        Returns:
+            Natural language summary of the analytics results
+        """
+        system_prompt = """You are an analytics assistant that explains data insights in natural language.
+Given the user's query and the actual data from the database, provide a clear, concise summary.
+
+Guidelines:
+- Be conversational but professional
+- Highlight key insights and trends
+- If comparing periods, mention the change (increase/decrease)
+- Keep the response to 1-3 sentences for simple queries
+- For complex queries, use up to 4-5 sentences
+- Don't include technical details about how data was retrieved
+- Use actual numbers from the data provided
+- If data is empty or zero, acknowledge it helpfully"""
+
+        user_prompt = f"""User asked: "{query}"
+
+Query interpretation: {intent.get('interpretation', 'General analytics query')}
+
+Data retrieved from database:
+{json.dumps(data, indent=2)}
+
+Provide a natural language summary of these results."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        response = self._make_api_call(messages, temperature=0.5)
+
+        if not response:
+            # Fallback to a basic summary
+            return self._generate_fallback_summary(data, intent)
+
+        return response
+
+    def _generate_fallback_summary(self, data: Dict, intent: Dict) -> str:
+        """Generate a basic summary when AI is unavailable"""
+        query_type = intent.get('query_type', 'overview')
+
+        if query_type == 'count':
+            if isinstance(data, list) and len(data) > 0:
+                value = data[0].get('value', 0)
+                label = data[0].get('label', 'items')
+                return f"There are {value} {label}."
+            return "No data found for your query."
+
+        if query_type == 'breakdown':
+            if isinstance(data, list) and len(data) > 0:
+                total = sum(item.get('count', item.get('submissions', item.get('pending', 0))) for item in data)
+                return f"Found {total} items across {len(data)} categories."
+            return "No breakdown data available."
+
+        return "Here are the results for your query."
+
 
 class FormGenerationService:
     """Service specifically for AI-powered form generation"""

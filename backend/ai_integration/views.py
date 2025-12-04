@@ -390,11 +390,18 @@ User's department: {user_department.name if user_department else 'Not specified'
 
 
 class NaturalLanguageQueryView(APIView):
-    """View for natural language analytics queries"""
+    """
+    View for natural language analytics queries using AI-powered interpretation
+
+    This implements the Hybrid Approach:
+    1. OpenAI parses user query to understand intent
+    2. Backend executes database queries based on intent
+    3. OpenAI formats the response in natural language
+    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        """Process natural language query"""
+        """Process natural language query with AI assistance"""
         # Check permission - only ADMIN and MANAGER can access analytics
         if request.user.role not in ['ADMIN', 'MANAGER']:
             return Response(
@@ -406,17 +413,81 @@ class NaturalLanguageQueryView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        query = serializer.validated_data['query'].lower()
-
-        # Build context based on user's role and department
+        query = serializer.validated_data['query']
         user_role = request.user.role
         user_department = request.user.department if request.user.department else None
 
-        # Generate analytics response using real database queries
-        query_result = self._process_analytics_query(query, user_role, user_department)
+        # Get AI service
+        ai_service = get_openai_service()
+
+        # Build context for AI
+        available_context = self._build_context(user_role, user_department)
+
+        # Step 1: AI parses the query to understand intent
+        intent = ai_service.parse_analytics_intent(query, available_context)
+        logger.info(f"Analytics query intent: {intent}")
+
+        # Handle special cases (greetings, help requests)
+        if intent.get('is_greeting'):
+            return Response({
+                "interpretation": "Hello! I'm your analytics assistant.",
+                "filters": {},
+                "aggregation": None,
+                "visualization": "text",
+                "data": [],
+                "summary": "Hello! I can help you analyze your forms data. Try asking questions like:\n\n• How many leave requests were submitted last month?\n• Show me pending forms by department\n• What's our approval rate?\n• Show submission trends over time"
+            })
+
+        if intent.get('is_help_request'):
+            return Response({
+                "interpretation": "Here's what I can help you with",
+                "filters": {},
+                "aggregation": None,
+                "visualization": "text",
+                "data": [],
+                "summary": "I can answer questions about your forms and submissions. Here are some examples:\n\n• \"How many leave requests last month?\" - Count specific form types\n• \"Show pending forms by department\" - Break down by categories\n• \"What's the average approval time?\" - Calculate metrics\n• \"Show submission trends\" - View data over time\n• \"Status breakdown\" - See distribution of statuses"
+            })
+
+        # Step 2: Execute database query based on AI intent
+        query_result = self._execute_query(intent, user_role, user_department)
+
+        # Step 3: AI formats the response (if AI is available)
+        if ai_service.client and not intent.get('error'):
+            try:
+                ai_summary = ai_service.format_analytics_response(
+                    query,
+                    query_result.get('data', []),
+                    intent
+                )
+                query_result['summary'] = ai_summary
+            except Exception as e:
+                logger.error(f"Error formatting AI response: {e}")
+                # Keep the default summary from _execute_query
+
+        # Add interpretation from AI
+        if intent.get('interpretation'):
+            query_result['interpretation'] = intent['interpretation']
 
         response_serializer = NLQueryResponseSerializer(query_result)
         return Response(response_serializer.data, status=status.HTTP_200_OK)
+
+    def _build_context(self, user_role, user_department):
+        """Build context information for AI to understand the data available"""
+        from users.models import Department
+
+        # Get list of departments
+        departments = list(Department.objects.filter(is_active=True).values_list('name', flat=True))
+
+        # Get form types from existing forms
+        form_types = list(Form.objects.values_list('name', flat=True).distinct()[:20])
+
+        return {
+            'departments': departments,
+            'form_types': form_types,
+            'user_role': user_role,
+            'user_department': user_department.name if user_department else None,
+            'statuses': ['DRAFT', 'SUBMITTED', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED']
+        }
 
     def _get_base_queryset(self, user_role, user_department):
         """Get base queryset filtered by user's access level"""
@@ -432,13 +503,20 @@ class NaturalLanguageQueryView(APIView):
             queryset = queryset.filter(department=user_department)
         return queryset
 
-    def _process_analytics_query(self, query, user_role, user_department):
-        """Process analytics query using real database data"""
-        from django.db.models import Count, Avg, Q
-        from django.db.models.functions import TruncMonth
+    def _execute_query(self, intent, user_role, user_department):
+        """
+        Execute database query based on AI-parsed intent
+
+        This is Step 2 of the Hybrid Approach - actual database queries
+        """
+        from django.db.models import Count, Q
         from django.utils import timezone
         from datetime import timedelta
         from users.models import Department
+
+        base_qs = self._get_base_queryset(user_role, user_department)
+        forms_qs = self._get_forms_queryset(user_role, user_department)
+        now = timezone.now()
 
         # Get department info for display
         dept_name = user_department.name if user_department else None
@@ -447,212 +525,146 @@ class NaturalLanguageQueryView(APIView):
         else:
             dept_note = " (showing data across all departments)"
 
-        # Keywords to detect query intent
-        leave_keywords = ['leave', 'vacation', 'time off', 'absence', 'annual', 'medical', 'sick']
-        pending_keywords = ['pending', 'waiting', 'awaiting', 'queue', 'unprocessed', 'in review', 'in_review']
-        department_keywords = ['department', 'team', 'division', 'unit', 'group']
-        count_keywords = ['how many', 'count', 'number', 'total', 'submitted', 'requests']
-        time_keywords = ['month', 'week', 'last', 'this', 'today', 'yesterday', 'average', 'time']
-        approval_keywords = ['approval', 'approved', 'rejected', 'review', 'processing']
-        top_keywords = ['most', 'top', 'highest', 'maximum', 'best', 'popular']
+        query_type = intent.get('query_type', 'overview')
+        filters = intent.get('filters', {})
+        group_by = intent.get('group_by')
+        visualization = intent.get('visualization', 'cards')
 
-        base_qs = self._get_base_queryset(user_role, user_department)
-        forms_qs = self._get_forms_queryset(user_role, user_department)
-        now = timezone.now()
+        # Apply time range filter
+        time_range = filters.get('time_range')
+        if time_range:
+            base_qs = self._apply_time_filter(base_qs, time_range, now)
 
-        # Detect query type and process with real data
-        if any(kw in query for kw in leave_keywords) and any(kw in query for kw in count_keywords):
-            # Leave request count queries
-            leave_qs = base_qs.filter(
-                Q(form__name__icontains='leave') |
-                Q(form__code__icontains='leave')
+        # Apply status filter
+        status_filter = filters.get('status')
+        if status_filter:
+            if isinstance(status_filter, list):
+                base_qs = base_qs.filter(status__in=status_filter)
+            else:
+                base_qs = base_qs.filter(status=status_filter)
+
+        # Apply form type filter
+        form_type = filters.get('form_type')
+        if form_type:
+            base_qs = base_qs.filter(
+                Q(form__name__icontains=form_type) |
+                Q(form__code__icontains=form_type)
             )
 
-            if 'month' in query or 'last month' in query:
-                last_month_start = (now.replace(day=1) - timedelta(days=1)).replace(day=1)
-                last_month_end = now.replace(day=1) - timedelta(days=1)
-                count = leave_qs.filter(
-                    submitted_at__gte=last_month_start,
-                    submitted_at__lte=last_month_end
-                ).count()
+        # Apply department filter
+        dept_filter = filters.get('department')
+        if dept_filter:
+            base_qs = base_qs.filter(form__department__name__icontains=dept_filter)
 
-                # Get previous month for comparison
-                prev_month_start = (last_month_start - timedelta(days=1)).replace(day=1)
-                prev_count = leave_qs.filter(
-                    submitted_at__gte=prev_month_start,
-                    submitted_at__lt=last_month_start
-                ).count()
+        # Execute based on query type
+        if query_type == 'count':
+            return self._execute_count_query(base_qs, intent, dept_note)
 
-                trend = ""
-                if prev_count > 0:
-                    change = ((count - prev_count) / prev_count) * 100
-                    trend = f"+{change:.0f}%" if change > 0 else f"{change:.0f}%"
+        elif query_type == 'breakdown' or group_by:
+            return self._execute_breakdown_query(base_qs, intent, group_by, user_role, user_department, dept_note)
 
-                return {
-                    "interpretation": f"You're asking about leave requests submitted last month{dept_note}",
-                    "filters": {"form_type": "Leave Request", "time_range": "last_month"},
-                    "aggregation": "count",
-                    "visualization": "number",
-                    "data": [{"label": "Leave Requests (Last Month)", "value": count, "trend": trend}],
-                    "summary": f"There were {count} leave requests submitted last month." + (f" This is {trend} compared to the previous month." if trend else "")
-                }
-            elif 'week' in query:
-                week_start = now - timedelta(days=now.weekday())
-                count = leave_qs.filter(submitted_at__gte=week_start).count()
-                return {
-                    "interpretation": f"You're asking about leave requests submitted this week{dept_note}",
-                    "filters": {"form_type": "Leave Request", "time_range": "this_week"},
-                    "aggregation": "count",
-                    "visualization": "number",
-                    "data": [{"label": "Leave Requests (This Week)", "value": count}],
-                    "summary": f"There have been {count} leave requests submitted this week so far."
-                }
-            else:
-                count = leave_qs.count()
-                return {
-                    "interpretation": f"You're asking about total leave requests{dept_note}",
-                    "filters": {"form_type": "Leave Request"},
-                    "aggregation": "count",
-                    "visualization": "number",
-                    "data": [{"label": "Total Leave Requests", "value": count}],
-                    "summary": f"There are {count} leave requests in total."
-                }
+        elif query_type == 'trend':
+            return self._execute_trend_query(base_qs, intent, now, dept_note)
 
-        elif any(kw in query for kw in pending_keywords):
-            # Pending/In Review forms queries
-            pending_statuses = ['SUBMITTED', 'IN_REVIEW']
+        elif query_type == 'average':
+            return self._execute_average_query(base_qs, intent, dept_note)
 
-            if any(kw in query for kw in department_keywords):
-                # Group by department
-                dept_data = []
-                departments = Department.objects.filter(is_active=True)
-                if user_role == 'MANAGER' and user_department:
-                    departments = departments.filter(id=user_department.id)
+        elif query_type == 'comparison':
+            return self._execute_comparison_query(base_qs, intent, user_role, user_department, dept_note)
 
-                for dept in departments:
-                    count = FormSubmission.objects.filter(
-                        form__department=dept,
-                        status__in=pending_statuses
-                    ).count()
-                    if count > 0:
-                        dept_data.append({"department": dept.name, "pending": count})
+        else:
+            # Default: overview
+            return self._execute_overview_query(base_qs, forms_qs, dept_note)
 
-                dept_data.sort(key=lambda x: x['pending'], reverse=True)
+    def _apply_time_filter(self, queryset, time_range, now):
+        """Apply time range filter to queryset"""
+        from datetime import timedelta
 
-                return {
-                    "interpretation": f"You're asking about pending forms by department{dept_note}",
-                    "filters": {"status": "PENDING"},
-                    "aggregation": "group_by_department",
-                    "visualization": "bar",
-                    "data": dept_data if dept_data else [{"department": "No data", "pending": 0}],
-                    "summary": f"Here's the breakdown of pending forms across {len(dept_data)} departments."
-                }
-            else:
-                pending_count = base_qs.filter(status__in=pending_statuses).count()
-                in_review = base_qs.filter(status='IN_REVIEW').count()
-                return {
-                    "interpretation": f"You're asking about pending forms{dept_note}",
-                    "filters": {"status": "PENDING"},
-                    "aggregation": "count",
-                    "visualization": "number",
-                    "data": [
-                        {"label": "Pending Forms", "value": pending_count},
-                        {"label": "In Review", "value": in_review}
-                    ],
-                    "summary": f"There are {pending_count} forms currently pending review ({in_review} are actively being reviewed)."
-                }
+        if time_range == 'today':
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            return queryset.filter(submitted_at__gte=start)
 
-        elif any(kw in query for kw in top_keywords) and any(kw in query for kw in department_keywords):
-            # Department comparison queries
+        elif time_range == 'this_week':
+            start = now - timedelta(days=now.weekday())
+            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+            return queryset.filter(submitted_at__gte=start)
+
+        elif time_range == 'last_week':
+            end = now - timedelta(days=now.weekday())
+            start = end - timedelta(days=7)
+            return queryset.filter(submitted_at__gte=start, submitted_at__lt=end)
+
+        elif time_range == 'this_month':
+            start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            return queryset.filter(submitted_at__gte=start)
+
+        elif time_range == 'last_month':
+            end = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            start = (end - timedelta(days=1)).replace(day=1)
+            return queryset.filter(submitted_at__gte=start, submitted_at__lt=end)
+
+        elif time_range == 'this_year':
+            start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            return queryset.filter(submitted_at__gte=start)
+
+        elif time_range == 'last_6_months':
+            start = now - timedelta(days=180)
+            return queryset.filter(submitted_at__gte=start)
+
+        return queryset
+
+    def _execute_count_query(self, queryset, intent, dept_note):
+        """Execute a count query"""
+        count = queryset.count()
+        filters = intent.get('filters', {})
+
+        # Build label
+        form_type = filters.get('form_type', 'Forms')
+        time_range = filters.get('time_range', '')
+        time_label = f" ({time_range.replace('_', ' ')})" if time_range else ""
+
+        label = f"{form_type.title()} Submissions{time_label}"
+
+        return {
+            "interpretation": intent.get('interpretation', f"Counting submissions{dept_note}"),
+            "filters": filters,
+            "aggregation": "count",
+            "visualization": "number",
+            "data": [{"label": label, "value": count}],
+            "summary": f"Found {count} submissions matching your criteria."
+        }
+
+    def _execute_breakdown_query(self, queryset, intent, group_by, user_role, user_department, dept_note):
+        """Execute a breakdown/group by query"""
+        from django.db.models import Count
+        from users.models import Department
+
+        if group_by == 'department':
+            # Group by department
             dept_data = []
             departments = Department.objects.filter(is_active=True)
+            if user_role == 'MANAGER' and user_department:
+                departments = departments.filter(id=user_department.id)
 
             for dept in departments:
-                count = FormSubmission.objects.filter(form__department=dept).count()
-                dept_data.append({"department": dept.name, "submissions": count})
+                count = queryset.filter(form__department=dept).count()
+                if count > 0:
+                    dept_data.append({"department": dept.name, "submissions": count})
 
             dept_data.sort(key=lambda x: x['submissions'], reverse=True)
 
-            if dept_data:
-                top_dept = dept_data[0]
-                summary = f"The {top_dept['department']} department leads with {top_dept['submissions']} submissions."
-            else:
-                summary = "No submission data available."
-
             return {
-                "interpretation": f"You're asking which department has the most submissions{dept_note}",
-                "filters": {"group_by": "department"},
-                "aggregation": "count_by_department",
+                "interpretation": intent.get('interpretation', f"Breakdown by department{dept_note}"),
+                "filters": intent.get('filters', {}),
+                "aggregation": "group_by_department",
                 "visualization": "bar",
                 "data": dept_data if dept_data else [{"department": "No data", "submissions": 0}],
-                "summary": summary
+                "summary": f"Breakdown across {len(dept_data)} departments."
             }
 
-        elif any(kw in query for kw in approval_keywords) and any(kw in query for kw in time_keywords):
-            # Approval time analytics - calculate from submitted_at to updated_at for approved forms
-            approved_qs = base_qs.filter(status='APPROVED', submitted_at__isnull=False)
-
-            times = []
-            for sub in approved_qs:
-                if sub.submitted_at and sub.updated_at:
-                    diff = (sub.updated_at - sub.submitted_at).total_seconds() / 86400  # days
-                    times.append(diff)
-
-            if times:
-                avg_time = round(sum(times) / len(times), 1)
-                min_time = round(min(times), 1)
-                max_time = round(min(max(times), 30), 1)  # Cap at 30 days for display
-            else:
-                avg_time, min_time, max_time = 0, 0, 0
-
-            return {
-                "interpretation": f"You're asking about average approval time{dept_note}",
-                "filters": {"metric": "approval_time"},
-                "aggregation": "average",
-                "visualization": "number",
-                "data": [
-                    {"label": "Average Approval Time", "value": avg_time, "unit": "days"},
-                    {"label": "Fastest", "value": min_time, "unit": "days"},
-                    {"label": "Slowest", "value": max_time, "unit": "days"}
-                ],
-                "summary": f"The average approval time is {avg_time} days. Fastest: {min_time} days, Slowest: {max_time} days." if times else "No approved submissions to calculate approval time."
-            }
-
-        elif 'trend' in query or 'over time' in query or 'history' in query:
-            # Trend queries - last 6 months
-            trend_data = []
-            for i in range(5, -1, -1):
-                month_date = now - timedelta(days=i*30)
-                month_start = month_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-                if i > 0:
-                    next_month = (month_date + timedelta(days=32)).replace(day=1)
-                else:
-                    next_month = now + timedelta(days=1)
-
-                month_name = month_start.strftime('%b')
-                submissions = base_qs.filter(
-                    submitted_at__gte=month_start,
-                    submitted_at__lt=next_month
-                ).count()
-                approved = base_qs.filter(
-                    submitted_at__gte=month_start,
-                    submitted_at__lt=next_month,
-                    status='APPROVED'
-                ).count()
-                trend_data.append({"month": month_name, "submissions": submissions, "approved": approved})
-
-            return {
-                "interpretation": f"You're asking about submission trends over time{dept_note}",
-                "filters": {"time_range": "6_months"},
-                "aggregation": "time_series",
-                "visualization": "line",
-                "data": trend_data,
-                "summary": "Here's the submission trend over the last 6 months."
-            }
-
-        elif 'status' in query or 'breakdown' in query:
-            # Status breakdown
-            status_counts = base_qs.values('status').annotate(count=Count('id'))
+        elif group_by == 'status':
+            # Group by status
+            status_counts = queryset.values('status').annotate(count=Count('id'))
             total = sum(s['count'] for s in status_counts) or 1
 
             status_map = {
@@ -672,66 +684,149 @@ class NaturalLanguageQueryView(APIView):
                     "percentage": round((s['count'] / total) * 100)
                 })
 
-            # Sort by count
             data.sort(key=lambda x: x['count'], reverse=True)
 
-            approved = next((d['count'] for d in data if d['status'] == 'Approved'), 0)
-            submitted = next((d['count'] for d in data if d['status'] == 'Submitted'), 0)
-
             return {
-                "interpretation": f"You're asking about form status breakdown{dept_note}",
-                "filters": {"group_by": "status"},
+                "interpretation": intent.get('interpretation', f"Status breakdown{dept_note}"),
+                "filters": intent.get('filters', {}),
                 "aggregation": "count_by_status",
                 "visualization": "pie",
                 "data": data if data else [{"status": "No Data", "count": 0, "percentage": 0}],
-                "summary": f"Out of {total} total submissions: {approved} approved, {submitted} awaiting review."
+                "summary": f"Status distribution across {total} submissions."
             }
 
-        elif 'expense' in query or 'claim' in query:
-            # Expense related queries
-            expense_qs = base_qs.filter(
-                Q(form__name__icontains='expense') |
-                Q(form__code__icontains='expense') |
-                Q(form__name__icontains='claim') |
-                Q(form__code__icontains='claim')
-            )
-            claim_count = expense_qs.count()
+        elif group_by == 'form':
+            # Group by form type
+            form_counts = queryset.values('form__name').annotate(count=Count('id')).order_by('-count')[:10]
+
+            data = [{"form": f['form__name'], "submissions": f['count']} for f in form_counts]
 
             return {
-                "interpretation": f"You're asking about expense claims{dept_note}",
-                "filters": {"form_type": "Expense Claim"},
-                "aggregation": "count",
-                "visualization": "number",
-                "data": [
-                    {"label": "Total Claims", "value": claim_count},
-                    {"label": "Approved", "value": expense_qs.filter(status='APPROVED').count()},
-                    {"label": "Pending", "value": expense_qs.filter(status__in=['SUBMITTED', 'IN_REVIEW']).count()}
-                ],
-                "summary": f"There are {claim_count} expense claims in the system."
+                "interpretation": intent.get('interpretation', f"Breakdown by form type{dept_note}"),
+                "filters": intent.get('filters', {}),
+                "aggregation": "group_by_form",
+                "visualization": "bar",
+                "data": data if data else [{"form": "No data", "submissions": 0}],
+                "summary": f"Top {len(data)} forms by submission count."
             }
 
         else:
-            # Default: general statistics from real data
-            total_submissions = base_qs.count()
-            total_forms = forms_qs.filter(status='ACTIVE').count()
-            pending = base_qs.filter(status__in=['SUBMITTED', 'IN_REVIEW']).count()
-            approved = base_qs.filter(status='APPROVED').count()
+            # Default breakdown by status
+            return self._execute_breakdown_query(queryset, intent, 'status', user_role, user_department, dept_note)
 
-            approval_rate = round((approved / total_submissions * 100)) if total_submissions > 0 else 0
+    def _execute_trend_query(self, queryset, intent, now, dept_note):
+        """Execute a trend/time series query"""
+        from datetime import timedelta
 
-            return {
-                "interpretation": f"Here's an overview of the forms system{dept_note}",
-                "filters": {},
-                "aggregation": "overview",
-                "visualization": "cards",
-                "data": [
-                    {"label": "Total Submissions", "value": total_submissions, "icon": "document"},
-                    {"label": "Active Forms", "value": total_forms, "icon": "form"},
-                    {"label": "Pending Review", "value": pending, "icon": "clock"},
-                    {"label": "Approval Rate", "value": f"{approval_rate}%", "icon": "check"}
-                ],
-                "summary": f"The system currently has {total_forms} active forms with {total_submissions} total submissions. {pending} are pending review."
-            }
+        trend_data = []
+        for i in range(5, -1, -1):
+            month_date = now - timedelta(days=i*30)
+            month_start = month_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            if i > 0:
+                next_month = (month_date + timedelta(days=32)).replace(day=1)
+            else:
+                next_month = now + timedelta(days=1)
+
+            month_name = month_start.strftime('%b')
+            submissions = queryset.filter(
+                submitted_at__gte=month_start,
+                submitted_at__lt=next_month
+            ).count()
+            approved = queryset.filter(
+                submitted_at__gte=month_start,
+                submitted_at__lt=next_month,
+                status='APPROVED'
+            ).count()
+            trend_data.append({
+                "month": month_name,
+                "submissions": submissions,
+                "approved": approved
+            })
+
+        return {
+            "interpretation": intent.get('interpretation', f"Submission trends over time{dept_note}"),
+            "filters": intent.get('filters', {}),
+            "aggregation": "time_series",
+            "visualization": "line",
+            "data": trend_data,
+            "summary": "Trend data for the last 6 months."
+        }
+
+    def _execute_average_query(self, queryset, intent, dept_note):
+        """Execute an average/metric query (e.g., approval time)"""
+        # Calculate approval time for approved submissions
+        approved_qs = queryset.filter(status='APPROVED', submitted_at__isnull=False)
+
+        times = []
+        for sub in approved_qs:
+            if sub.submitted_at and sub.updated_at:
+                diff = (sub.updated_at - sub.submitted_at).total_seconds() / 86400  # days
+                times.append(diff)
+
+        if times:
+            avg_time = round(sum(times) / len(times), 1)
+            min_time = round(min(times), 1)
+            max_time = round(min(max(times), 30), 1)
+        else:
+            avg_time, min_time, max_time = 0, 0, 0
+
+        return {
+            "interpretation": intent.get('interpretation', f"Average metrics{dept_note}"),
+            "filters": intent.get('filters', {}),
+            "aggregation": "average",
+            "visualization": "number",
+            "data": [
+                {"label": "Average Approval Time", "value": avg_time, "unit": "days"},
+                {"label": "Fastest", "value": min_time, "unit": "days"},
+                {"label": "Slowest", "value": max_time, "unit": "days"}
+            ],
+            "summary": f"Average approval time is {avg_time} days." if times else "No data available to calculate averages."
+        }
+
+    def _execute_comparison_query(self, queryset, intent, user_role, user_department, dept_note):
+        """Execute a comparison query (e.g., department vs department)"""
+        from users.models import Department
+
+        dept_data = []
+        departments = Department.objects.filter(is_active=True)
+
+        for dept in departments:
+            count = queryset.filter(form__department=dept).count()
+            dept_data.append({"department": dept.name, "submissions": count})
+
+        dept_data.sort(key=lambda x: x['submissions'], reverse=True)
+
+        return {
+            "interpretation": intent.get('interpretation', f"Comparison across departments{dept_note}"),
+            "filters": intent.get('filters', {}),
+            "aggregation": "comparison",
+            "visualization": "bar",
+            "data": dept_data if dept_data else [{"department": "No data", "submissions": 0}],
+            "summary": f"Comparison data across {len(dept_data)} departments."
+        }
+
+    def _execute_overview_query(self, base_qs, forms_qs, dept_note):
+        """Execute an overview query - general statistics"""
+        total_submissions = base_qs.count()
+        total_forms = forms_qs.filter(status='ACTIVE').count()
+        pending = base_qs.filter(status__in=['SUBMITTED', 'IN_REVIEW']).count()
+        approved = base_qs.filter(status='APPROVED').count()
+
+        approval_rate = round((approved / total_submissions * 100)) if total_submissions > 0 else 0
+
+        return {
+            "interpretation": f"System overview{dept_note}",
+            "filters": {},
+            "aggregation": "overview",
+            "visualization": "cards",
+            "data": [
+                {"label": "Total Submissions", "value": total_submissions, "icon": "document"},
+                {"label": "Active Forms", "value": total_forms, "icon": "form"},
+                {"label": "Pending Review", "value": pending, "icon": "clock"},
+                {"label": "Approval Rate", "value": f"{approval_rate}%", "icon": "check"}
+            ],
+            "summary": f"Overview: {total_forms} active forms, {total_submissions} submissions, {pending} pending review."
+        }
 
 
 class RecommendationView(APIView):

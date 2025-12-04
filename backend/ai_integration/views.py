@@ -1248,3 +1248,175 @@ class ChatHistoryViewSet(viewsets.ViewSet):
                 {"error": "Session not found"},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class AnalyticsHistoryViewSet(viewsets.ViewSet):
+    """ViewSet for managing analytics query history"""
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        """Get or create the current active analytics session with all messages"""
+        from .models import AnalyticsSession
+        from .serializers import AnalyticsSessionSerializer
+
+        # Get or create active session for the user
+        session, created = AnalyticsSession.objects.get_or_create(
+            user=request.user,
+            is_active=True,
+            defaults={'title': 'Analytics Query'}
+        )
+
+        # Get all messages for this session
+        serializer = AnalyticsSessionSerializer(session)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def add_message(self, request):
+        """Add a message to the current analytics session"""
+        from .models import AnalyticsSession, AnalyticsMessage
+        from .serializers import AnalyticsMessageCreateSerializer, AnalyticsMessageSerializer
+
+        serializer = AnalyticsMessageCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get or create active session
+        session, created = AnalyticsSession.objects.get_or_create(
+            user=request.user,
+            is_active=True,
+            defaults={'title': 'Analytics Query'}
+        )
+
+        # Create the message
+        message = AnalyticsMessage.objects.create(
+            session=session,
+            message_type=serializer.validated_data['message_type'],
+            content=serializer.validated_data['content'],
+            metadata=serializer.validated_data.get('metadata', {})
+        )
+
+        # Update session title based on first user message
+        if created or not session.title or session.title == 'Analytics Query':
+            user_messages = session.messages.filter(message_type='USER')
+            if user_messages.count() == 1:
+                first_msg = user_messages.first().content[:50]
+                session.title = first_msg + ('...' if len(user_messages.first().content) > 50 else '')
+                session.save()
+
+        # Update session's updated_at timestamp
+        session.save()
+
+        return Response(AnalyticsMessageSerializer(message).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def add_messages(self, request):
+        """Add multiple messages at once (for batch saving)"""
+        from .models import AnalyticsSession, AnalyticsMessage
+        from .serializers import AnalyticsMessageCreateSerializer, AnalyticsMessageSerializer
+
+        messages_data = request.data.get('messages', [])
+
+        if not messages_data:
+            return Response(
+                {"error": "No messages provided"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get or create active session
+        session, created = AnalyticsSession.objects.get_or_create(
+            user=request.user,
+            is_active=True,
+            defaults={'title': 'Analytics Query'}
+        )
+
+        created_messages = []
+        for msg_data in messages_data:
+            serializer = AnalyticsMessageCreateSerializer(data=msg_data)
+            if serializer.is_valid():
+                message = AnalyticsMessage.objects.create(
+                    session=session,
+                    message_type=serializer.validated_data['message_type'],
+                    content=serializer.validated_data['content'],
+                    metadata=serializer.validated_data.get('metadata', {})
+                )
+                created_messages.append(message)
+
+        # Update session title if needed
+        if created or not session.title or session.title == 'Analytics Query':
+            user_messages = session.messages.filter(message_type='USER')
+            if user_messages.exists():
+                first_msg = user_messages.first().content[:50]
+                session.title = first_msg + ('...' if len(user_messages.first().content) > 50 else '')
+                session.save()
+
+        session.save()  # Update timestamp
+
+        return Response({
+            "created_count": len(created_messages),
+            "messages": AnalyticsMessageSerializer(created_messages, many=True).data
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def clear(self, request):
+        """Clear analytics history and start a new session"""
+        from .models import AnalyticsSession
+
+        # Deactivate current session
+        AnalyticsSession.objects.filter(user=request.user, is_active=True).update(is_active=False)
+
+        # Create a new active session
+        new_session = AnalyticsSession.objects.create(
+            user=request.user,
+            is_active=True,
+            title='Analytics Query'
+        )
+
+        return Response({
+            "message": "Analytics history cleared",
+            "session_id": str(new_session.id)
+        })
+
+    @action(detail=False, methods=['get'])
+    def history(self, request):
+        """Get all past analytics sessions for the user"""
+        from .models import AnalyticsSession
+        from .serializers import AnalyticsSessionSerializer
+
+        sessions = AnalyticsSession.objects.filter(user=request.user).order_by('-updated_at')[:20]
+        serializer = AnalyticsSessionSerializer(sessions, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def session(self, request, pk=None):
+        """Get a specific analytics session by ID"""
+        from .models import AnalyticsSession
+        from .serializers import AnalyticsSessionSerializer
+
+        try:
+            session = AnalyticsSession.objects.get(pk=pk, user=request.user)
+            serializer = AnalyticsSessionSerializer(session)
+            return Response(serializer.data)
+        except AnalyticsSession.DoesNotExist:
+            return Response(
+                {"error": "Analytics session not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=True, methods=['post'])
+    def activate(self, request, pk=None):
+        """Activate a specific analytics session (switch to it)"""
+        from .models import AnalyticsSession
+        from .serializers import AnalyticsSessionSerializer
+
+        try:
+            session = AnalyticsSession.objects.get(pk=pk, user=request.user)
+            session.is_active = True
+            session.save()  # This will deactivate other sessions
+            serializer = AnalyticsSessionSerializer(session)
+            return Response(serializer.data)
+        except AnalyticsSession.DoesNotExist:
+            return Response(
+                {"error": "Analytics session not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )

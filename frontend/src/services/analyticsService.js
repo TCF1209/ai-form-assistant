@@ -181,6 +181,144 @@ const analyticsService = {
           data: result.data
         };
     }
+  },
+
+  // ============================================
+  // Chat History Methods
+  // ============================================
+
+  /**
+   * Load chat history from backend
+   * @returns {Promise<object>} - Current session with messages
+   */
+  async loadChatHistory() {
+    try {
+      const response = await api.get('/ai/analytics-history/current/');
+      return {
+        success: true,
+        session: response.data,
+        messages: response.data.messages || []
+      };
+    } catch (error) {
+      console.error('Failed to load analytics history:', error);
+      return {
+        success: false,
+        session: null,
+        messages: [],
+        error: error.message
+      };
+    }
+  },
+
+  /**
+   * Save a single message to the current session
+   * @param {string} content - Message content
+   * @param {string} messageType - 'USER' or 'ASSISTANT'
+   * @param {object} metadata - Additional data (visualization, data, etc.)
+   */
+  async saveMessage(content, messageType = 'USER', metadata = {}) {
+    try {
+      const response = await api.post('/ai/analytics-history/add_message/', {
+        content,
+        message_type: messageType,
+        metadata
+      });
+      return {
+        success: true,
+        message: response.data
+      };
+    } catch (error) {
+      console.error('Failed to save analytics message:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  /**
+   * Save multiple messages at once (batch save)
+   * @param {Array} messages - Array of message objects
+   */
+  async saveMessages(messages) {
+    try {
+      const response = await api.post('/ai/analytics-history/add_messages/', {
+        messages: messages.map(msg => ({
+          content: msg.content,
+          message_type: msg.messageType || msg.message_type || 'USER',
+          metadata: msg.metadata || {}
+        }))
+      });
+      return {
+        success: true,
+        createdCount: response.data.created_count
+      };
+    } catch (error) {
+      console.error('Failed to save analytics messages:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  /**
+   * Clear chat history and start a new session
+   */
+  async clearChatHistory() {
+    try {
+      const response = await api.post('/ai/analytics-history/clear/');
+      return {
+        success: true,
+        sessionId: response.data.session_id
+      };
+    } catch (error) {
+      console.error('Failed to clear analytics history:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
+  /**
+   * Get all past analytics sessions
+   */
+  async getChatSessions() {
+    try {
+      const response = await api.get('/ai/analytics-history/history/');
+      return {
+        success: true,
+        sessions: response.data
+      };
+    } catch (error) {
+      console.error('Failed to get analytics sessions:', error);
+      return {
+        success: false,
+        sessions: [],
+        error: error.message
+      };
+    }
+  },
+
+  /**
+   * Switch to a different session
+   * @param {string} sessionId - Session ID to activate
+   */
+  async switchSession(sessionId) {
+    try {
+      const response = await api.post(`/ai/analytics-history/${sessionId}/activate/`);
+      return {
+        success: true,
+        session: response.data
+      };
+    } catch (error) {
+      console.error('Failed to switch analytics session:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
   }
 };
 

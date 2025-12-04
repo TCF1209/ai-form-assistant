@@ -202,3 +202,40 @@ class ChatMessageCreateSerializer(serializers.Serializer):
     )
     content = serializers.CharField(max_length=5000)
     metadata = serializers.DictField(required=False, default=dict)
+
+
+# ============================================
+# Analytics Query History Serializers
+# ============================================
+
+class AnalyticsMessageSerializer(serializers.Serializer):
+    """Serializer for individual analytics messages"""
+    id = serializers.UUIDField(read_only=True)
+    message_type = serializers.ChoiceField(choices=['USER', 'ASSISTANT', 'SYSTEM'])
+    content = serializers.CharField()
+    metadata = serializers.DictField(required=False, default=dict)
+    created_at = serializers.DateTimeField(read_only=True)
+
+
+class AnalyticsSessionSerializer(serializers.Serializer):
+    """Serializer for analytics sessions"""
+    id = serializers.UUIDField(read_only=True)
+    title = serializers.CharField(required=False, allow_blank=True)
+    is_active = serializers.BooleanField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
+    messages = AnalyticsMessageSerializer(many=True, read_only=True)
+    message_count = serializers.SerializerMethodField()
+
+    def get_message_count(self, obj):
+        return obj.messages.count() if hasattr(obj, 'messages') else 0
+
+
+class AnalyticsMessageCreateSerializer(serializers.Serializer):
+    """Serializer for creating a new analytics message"""
+    message_type = serializers.ChoiceField(
+        choices=['USER', 'ASSISTANT', 'SYSTEM'],
+        default='USER'
+    )
+    content = serializers.CharField(max_length=5000)
+    metadata = serializers.DictField(required=False, default=dict)

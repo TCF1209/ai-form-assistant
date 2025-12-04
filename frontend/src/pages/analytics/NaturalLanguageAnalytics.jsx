@@ -333,11 +333,50 @@ const NaturalLanguageAnalytics = () => {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  // Initialize with welcome message
+  // Load chat history on mount
   useEffect(() => {
-    const welcomeMessage = analyticsService.getWelcomeMessage();
-    setMessages([{ ...welcomeMessage, isUser: false }]);
+    const loadHistory = async () => {
+      setIsLoadingHistory(true);
+      const result = await analyticsService.loadChatHistory();
+
+      if (result.success && result.messages && result.messages.length > 0) {
+        // Convert backend messages to frontend format
+        const loadedMessages = result.messages.map(msg => {
+          const baseMessage = {
+            content: msg.content,
+            isUser: msg.message_type === 'USER',
+            timestamp: msg.created_at
+          };
+
+          // Check if this is an analytics result (has visualization data in metadata)
+          if (msg.metadata && msg.metadata.visualization) {
+            return {
+              ...baseMessage,
+              isAnalyticsResult: true,
+              visualization: msg.metadata.visualization,
+              data: msg.metadata.data || [],
+              summary: msg.metadata.summary,
+              interpretation: msg.metadata.interpretation
+            };
+          }
+
+          return baseMessage;
+        });
+        setMessages(loadedMessages);
+        setShowSuggestions(false); // Hide suggestions if there's history
+      } else {
+        // No history, show welcome message
+        const welcomeMessage = analyticsService.getWelcomeMessage();
+        setMessages([{ ...welcomeMessage, isUser: false }]);
+        // Save welcome message to backend (fire and forget)
+        analyticsService.saveMessage(welcomeMessage.content, 'ASSISTANT');
+      }
+      setIsLoadingHistory(false);
+    };
+
+    loadHistory();
   }, []);
 
   // Auto-scroll to bottom
@@ -345,9 +384,29 @@ const NaturalLanguageAnalytics = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // Add message to chat
-  const addMessage = (message) => {
+  // Add message to chat and save to backend
+  const addMessage = (message, metadata = {}) => {
     setMessages(prev => [...prev, message]);
+
+    // Save to backend (fire and forget - don't wait)
+    analyticsService.saveMessage(
+      message.content,
+      message.isUser ? 'USER' : 'ASSISTANT',
+      metadata
+    );
+  };
+
+  // Clear chat history
+  const handleClearChat = async () => {
+    const result = await analyticsService.clearChatHistory();
+    if (result.success) {
+      // Reset to welcome message
+      const welcomeMessage = analyticsService.getWelcomeMessage();
+      setMessages([{ ...welcomeMessage, isUser: false }]);
+      setShowSuggestions(true);
+      // Save welcome message to new session
+      analyticsService.saveMessage(welcomeMessage.content, 'ASSISTANT');
+    }
   };
 
   // Handle send message
@@ -381,7 +440,22 @@ const NaturalLanguageAnalytics = () => {
         });
       } else {
         // Add analytics result as a special message type
-        setMessages(prev => [...prev, { ...response, isUser: false, isAnalyticsResult: true }]);
+        const analyticsResult = { ...response, isUser: false, isAnalyticsResult: true };
+        setMessages(prev => [...prev, analyticsResult]);
+
+        // Save analytics result to backend with visualization metadata
+        analyticsService.saveMessage(
+          response.summary || response.interpretation || response.content,
+          'ASSISTANT',
+          {
+            visualization: response.visualization,
+            data: response.data,
+            summary: response.summary,
+            interpretation: response.interpretation,
+            filters: response.filters,
+            aggregation: response.aggregation
+          }
+        );
       }
     } catch (error) {
       setIsTyping(false);
@@ -410,30 +484,51 @@ const NaturalLanguageAnalytics = () => {
     <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
       {/* Header - Fixed at top */}
       <div className="flex-shrink-0 bg-white border-b border-slate-200 px-6 py-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center">
-            <ChartBarIcon />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center">
+              <ChartBarIcon />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-slate-800">Analytics Query</h1>
+              <p className="text-sm text-slate-500">
+                Ask questions about your forms data in natural language
+                {user?.role === 'ADMIN' && ' (All Departments)'}
+                {user?.role === 'MANAGER' && user?.department && ` (${user.department.name} Department)`}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-800">Analytics Query</h1>
-            <p className="text-sm text-slate-500">
-              Ask questions about your forms data in natural language
-              {user?.role === 'ADMIN' && ' (All Departments)'}
-              {user?.role === 'MANAGER' && user?.department && ` (${user.department.name} Department)`}
-            </p>
-          </div>
+          {/* Clear Chat Button */}
+          <button
+            onClick={handleClearChat}
+            className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors flex items-center gap-1"
+            title="Start new chat"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            New Chat
+          </button>
         </div>
       </div>
 
       {/* Chat Messages Area - Scrollable */}
       <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
-        {messages.map((message, index) => (
-          message.isAnalyticsResult ? (
-            <AnalyticsResultCard key={index} result={message} />
-          ) : (
-            <ChatMessage key={index} message={message} isUser={message.isUser} />
-          )
-        ))}
+        {/* Loading history indicator */}
+        {isLoadingHistory ? (
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+            <span className="ml-3 text-slate-500">Loading chat history...</span>
+          </div>
+        ) : (
+          messages.map((message, index) => (
+            message.isAnalyticsResult ? (
+              <AnalyticsResultCard key={index} result={message} />
+            ) : (
+              <ChatMessage key={index} message={message} isUser={message.isUser} />
+            )
+          ))
+        )}
 
         {/* Typing indicator */}
         {isTyping && <TypingIndicator />}

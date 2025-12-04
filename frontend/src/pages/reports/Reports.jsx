@@ -397,27 +397,37 @@ const Reports = () => {
         .sort((a, b) => b.count - a.count)
         .slice(0, 10);
 
-      // Submissions trend (by day/week)
+      // Submissions trend (by day/week) - sorted from oldest to newest
       const trendData = {};
       const trendFormat = parseInt(dateRange) <= 14 ? 'day' : 'week';
 
       filteredSubmissions.forEach(s => {
         const date = new Date(s.submitted_at || s.created_at);
-        let key;
+        let sortKey; // Use ISO date string for proper sorting
+        let displayKey;
+
         if (trendFormat === 'day') {
-          key = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          sortKey = date.toISOString().split('T')[0]; // YYYY-MM-DD for sorting
+          displayKey = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         } else {
           // Get week start
           const weekStart = new Date(date);
           weekStart.setDate(date.getDate() - date.getDay());
-          key = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          sortKey = weekStart.toISOString().split('T')[0]; // YYYY-MM-DD for sorting
+          displayKey = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         }
-        trendData[key] = (trendData[key] || 0) + 1;
+
+        if (!trendData[sortKey]) {
+          trendData[sortKey] = { count: 0, displayKey };
+        }
+        trendData[sortKey].count += 1;
       });
 
+      // Sort by date (oldest to newest) and take last 10
       const submissionsTrend = Object.entries(trendData)
-        .map(([date, count]) => ({ date, count }))
-        .slice(-10); // Last 10 periods
+        .sort((a, b) => a[0].localeCompare(b[0])) // Sort by ISO date string (ascending)
+        .slice(-10) // Last 10 periods
+        .map(([, { count, displayKey }]) => ({ date: displayKey, count }));
 
       // Forms by type/department
       const formTypeCounts = {};

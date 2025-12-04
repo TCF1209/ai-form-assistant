@@ -591,9 +591,16 @@ class NaturalLanguageQueryView(APIView):
         if dept_filter:
             base_qs = base_qs.filter(form__department__name__icontains=dept_filter)
 
+        # Determine which entity to query
+        entity = intent.get('entity', 'submissions')
+
         # Execute based on query type
         if query_type == 'count':
-            return self._execute_count_query(base_qs, intent, dept_note)
+            # Handle counting forms vs submissions
+            if entity == 'forms':
+                return self._execute_forms_count_query(forms_qs, intent, dept_note)
+            else:
+                return self._execute_count_query(base_qs, intent, dept_note)
 
         elif query_type == 'breakdown' or group_by:
             return self._execute_breakdown_query(base_qs, intent, group_by, user_role, user_department, dept_note)
@@ -606,6 +613,10 @@ class NaturalLanguageQueryView(APIView):
 
         elif query_type == 'comparison':
             return self._execute_comparison_query(base_qs, intent, user_role, user_department, dept_note)
+
+        elif query_type == 'list' and entity == 'forms':
+            # Handle listing forms
+            return self._execute_forms_list_query(forms_qs, intent, dept_note)
 
         else:
             # Default: overview
@@ -649,12 +660,12 @@ class NaturalLanguageQueryView(APIView):
         return queryset
 
     def _execute_count_query(self, queryset, intent, dept_note):
-        """Execute a count query"""
+        """Execute a count query for submissions"""
         count = queryset.count()
         filters = intent.get('filters', {})
 
         # Build label
-        form_type = filters.get('form_type', 'Forms')
+        form_type = filters.get('form_type', 'Form')
         time_range = filters.get('time_range', '')
         time_label = f" ({time_range.replace('_', ' ')})" if time_range else ""
 
@@ -667,6 +678,74 @@ class NaturalLanguageQueryView(APIView):
             "visualization": "number",
             "data": [{"label": label, "value": count}],
             "summary": f"Found {count} submissions matching your criteria."
+        }
+
+    def _execute_forms_count_query(self, forms_queryset, intent, dept_note):
+        """Execute a count query for forms (not submissions)"""
+        filters = intent.get('filters', {})
+        status_filter = filters.get('status')
+
+        # Apply status filter to forms if specified
+        if status_filter:
+            if isinstance(status_filter, list):
+                # Map common terms to form statuses
+                status_map = {
+                    'active': 'ACTIVE',
+                    'draft': 'DRAFT',
+                    'archived': 'ARCHIVED',
+                    'inactive': 'ARCHIVED'
+                }
+                mapped_statuses = []
+                for s in status_filter:
+                    mapped = status_map.get(s.lower(), s.upper())
+                    mapped_statuses.append(mapped)
+                forms_queryset = forms_queryset.filter(status__in=mapped_statuses)
+            else:
+                status_map = {'active': 'ACTIVE', 'draft': 'DRAFT', 'archived': 'ARCHIVED'}
+                mapped_status = status_map.get(status_filter.lower(), status_filter.upper())
+                forms_queryset = forms_queryset.filter(status=mapped_status)
+        else:
+            # Default to active forms if asking about forms
+            forms_queryset = forms_queryset.filter(status='ACTIVE')
+
+        count = forms_queryset.count()
+
+        # Build descriptive label
+        status_label = "Active" if not status_filter else str(status_filter).title()
+        label = f"{status_label} Forms"
+
+        return {
+            "interpretation": intent.get('interpretation', f"Counting forms{dept_note}"),
+            "filters": filters,
+            "aggregation": "count",
+            "visualization": "number",
+            "data": [{"label": label, "value": count}],
+            "summary": f"There are {count} {status_label.lower()} forms in the system."
+        }
+
+    def _execute_forms_list_query(self, forms_queryset, intent, dept_note):
+        """Execute a list query for forms"""
+        filters = intent.get('filters', {})
+
+        # Default to active forms
+        forms_queryset = forms_queryset.filter(status='ACTIVE')
+
+        # Get form data
+        forms_data = []
+        for form in forms_queryset[:10]:  # Limit to 10
+            forms_data.append({
+                "name": form.name,
+                "department": form.department.name if form.department else "General",
+                "submissions": form.submissions.count()
+            })
+
+        return {
+            "interpretation": intent.get('interpretation', f"Listing forms{dept_note}"),
+            "filters": filters,
+            "aggregation": "list",
+            "visualization": "bar",
+            "data": forms_data if forms_data else [{"name": "No forms", "department": "-", "submissions": 0}],
+            "summary": f"Found {len(forms_data)} active forms."
         }
 
     def _execute_breakdown_query(self, queryset, intent, group_by, user_role, user_department, dept_note):

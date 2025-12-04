@@ -561,38 +561,39 @@ class NaturalLanguageQueryView(APIView):
             dept_note = " (showing data across all departments)"
 
         query_type = intent.get('query_type', 'overview')
-        filters = intent.get('filters', {})
+        filters = intent.get('filters') or {}  # Handle None case
         group_by = intent.get('group_by')
         visualization = intent.get('visualization', 'cards')
 
+        # Safely extract filter values (handle None and non-dict cases)
+        time_range = filters.get('time_range') if filters else None
+        status_filter = filters.get('status') if filters else None
+        form_type = filters.get('form_type') if filters else None
+        dept_filter = filters.get('department') if filters else None
+
         # Apply time range filter
-        time_range = filters.get('time_range')
         if time_range:
             base_qs = self._apply_time_filter(base_qs, time_range, now)
 
-        # Apply status filter
-        status_filter = filters.get('status')
-        if status_filter:
+        # Apply status filter (only for submissions, not forms)
+        # Note: For forms queries, status is handled in _execute_forms_count_query
+        entity = intent.get('entity', 'submissions')
+        if status_filter and entity != 'forms':
             if isinstance(status_filter, list):
                 base_qs = base_qs.filter(status__in=status_filter)
-            else:
+            elif isinstance(status_filter, str):
                 base_qs = base_qs.filter(status=status_filter)
 
         # Apply form type filter
-        form_type = filters.get('form_type')
-        if form_type:
+        if form_type and isinstance(form_type, str):
             base_qs = base_qs.filter(
                 Q(form__name__icontains=form_type) |
                 Q(form__code__icontains=form_type)
             )
 
         # Apply department filter
-        dept_filter = filters.get('department')
-        if dept_filter:
+        if dept_filter and isinstance(dept_filter, str):
             base_qs = base_qs.filter(form__department__name__icontains=dept_filter)
-
-        # Determine which entity to query
-        entity = intent.get('entity', 'submissions')
 
         # Execute based on query type
         if query_type == 'count':
@@ -682,36 +683,54 @@ class NaturalLanguageQueryView(APIView):
 
     def _execute_forms_count_query(self, forms_queryset, intent, dept_note):
         """Execute a count query for forms (not submissions)"""
-        filters = intent.get('filters', {})
+        filters = intent.get('filters', {}) or {}
         status_filter = filters.get('status')
+        status_label = "Active"  # Default label
 
-        # Apply status filter to forms if specified
-        if status_filter:
-            if isinstance(status_filter, list):
-                # Map common terms to form statuses
-                status_map = {
-                    'active': 'ACTIVE',
-                    'draft': 'DRAFT',
-                    'archived': 'ARCHIVED',
-                    'inactive': 'ARCHIVED'
-                }
-                mapped_statuses = []
-                for s in status_filter:
-                    mapped = status_map.get(s.lower(), s.upper())
-                    mapped_statuses.append(mapped)
-                forms_queryset = forms_queryset.filter(status__in=mapped_statuses)
+        # Map common terms to form statuses
+        status_map = {
+            'active': 'ACTIVE',
+            'draft': 'DRAFT',
+            'archived': 'ARCHIVED',
+            'inactive': 'ARCHIVED'
+        }
+
+        try:
+            # Apply status filter to forms if specified
+            if status_filter:
+                if isinstance(status_filter, list):
+                    # Handle list of statuses
+                    mapped_statuses = []
+                    for s in status_filter:
+                        if isinstance(s, str):
+                            mapped = status_map.get(s.lower(), s.upper())
+                            mapped_statuses.append(mapped)
+                    if mapped_statuses:
+                        forms_queryset = forms_queryset.filter(status__in=mapped_statuses)
+                        status_label = mapped_statuses[0].title() if len(mapped_statuses) == 1 else "Filtered"
+                    else:
+                        # Default to active if no valid statuses
+                        forms_queryset = forms_queryset.filter(status='ACTIVE')
+                elif isinstance(status_filter, str):
+                    # Handle single status string
+                    mapped_status = status_map.get(status_filter.lower(), status_filter.upper())
+                    forms_queryset = forms_queryset.filter(status=mapped_status)
+                    status_label = mapped_status.title()
+                else:
+                    # Unknown format, default to active
+                    forms_queryset = forms_queryset.filter(status='ACTIVE')
             else:
-                status_map = {'active': 'ACTIVE', 'draft': 'DRAFT', 'archived': 'ARCHIVED'}
-                mapped_status = status_map.get(status_filter.lower(), status_filter.upper())
-                forms_queryset = forms_queryset.filter(status=mapped_status)
-        else:
-            # Default to active forms if asking about forms
-            forms_queryset = forms_queryset.filter(status='ACTIVE')
+                # Default to active forms if no status specified
+                forms_queryset = forms_queryset.filter(status='ACTIVE')
 
-        count = forms_queryset.count()
+            count = forms_queryset.count()
 
-        # Build descriptive label
-        status_label = "Active" if not status_filter else str(status_filter).title()
+        except Exception as e:
+            logger.error(f"Error in forms count query: {e}, filters: {filters}")
+            # Fallback: count all active forms
+            count = forms_queryset.filter(status='ACTIVE').count()
+            status_label = "Active"
+
         label = f"{status_label} Forms"
 
         return {

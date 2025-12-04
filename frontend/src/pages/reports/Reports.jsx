@@ -1,0 +1,593 @@
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../hooks/useAuth';
+import api from '../../services/api';
+
+// Icons
+const ReportsIcon = () => (
+  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
+
+const DownloadIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+  </svg>
+);
+
+const CalendarIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+
+const RefreshIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+  </svg>
+);
+
+// Stat Card Component
+const StatCard = ({ title, value, subtitle, icon, color = 'sky' }) => {
+  const colorClasses = {
+    sky: 'bg-sky-100 text-sky-600',
+    emerald: 'bg-emerald-100 text-emerald-600',
+    amber: 'bg-amber-100 text-amber-600',
+    red: 'bg-red-100 text-red-600',
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <p className="mt-2 text-3xl font-bold text-slate-800">{value}</p>
+          {subtitle && <p className="mt-1 text-sm text-slate-400">{subtitle}</p>}
+        </div>
+        <div className={`p-3 rounded-full ${colorClasses[color]}`}>
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Simple Bar Chart Component
+const BarChart = ({ data, title, xKey, yKey, color = 'sky' }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <h3 className="text-lg font-semibold text-slate-800 mb-4">{title}</h3>
+        <p className="text-slate-500 text-center py-8">No data available</p>
+      </div>
+    );
+  }
+
+  const maxValue = Math.max(...data.map(d => d[yKey] || 0));
+  const colorClass = color === 'sky' ? 'bg-sky-500' : color === 'emerald' ? 'bg-emerald-500' : 'bg-sky-500';
+
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6">
+      <h3 className="text-lg font-semibold text-slate-800 mb-4">{title}</h3>
+      <div className="space-y-3">
+        {data.map((item, index) => {
+          const value = item[yKey] || 0;
+          const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
+          return (
+            <div key={index} className="flex items-center gap-3">
+              <div className="w-28 text-sm text-slate-600 truncate" title={item[xKey]}>
+                {item[xKey]}
+              </div>
+              <div className="flex-1 h-8 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${colorClass} rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
+                  style={{ width: `${Math.max(percentage, 5)}%` }}
+                >
+                  {percentage > 20 && (
+                    <span className="text-xs font-medium text-white">{value}</span>
+                  )}
+                </div>
+              </div>
+              {percentage <= 20 && (
+                <div className="w-12 text-sm font-medium text-slate-700 text-right">
+                  {value}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// Simple Pie Chart Component (using CSS)
+const PieChart = ({ data, title, labelKey, valueKey }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <h3 className="text-lg font-semibold text-slate-800 mb-4">{title}</h3>
+        <p className="text-slate-500 text-center py-8">No data available</p>
+      </div>
+    );
+  }
+
+  const total = data.reduce((sum, item) => sum + (item[valueKey] || 0), 0);
+  const colors = [
+    { bg: 'bg-sky-500', text: 'text-sky-500' },
+    { bg: 'bg-emerald-500', text: 'text-emerald-500' },
+    { bg: 'bg-amber-500', text: 'text-amber-500' },
+    { bg: 'bg-red-500', text: 'text-red-500' },
+    { bg: 'bg-purple-500', text: 'text-purple-500' },
+    { bg: 'bg-slate-500', text: 'text-slate-500' },
+  ];
+
+  // Calculate conic gradient
+  let currentAngle = 0;
+  const gradientParts = data.map((item, index) => {
+    const value = item[valueKey] || 0;
+    const percentage = total > 0 ? (value / total) * 100 : 0;
+    const startAngle = currentAngle;
+    currentAngle += percentage * 3.6; // Convert to degrees
+    const colorHex = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'][index % 6];
+    return `${colorHex} ${startAngle}deg ${currentAngle}deg`;
+  });
+
+  const conicGradient = `conic-gradient(${gradientParts.join(', ')})`;
+
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6">
+      <h3 className="text-lg font-semibold text-slate-800 mb-4">{title}</h3>
+      <div className="flex items-center gap-6">
+        {/* Pie Chart */}
+        <div
+          className="w-32 h-32 rounded-full flex-shrink-0"
+          style={{ background: conicGradient }}
+        />
+        {/* Legend */}
+        <div className="flex-1 space-y-2">
+          {data.map((item, index) => {
+            const value = item[valueKey] || 0;
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+            return (
+              <div key={index} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${colors[index % colors.length].bg}`} />
+                  <span className="text-sm text-slate-600">{item[labelKey]}</span>
+                </div>
+                <div className="text-sm">
+                  <span className="font-medium text-slate-800">{value}</span>
+                  <span className="text-slate-400 ml-1">({percentage}%)</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Line Chart Component (simple implementation)
+const LineChart = ({ data, title, xKey, yKey }) => {
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <h3 className="text-lg font-semibold text-slate-800 mb-4">{title}</h3>
+        <p className="text-slate-500 text-center py-8">No data available</p>
+      </div>
+    );
+  }
+
+  const maxValue = Math.max(...data.map(d => d[yKey] || 0));
+  const minValue = 0;
+  const range = maxValue - minValue || 1;
+  const chartHeight = 200;
+  const chartWidth = 100; // percentage
+
+  // Calculate points for the line
+  const points = data.map((item, index) => {
+    const x = (index / (data.length - 1 || 1)) * chartWidth;
+    const y = chartHeight - ((item[yKey] - minValue) / range) * chartHeight;
+    return { x, y, value: item[yKey], label: item[xKey] };
+  });
+
+  // Create SVG path
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6">
+      <h3 className="text-lg font-semibold text-slate-800 mb-4">{title}</h3>
+      <div className="relative">
+        <svg viewBox={`0 0 ${chartWidth} ${chartHeight + 20}`} className="w-full h-48">
+          {/* Grid lines */}
+          {[0, 25, 50, 75, 100].map((percent) => (
+            <line
+              key={percent}
+              x1="0"
+              y1={chartHeight - (percent / 100) * chartHeight}
+              x2={chartWidth}
+              y2={chartHeight - (percent / 100) * chartHeight}
+              stroke="#e2e8f0"
+              strokeWidth="0.5"
+            />
+          ))}
+          {/* Line */}
+          <path
+            d={pathD}
+            fill="none"
+            stroke="#0ea5e9"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          {/* Area fill */}
+          <path
+            d={`${pathD} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`}
+            fill="url(#gradient)"
+            opacity="0.2"
+          />
+          {/* Points */}
+          {points.map((p, i) => (
+            <circle
+              key={i}
+              cx={p.x}
+              cy={p.y}
+              r="3"
+              fill="#0ea5e9"
+              stroke="white"
+              strokeWidth="2"
+            />
+          ))}
+          {/* Gradient definition */}
+          <defs>
+            <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#0ea5e9" />
+              <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+        </svg>
+        {/* X-axis labels */}
+        <div className="flex justify-between mt-2 text-xs text-slate-500">
+          {data.map((item, index) => (
+            <span key={index} className="truncate max-w-[60px]" title={item[xKey]}>
+              {item[xKey]}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Main Reports Component
+const Reports = () => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [dateRange, setDateRange] = useState('30'); // days
+  const [reportData, setReportData] = useState({
+    summary: {},
+    submissionsByStatus: [],
+    submissionsByDepartment: [],
+    submissionsTrend: [],
+    formsByType: [],
+  });
+
+  useEffect(() => {
+    fetchReportData();
+  }, [dateRange]);
+
+  const fetchReportData = async () => {
+    setLoading(true);
+    try {
+      // Fetch submissions
+      const submissionsRes = await api.get('/submissions/');
+      const submissions = submissionsRes.data.results || submissionsRes.data || [];
+
+      // Fetch forms
+      const formsRes = await api.get('/forms/');
+      const forms = formsRes.data.results || formsRes.data || [];
+
+      // Filter by date range
+      const now = new Date();
+      const startDate = new Date(now.getTime() - parseInt(dateRange) * 24 * 60 * 60 * 1000);
+
+      const filteredSubmissions = submissions.filter(s => {
+        const submittedDate = new Date(s.submitted_at || s.created_at);
+        return submittedDate >= startDate;
+      });
+
+      // Calculate summary
+      const summary = {
+        totalSubmissions: filteredSubmissions.length,
+        approvedSubmissions: filteredSubmissions.filter(s => s.status === 'APPROVED').length,
+        pendingSubmissions: filteredSubmissions.filter(s => s.status === 'SUBMITTED' || s.status === 'IN_REVIEW').length,
+        rejectedSubmissions: filteredSubmissions.filter(s => s.status === 'REJECTED').length,
+        totalForms: forms.length,
+        activeForms: forms.filter(f => f.status === 'ACTIVE').length,
+      };
+
+      // Calculate approval rate
+      const completedSubmissions = summary.approvedSubmissions + summary.rejectedSubmissions;
+      summary.approvalRate = completedSubmissions > 0
+        ? Math.round((summary.approvedSubmissions / completedSubmissions) * 100)
+        : 0;
+
+      // Submissions by status
+      const statusCounts = {};
+      filteredSubmissions.forEach(s => {
+        const status = s.status || 'UNKNOWN';
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+      });
+      const submissionsByStatus = Object.entries(statusCounts).map(([status, count]) => ({
+        status: status.replace('_', ' '),
+        count,
+      }));
+
+      // Submissions by department
+      const deptCounts = {};
+      filteredSubmissions.forEach(s => {
+        const dept = s.form_detail?.department_name || 'Unknown';
+        deptCounts[dept] = (deptCounts[dept] || 0) + 1;
+      });
+      const submissionsByDepartment = Object.entries(deptCounts)
+        .map(([department, count]) => ({ department, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+
+      // Submissions trend (by day/week)
+      const trendData = {};
+      const trendFormat = parseInt(dateRange) <= 14 ? 'day' : 'week';
+
+      filteredSubmissions.forEach(s => {
+        const date = new Date(s.submitted_at || s.created_at);
+        let key;
+        if (trendFormat === 'day') {
+          key = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        } else {
+          // Get week start
+          const weekStart = new Date(date);
+          weekStart.setDate(date.getDate() - date.getDay());
+          key = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+        trendData[key] = (trendData[key] || 0) + 1;
+      });
+
+      const submissionsTrend = Object.entries(trendData)
+        .map(([date, count]) => ({ date, count }))
+        .slice(-10); // Last 10 periods
+
+      // Forms by type/department
+      const formTypeCounts = {};
+      forms.forEach(f => {
+        const dept = f.department_name || 'Unknown';
+        formTypeCounts[dept] = (formTypeCounts[dept] || 0) + 1;
+      });
+      const formsByType = Object.entries(formTypeCounts)
+        .map(([type, count]) => ({ type, count }))
+        .sort((a, b) => b.count - a.count);
+
+      setReportData({
+        summary,
+        submissionsByStatus,
+        submissionsByDepartment,
+        submissionsTrend,
+        formsByType,
+      });
+    } catch (error) {
+      console.error('Error fetching report data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const response = await api.get('/submissions/export/', {
+        params: { format: 'excel', days: dateRange },
+        responseType: 'blob',
+      });
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `submissions_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    setExporting(true);
+    try {
+      const response = await api.get('/submissions/export/', {
+        params: { format: 'pdf', days: dateRange },
+        responseType: 'blob',
+      });
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `submissions_report_${new Date().toISOString().split('T')[0]}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-full bg-sky-100 text-sky-600">
+              <ReportsIcon />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800">Reports</h1>
+              <p className="text-slate-500">
+                View analytics and export data
+                {user?.role === 'MANAGER' && user?.department && ` • ${user.department.name} Department`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Date Range Filter */}
+            <div className="flex items-center gap-2">
+              <CalendarIcon />
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value)}
+                className="border border-slate-300 rounded-md px-3 py-2 text-sm focus:ring-sky-500 focus:border-sky-500"
+              >
+                <option value="7">Last 7 days</option>
+                <option value="14">Last 14 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="365">Last year</option>
+              </select>
+            </div>
+
+            {/* Refresh Button */}
+            <button
+              onClick={fetchReportData}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              <RefreshIcon />
+              Refresh
+            </button>
+
+            {/* Export Buttons */}
+            <button
+              onClick={handleExportExcel}
+              disabled={exporting}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-md hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+            >
+              <DownloadIcon />
+              Excel
+            </button>
+            <button
+              onClick={handleExportPDF}
+              disabled={exporting}
+              className="flex items-center gap-2 px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600 disabled:opacity-50 transition-colors"
+            >
+              <DownloadIcon />
+              PDF
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Total Submissions"
+          value={reportData.summary.totalSubmissions || 0}
+          subtitle={`Last ${dateRange} days`}
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          }
+          color="sky"
+        />
+        <StatCard
+          title="Approved"
+          value={reportData.summary.approvedSubmissions || 0}
+          subtitle={`${reportData.summary.approvalRate || 0}% approval rate`}
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+          color="emerald"
+        />
+        <StatCard
+          title="Pending Review"
+          value={reportData.summary.pendingSubmissions || 0}
+          subtitle="Awaiting action"
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+          color="amber"
+        />
+        <StatCard
+          title="Rejected"
+          value={reportData.summary.rejectedSubmissions || 0}
+          subtitle={`${reportData.summary.activeForms || 0} active forms`}
+          icon={
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          }
+          color="red"
+        />
+      </div>
+
+      {/* Charts Row 1 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <LineChart
+          data={reportData.submissionsTrend}
+          title="Submission Trends"
+          xKey="date"
+          yKey="count"
+        />
+        <PieChart
+          data={reportData.submissionsByStatus}
+          title="Status Distribution"
+          labelKey="status"
+          valueKey="count"
+        />
+      </div>
+
+      {/* Charts Row 2 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <BarChart
+          data={reportData.submissionsByDepartment}
+          title="Submissions by Department"
+          xKey="department"
+          yKey="count"
+          color="sky"
+        />
+        <BarChart
+          data={reportData.formsByType}
+          title="Forms by Department"
+          xKey="type"
+          yKey="count"
+          color="emerald"
+        />
+      </div>
+    </div>
+  );
+};
+
+export default Reports;

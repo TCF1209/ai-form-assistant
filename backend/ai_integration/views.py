@@ -426,6 +426,7 @@ class NaturalLanguageQueryView(APIView):
         # Step 1: AI parses the query to understand intent
         intent = ai_service.parse_analytics_intent(query, available_context)
         logger.info(f"Analytics query intent: {intent}")
+        logger.info(f"Analytics query - entity: {intent.get('entity')}, filters: {intent.get('filters')}")
 
         # Handle special cases (greetings, help requests, casual messages, gibberish)
         if intent.get('is_greeting'):
@@ -692,38 +693,34 @@ class NaturalLanguageQueryView(APIView):
             'active': 'ACTIVE',
             'draft': 'DRAFT',
             'archived': 'ARCHIVED',
-            'inactive': 'ARCHIVED'
+            'inactive': 'INACTIVE'
         }
 
-        try:
-            # Apply status filter to forms if specified
-            if status_filter:
-                if isinstance(status_filter, list):
-                    # Handle list of statuses
-                    mapped_statuses = []
-                    for s in status_filter:
-                        if isinstance(s, str):
-                            mapped = status_map.get(s.lower(), s.upper())
-                            mapped_statuses.append(mapped)
-                    if mapped_statuses:
-                        forms_queryset = forms_queryset.filter(status__in=mapped_statuses)
-                        status_label = mapped_statuses[0].title() if len(mapped_statuses) == 1 else "Filtered"
-                    else:
-                        # Default to active if no valid statuses
-                        forms_queryset = forms_queryset.filter(status='ACTIVE')
-                elif isinstance(status_filter, str):
-                    # Handle single status string
-                    mapped_status = status_map.get(status_filter.lower(), status_filter.upper())
-                    forms_queryset = forms_queryset.filter(status=mapped_status)
-                    status_label = mapped_status.title()
-                else:
-                    # Unknown format, default to active
-                    forms_queryset = forms_queryset.filter(status='ACTIVE')
-            else:
-                # Default to active forms if no status specified
-                forms_queryset = forms_queryset.filter(status='ACTIVE')
+        logger.info(f"Forms count query - status_filter: {status_filter}, type: {type(status_filter)}")
 
+        try:
+            # Normalize status filter to get the actual status to query
+            target_status = None
+
+            if status_filter:
+                if isinstance(status_filter, list) and len(status_filter) > 0:
+                    # Take first status from list
+                    first_status = status_filter[0]
+                    if isinstance(first_status, str):
+                        target_status = status_map.get(first_status.lower(), first_status.upper())
+                elif isinstance(status_filter, str):
+                    target_status = status_map.get(status_filter.lower(), status_filter.upper())
+
+            # Default to ACTIVE if no valid status found
+            if not target_status:
+                target_status = 'ACTIVE'
+
+            # Apply the status filter
+            forms_queryset = forms_queryset.filter(status=target_status)
+            status_label = target_status.title()
             count = forms_queryset.count()
+
+            logger.info(f"Forms count query - target_status: {target_status}, count: {count}")
 
         except Exception as e:
             logger.error(f"Error in forms count query: {e}, filters: {filters}")

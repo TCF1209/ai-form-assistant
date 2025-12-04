@@ -363,10 +363,19 @@ Your job is to understand what the user is asking and return a structured intent
 
 IMPORTANT: You must return ONLY a valid JSON object, no other text.
 
-The system has:
-- Form submissions with statuses: DRAFT, SUBMITTED, IN_REVIEW, APPROVED, REJECTED, CANCELLED
-- Forms belonging to departments
-- Time-based data (submitted_at, updated_at dates)
+The system has TWO different concepts:
+1. FORMS - The form templates (like "Leave Request Form", "Expense Claim Form")
+   - Forms have statuses: DRAFT, ACTIVE, INACTIVE, ARCHIVED
+   - "Active forms" means forms that are currently available for use (status=ACTIVE)
+
+2. SUBMISSIONS - User submissions/entries for those forms
+   - Submissions have statuses: DRAFT, SUBMITTED, IN_REVIEW, APPROVED, REJECTED, CANCELLED
+   - "Pending submissions" means submissions waiting for review (SUBMITTED, IN_REVIEW)
+
+CRITICAL DISTINCTION:
+- "How many active forms?" → entity: "forms" (asking about form templates)
+- "How many submissions?" → entity: "submissions" (asking about user submissions)
+- "How many leave requests?" → entity: "submissions" (asking about submissions of leave forms)
 
 Analyze the user's query and return a JSON object with this structure:
 {
@@ -402,11 +411,11 @@ IMPORTANT for interpretation field:
 - For casual messages: Leave interpretation empty or null, the system will handle the response
 
 Examples:
-- "How many leave requests last month?" → query_type: "count", filters: {form_type: "leave", time_range: "last_month"}, interpretation: "Counting leave requests from last month"
-- "Show pending forms by department" → query_type: "breakdown", group_by: "department", filters: {status: ["SUBMITTED", "IN_REVIEW"]}, interpretation: "Breaking down pending forms by department"
-- "How many forms this month?" → query_type: "count", filters: {time_range: "this_month"}, interpretation: "Counting all form submissions this month"
+- "How many active forms?" → entity: "forms", query_type: "count", filters: {status: null}, interpretation: "Counting active form templates"
+- "How many forms right now?" → entity: "forms", query_type: "count", interpretation: "Counting available forms"
+- "How many leave requests last month?" → entity: "submissions", query_type: "count", filters: {form_type: "leave", time_range: "last_month"}, interpretation: "Counting leave request submissions from last month"
+- "Show pending submissions by department" → entity: "submissions", query_type: "breakdown", group_by: "department", filters: {status: ["SUBMITTED", "IN_REVIEW"]}, interpretation: "Breaking down pending submissions by department"
 - "thank you" → is_casual_message: true, interpretation: null
-- "asdfghj" → is_gibberish: true, interpretation: null
 """
 
         user_prompt = f"""User query: "{query}"

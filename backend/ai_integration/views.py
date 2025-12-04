@@ -664,14 +664,16 @@ class NaturalLanguageQueryView(APIView):
     def _execute_count_query(self, queryset, intent, dept_note):
         """Execute a count query for submissions"""
         count = queryset.count()
-        filters = intent.get('filters', {})
+        filters = intent.get('filters', {}) or {}
 
-        # Build label
-        form_type = filters.get('form_type', 'Form')
-        time_range = filters.get('time_range', '')
+        # Build label - handle None values safely
+        form_type = filters.get('form_type')
+        time_range = filters.get('time_range')
+
+        form_type_label = form_type.title() if form_type else "Form"
         time_label = f" ({time_range.replace('_', ' ')})" if time_range else ""
 
-        label = f"{form_type.title()} Submissions{time_label}"
+        label = f"{form_type_label} Submissions{time_label}"
 
         return {
             "interpretation": intent.get('interpretation', f"Counting submissions{dept_note}"),

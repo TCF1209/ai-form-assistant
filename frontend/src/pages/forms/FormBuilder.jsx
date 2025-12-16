@@ -128,6 +128,7 @@ const FormBuilder = () => {
   const { user } = useAuth();
   const [form, setForm] = useState(null);
   const [fields, setFields] = useState([]);
+  const [originalFieldIds, setOriginalFieldIds] = useState([]); // Track fields from backend
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showFieldEditor, setShowFieldEditor] = useState(false);
@@ -163,10 +164,14 @@ const FormBuilder = () => {
     try {
       setLoading(true);
       const response = await api.get(`/forms/${formId}/fields/`);
-      setFields(response.data || []);
+      const fetchedFields = response.data || [];
+      setFields(fetchedFields);
+      // Track original field IDs from backend (non-temp IDs only)
+      setOriginalFieldIds(fetchedFields.map(f => String(f.id)).filter(id => !id.startsWith('temp_')));
     } catch (error) {
       console.error('Failed to fetch fields:', error);
       setFields([]);
+      setOriginalFieldIds([]);
     } finally {
       setLoading(false);
     }
@@ -280,6 +285,15 @@ const FormBuilder = () => {
       };
 
       await api.put(`/forms/${formId}/`, formData);
+
+      // Find fields that were deleted (exist in original but not in current)
+      const currentFieldIds = sanitizedFields.map(f => f.id).filter(id => !id.startsWith('temp_'));
+      const deletedFieldIds = originalFieldIds.filter(id => !currentFieldIds.includes(id));
+
+      // Delete removed fields from backend
+      for (const fieldId of deletedFieldIds) {
+        await api.delete(`/forms/${formId}/delete_field/?field_id=${fieldId}`);
+      }
 
       // Then add/update all fields
       for (let i = 0; i < sanitizedFields.length; i++) {

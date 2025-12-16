@@ -42,19 +42,20 @@ const Header = ({ onMenuClick }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Fetch unread count on mount and periodically
+  // Fetch unread count on mount and periodically (only for regular users)
   useEffect(() => {
+    if (user?.role !== 'USER') return;
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 60000); // Refresh every minute
     return () => clearInterval(interval);
-  }, []);
+  }, [user?.role]);
 
-  // Fetch notifications when dropdown opens
+  // Fetch notifications when dropdown opens (only for regular users)
   useEffect(() => {
-    if (notificationOpen) {
+    if (notificationOpen && user?.role === 'USER') {
       fetchNotifications();
     }
-  }, [notificationOpen]);
+  }, [notificationOpen, user?.role]);
 
   const fetchUnreadCount = async () => {
     try {
@@ -137,113 +138,115 @@ const Header = ({ onMenuClick }) => {
 
         {/* Right side - Actions */}
         <div className="flex items-center space-x-4">
-          {/* Notifications */}
-          <div className="relative" ref={notificationRef}>
-            <button
-              onClick={() => setNotificationOpen(!notificationOpen)}
-              className="p-2 text-slate-500 hover:text-sky-500 rounded-lg hover:bg-slate-100 transition-colors relative"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                />
-              </svg>
-              {/* Notification badge */}
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] flex items-center justify-center text-xs font-medium text-white bg-red-500 rounded-full px-1">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </button>
+          {/* Notifications - Only show for regular users */}
+          {user?.role === 'USER' && (
+            <div className="relative" ref={notificationRef}>
+              <button
+                onClick={() => setNotificationOpen(!notificationOpen)}
+                className="p-2 text-slate-500 hover:text-sky-500 rounded-lg hover:bg-slate-100 transition-colors relative"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                  />
+                </svg>
+                {/* Notification badge */}
+                {unreadCount > 0 && (
+                  <span className="absolute top-1 right-1 min-w-[18px] h-[18px] flex items-center justify-center text-xs font-medium text-white bg-red-500 rounded-full px-1">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
 
-            {/* Notification Dropdown */}
-            {notificationOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden">
-                {/* Header */}
-                <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={markAllAsRead}
-                      className="text-xs text-sky-500 hover:text-sky-600"
-                    >
-                      Mark all as read
-                    </button>
-                  )}
-                </div>
-
-                {/* Notification List */}
-                <div className="max-h-80 overflow-y-auto">
-                  {loadingNotifications ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-500"></div>
-                    </div>
-                  ) : notifications.length === 0 ? (
-                    <div className="text-center py-8">
-                      <svg className="w-12 h-12 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                      </svg>
-                      <p className="text-sm text-slate-500">No notifications yet</p>
-                    </div>
-                  ) : (
-                    notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        onClick={() => handleNotificationClick(notification)}
-                        className={`px-4 py-3 cursor-pointer transition-colors hover:bg-slate-50 border-b border-slate-100 last:border-b-0 ${
-                          !notification.is_read ? 'bg-sky-50/50' : ''
-                        }`}
+              {/* Notification Dropdown */}
+              {notificationOpen && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-slate-200 z-50 overflow-hidden">
+                  {/* Header */}
+                  <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-800">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={markAllAsRead}
+                        className="text-xs text-sky-500 hover:text-sky-600"
                       >
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className={`text-sm truncate ${!notification.is_read ? 'font-medium text-slate-800' : 'text-slate-600'}`}>
-                                {notification.subject}
-                              </p>
-                              {!notification.is_read && (
-                                <span className="w-2 h-2 bg-sky-500 rounded-full flex-shrink-0"></span>
-                              )}
-                            </div>
-                            <p className="text-xs text-slate-500 truncate mt-0.5">
-                              {notification.message}
-                            </p>
-                            <p className="text-xs text-slate-400 mt-1">
-                              {formatTimeAgo(notification.created_at)}
-                            </p>
-                          </div>
-                          {!notification.is_read && (
-                            <button
-                              onClick={(e) => markAsRead(notification.id, e)}
-                              className="p-1 text-slate-400 hover:text-sky-500 rounded"
-                              title="Mark as read"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                        Mark all as read
+                      </button>
+                    )}
+                  </div>
 
-                {/* Footer */}
-                <div className="px-4 py-3 border-t border-slate-200 bg-slate-50">
-                  <Link
-                    to="/notifications"
-                    onClick={() => setNotificationOpen(false)}
-                    className="text-sm text-sky-500 hover:text-sky-600 font-medium block text-center"
-                  >
-                    View all notifications
-                  </Link>
+                  {/* Notification List */}
+                  <div className="max-h-80 overflow-y-auto">
+                    {loadingNotifications ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-500"></div>
+                      </div>
+                    ) : notifications.length === 0 ? (
+                      <div className="text-center py-8">
+                        <svg className="w-12 h-12 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        <p className="text-sm text-slate-500">No notifications yet</p>
+                      </div>
+                    ) : (
+                      notifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          onClick={() => handleNotificationClick(notification)}
+                          className={`px-4 py-3 cursor-pointer transition-colors hover:bg-slate-50 border-b border-slate-100 last:border-b-0 ${
+                            !notification.is_read ? 'bg-sky-50/50' : ''
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className={`text-sm truncate ${!notification.is_read ? 'font-medium text-slate-800' : 'text-slate-600'}`}>
+                                  {notification.subject}
+                                </p>
+                                {!notification.is_read && (
+                                  <span className="w-2 h-2 bg-sky-500 rounded-full flex-shrink-0"></span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500 truncate mt-0.5">
+                                {notification.message}
+                              </p>
+                              <p className="text-xs text-slate-400 mt-1">
+                                {formatTimeAgo(notification.created_at)}
+                              </p>
+                            </div>
+                            {!notification.is_read && (
+                              <button
+                                onClick={(e) => markAsRead(notification.id, e)}
+                                className="p-1 text-slate-400 hover:text-sky-500 rounded"
+                                title="Mark as read"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-4 py-3 border-t border-slate-200 bg-slate-50">
+                    <Link
+                      to="/notifications"
+                      onClick={() => setNotificationOpen(false)}
+                      className="text-sm text-sky-500 hover:text-sky-600 font-medium block text-center"
+                    >
+                      View all notifications
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* User Menu */}
           <div className="relative" ref={dropdownRef}>

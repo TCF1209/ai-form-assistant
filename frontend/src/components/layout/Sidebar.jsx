@@ -182,6 +182,7 @@ const Sidebar = ({ isOpen, onClose }) => {
           name: 'Notifications',
           href: '/notifications',
           icon: <NotificationIcon />,
+          roles: ['USER'],
         },
       ],
     },

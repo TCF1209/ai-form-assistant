@@ -378,13 +378,16 @@ class WorkflowEngine:
         workflow = instance.workflow
 
         if workflow.workflow_type == 'SEQUENTIAL':
-            # Complete if all required steps are approved
-            required_approvals = instance.approvals.filter(
-                workflow_step__is_required=True
-            )
-            return not required_approvals.filter(
-                status__in=['PENDING', 'DELEGATED']
-            ).exists()
+            # For sequential workflows, check if ALL required steps have been approved
+            # (not just if there are no pending approvals, because next step's approval
+            # hasn't been created yet at this point)
+            total_required_steps = workflow.steps.filter(is_required=True).count()
+            approved_steps = instance.approvals.filter(
+                workflow_step__is_required=True,
+                status='APPROVED'
+            ).count()
+
+            return approved_steps >= total_required_steps
 
         elif workflow.workflow_type == 'PARALLEL':
             # Complete based on threshold

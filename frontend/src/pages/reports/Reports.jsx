@@ -471,28 +471,62 @@ const Reports = () => {
         return submittedDate >= startDate;
       });
 
-      // Prepare data for Excel
-      const excelData = filteredSubmissions.map(sub => ({
-        'ID': String(sub.id).substring(0, 8),
-        'Form Name': sub.form_detail?.name || sub.form_name || 'N/A',
-        'Submitted By': sub.submitted_by_detail?.username || sub.submitted_by_name || 'N/A',
-        'Status': sub.status || 'N/A',
-        'Submitted At': sub.submitted_at ? new Date(sub.submitted_at).toLocaleString() : 'N/A',
-        'Department': sub.form_detail?.department_name || 'N/A'
-      }));
-
-      // Create workbook and worksheet
+      // Create workbook
       const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Create worksheet data with title and headers
+      const wsData = [
+        ['AI Office Assistant - Submissions Report'],
+        [`Report Period: ${startDate.toLocaleDateString()} to ${now.toLocaleDateString()}`],
+        [`Generated: ${now.toLocaleString()}`],
+        [], // Empty row for spacing
+        ['ID', 'Form Name', 'Submitted By', 'Status', 'Submitted At', 'Department'],
+      ];
+
+      // Add data rows
+      filteredSubmissions.forEach(sub => {
+        wsData.push([
+          String(sub.id).substring(0, 8),
+          sub.form_detail?.name || sub.form_name || 'N/A',
+          sub.submitted_by_detail?.username || sub.submitted_by_name || 'N/A',
+          sub.status || 'N/A',
+          sub.submitted_at ? new Date(sub.submitted_at).toLocaleString() : 'N/A',
+          sub.form_detail?.department_name || 'N/A'
+        ]);
+      });
+
+      // Add summary section
+      wsData.push([]);
+      wsData.push(['Summary']);
+      wsData.push([`Total Submissions: ${filteredSubmissions.length}`]);
+
+      // Count by status
+      const statusCounts = {};
+      filteredSubmissions.forEach(s => {
+        const status = s.status || 'UNKNOWN';
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+      });
+      Object.entries(statusCounts).forEach(([status, count]) => {
+        wsData.push([`${status}: ${count}`]);
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
 
       // Set column widths
       ws['!cols'] = [
         { wch: 12 }, // ID
-        { wch: 25 }, // Form Name
+        { wch: 30 }, // Form Name
         { wch: 18 }, // Submitted By
         { wch: 15 }, // Status
-        { wch: 20 }, // Submitted At
-        { wch: 18 }  // Department
+        { wch: 22 }, // Submitted At
+        { wch: 20 }  // Department
+      ];
+
+      // Merge title cell across all columns
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }, // Title row
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } }, // Date range row
+        { s: { r: 2, c: 0 }, e: { r: 2, c: 5 } }, // Generated row
       ];
 
       XLSX.utils.book_append_sheet(wb, ws, 'Submissions Report');
@@ -524,27 +558,92 @@ const Reports = () => {
         return submittedDate >= startDate;
       });
 
-      // Create PDF document (landscape)
+      // Design System Colors
+      const skyBlue = [14, 165, 233];      // #0EA5E9 - Primary
+      const skyBlueHover = [2, 132, 199];  // #0284C7 - Primary dark
+      const darkGray = [30, 41, 59];       // #1E293B - Text
+      const mediumGray = [100, 116, 139];  // #64748B - Secondary text
+      const lightGray = [248, 250, 252];   // #F8FAFC - Background
+      const white = [255, 255, 255];
+      const success = [16, 185, 129];      // #10B981 - Success
+      const errorColor = [239, 68, 68];    // #EF4444 - Error
+
+      // Create PDF document (landscape for better table display)
       const doc = new jsPDF('landscape');
+      const pageWidth = doc.internal.pageSize.width;
 
-      // Add title
-      doc.setFontSize(16);
+      // Header background
+      doc.setFillColor(...skyBlue);
+      doc.rect(0, 0, pageWidth, 35, 'F');
+
+      // Title
+      doc.setTextColor(...white);
+      doc.setFontSize(20);
       doc.setFont('helvetica', 'bold');
-      doc.text('Submissions Report', doc.internal.pageSize.width / 2, 15, { align: 'center' });
+      doc.text('AI Office Assistant', pageWidth / 2, 15, { align: 'center' });
 
-      doc.setFontSize(10);
+      doc.setFontSize(14);
       doc.setFont('helvetica', 'normal');
+      doc.text('Submissions Report', pageWidth / 2, 25, { align: 'center' });
+
+      // Subtitle with date range
+      doc.setTextColor(...darkGray);
+      doc.setFontSize(10);
       doc.text(
-        `${startDate.toLocaleDateString()} to ${now.toLocaleDateString()}`,
-        doc.internal.pageSize.width / 2,
-        22,
+        `Report Period: ${startDate.toLocaleDateString()} to ${now.toLocaleDateString()}`,
+        pageWidth / 2,
+        45,
         { align: 'center' }
       );
+
+      // Count by status for summary
+      const statusCounts = {};
+      filteredSubmissions.forEach(s => {
+        const status = s.status || 'UNKNOWN';
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+      });
+
+      // Summary cards
+      const cardY = 52;
+      const cardHeight = 18;
+      const cardSpacing = 5;
+      const totalCards = Object.keys(statusCounts).length + 1;
+      const cardWidth = Math.min(50, (pageWidth - 28 - (cardSpacing * (totalCards - 1))) / totalCards);
+      let cardX = 14;
+
+      // Total submissions card
+      doc.setFillColor(...skyBlue);
+      doc.roundedRect(cardX, cardY, cardWidth, cardHeight, 2, 2, 'F');
+      doc.setTextColor(...white);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text('TOTAL', cardX + cardWidth / 2, cardY + 6, { align: 'center' });
+      doc.setFontSize(12);
+      doc.text(String(filteredSubmissions.length), cardX + cardWidth / 2, cardY + 14, { align: 'center' });
+      cardX += cardWidth + cardSpacing;
+
+      // Status cards
+      Object.entries(statusCounts).forEach(([status, count]) => {
+        let cardColor = mediumGray;
+        if (status === 'APPROVED' || status === 'COMPLETED') cardColor = success;
+        else if (status === 'REJECTED') cardColor = errorColor;
+        else if (status === 'PENDING' || status === 'SUBMITTED') cardColor = skyBlueHover;
+
+        doc.setFillColor(...cardColor);
+        doc.roundedRect(cardX, cardY, cardWidth, cardHeight, 2, 2, 'F');
+        doc.setTextColor(...white);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.text(status.substring(0, 10).toUpperCase(), cardX + cardWidth / 2, cardY + 6, { align: 'center' });
+        doc.setFontSize(12);
+        doc.text(String(count), cardX + cardWidth / 2, cardY + 14, { align: 'center' });
+        cardX += cardWidth + cardSpacing;
+      });
 
       // Prepare table data
       const tableData = filteredSubmissions.map(sub => [
         String(sub.id).substring(0, 8),
-        (sub.form_detail?.name || sub.form_name || 'N/A').substring(0, 30),
+        (sub.form_detail?.name || sub.form_name || 'N/A').substring(0, 35),
         sub.submitted_by_detail?.username || sub.submitted_by_name || 'N/A',
         sub.status || 'N/A',
         sub.submitted_at ? new Date(sub.submitted_at).toLocaleString() : 'N/A',
@@ -553,32 +652,66 @@ const Reports = () => {
 
       // Add table using autoTable
       autoTable(doc, {
-        startY: 30,
+        startY: 78,
         head: [['ID', 'Form Name', 'Submitted By', 'Status', 'Submitted At', 'Department']],
         body: tableData,
         headStyles: {
-          fillColor: [14, 165, 233], // Sky blue (#0EA5E9)
-          textColor: 255,
+          fillColor: skyBlue,
+          textColor: white,
           fontStyle: 'bold',
-          halign: 'center'
+          halign: 'center',
+          fontSize: 10,
+          cellPadding: 4
         },
         bodyStyles: {
-          halign: 'center'
-        },
-        alternateRowStyles: {
-          fillColor: [248, 250, 252] // Light gray
-        },
-        styles: {
+          textColor: darkGray,
+          halign: 'center',
           fontSize: 9,
           cellPadding: 3
+        },
+        alternateRowStyles: {
+          fillColor: lightGray
+        },
+        styles: {
+          lineColor: [226, 232, 240],
+          lineWidth: 0.5
+        },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 25 },
+          1: { halign: 'left', cellWidth: 70 },
+          2: { halign: 'center', cellWidth: 40 },
+          3: { halign: 'center', cellWidth: 30 },
+          4: { halign: 'center', cellWidth: 45 },
+          5: { halign: 'center', cellWidth: 40 }
+        },
+        didParseCell: function(data) {
+          if (data.column.index === 3 && data.section === 'body') {
+            const status = data.cell.raw;
+            if (status === 'APPROVED' || status === 'COMPLETED') {
+              data.cell.styles.textColor = success;
+              data.cell.styles.fontStyle = 'bold';
+            } else if (status === 'REJECTED') {
+              data.cell.styles.textColor = errorColor;
+              data.cell.styles.fontStyle = 'bold';
+            } else if (status === 'PENDING' || status === 'SUBMITTED') {
+              data.cell.styles.textColor = skyBlue;
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
         }
       });
 
-      // Add summary
-      const finalY = doc.lastAutoTable?.finalY || 30;
-      doc.setFontSize(10);
-      doc.text(`Total Submissions: ${filteredSubmissions.length}`, 14, finalY + 10);
-      doc.text(`Report Generated: ${new Date().toLocaleString()}`, 14, finalY + 16);
+      // Footer
+      const finalY = doc.lastAutoTable?.finalY || 78;
+      doc.setDrawColor(...skyBlue);
+      doc.setLineWidth(0.5);
+      doc.line(14, finalY + 8, pageWidth - 14, finalY + 8);
+
+      doc.setTextColor(...mediumGray);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Generated: ${now.toLocaleString()}`, 14, finalY + 14);
+      doc.text('AI Office Assistant - Powered by OpenAI', pageWidth - 14, finalY + 14, { align: 'right' });
 
       // Save the PDF
       const fileName = `submissions_report_${new Date().toISOString().split('T')[0]}.pdf`;

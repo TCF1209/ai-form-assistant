@@ -78,14 +78,58 @@ class UserViewSet(viewsets.ModelViewSet):
             # Regular users can only see themselves
             return User.objects.filter(id=user.id)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get', 'patch', 'put'])
     def me(self, request):
         """
-        Get current user's profile.
-        GET /api/v1/users/me/
+        Get or update current user's profile.
+        GET /api/v1/users/me/ - Get profile
+        PATCH /api/v1/users/me/ - Partial update profile
+        PUT /api/v1/users/me/ - Full update profile
         """
-        serializer = self.get_serializer(request.user)
-        return Response(serializer.data)
+        if request.method == 'GET':
+            serializer = self.get_serializer(request.user)
+            return Response(serializer.data)
+
+        # PATCH or PUT - update profile
+        partial = request.method == 'PATCH'
+        serializer = UserProfileSerializer(
+            request.user,
+            data=request.data,
+            partial=partial
+        )
+
+        if serializer.is_valid():
+            user = serializer.save()
+
+            # Log the update
+            from .models import AuditLog
+            AuditLog.objects.create(
+                user=request.user,
+                action=AuditLog.ActionType.UPDATE,
+                model_name='User',
+                object_id=str(user.id),
+                object_repr=str(user),
+                changes=request.data,
+                ip_address=self.get_client_ip(request),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
+
+            return Response({
+                'message': 'Profile updated successfully',
+                'user': self.get_serializer(user).data
+            })
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @staticmethod
+    def get_client_ip(request):
+        """Get client IP address from request."""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
 
     @action(detail=True, methods=['post'])
     def activate(self, request, pk=None):

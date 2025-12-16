@@ -41,13 +41,6 @@ const RefreshIcon = () => (
   </svg>
 );
 
-const PlayIcon = () => (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
-);
-
 const WorkflowIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -355,31 +348,6 @@ const SubmissionsManagement = () => {
     setWorkflowModal(true);
   };
 
-  const handleStartWorkflow = async (submission) => {
-    try {
-      const workflowResponse = await api.get('/workflows/', {
-        params: { form: submission.form, status: 'ACTIVE' }
-      });
-
-      const workflows = workflowResponse.data.results || workflowResponse.data;
-
-      if (workflows.length === 0) {
-        alert('No active workflow found for this form');
-        return;
-      }
-
-      await api.post('/workflow-instances/start/', {
-        submission_id: submission.id,
-        workflow_id: workflows[0].id
-      });
-
-      fetchSubmissions();
-    } catch (error) {
-      console.error('Error starting workflow:', error);
-      alert(error.response?.data?.error || 'Failed to start workflow');
-    }
-  };
-
   const getProgressPercent = (instance) => {
     if (!instance || !instance.approvals) return 0;
     const total = instance.approvals.length;
@@ -530,15 +498,6 @@ const SubmissionsManagement = () => {
                             title="View Workflow"
                           >
                             <WorkflowIcon />
-                          </button>
-                        )}
-                        {!submission.workflow_instance && submission.status === 'SUBMITTED' && (
-                          <button
-                            onClick={() => handleStartWorkflow(submission)}
-                            className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
-                            title="Start Workflow"
-                          >
-                            <PlayIcon />
                           </button>
                         )}
                       </div>

@@ -211,9 +211,58 @@ const FormBuilder = () => {
     setShowPreview(true);
   };
 
+  // Sanitize a field object to only include expected properties
+  const sanitizeField = (field) => {
+    // Ensure options is a clean array of strings
+    let cleanOptions = [];
+    if (Array.isArray(field.options)) {
+      cleanOptions = field.options
+        .filter(opt => opt != null)
+        .map(opt => {
+          if (typeof opt === 'string') return opt;
+          if (typeof opt === 'object' && opt !== null) {
+            return String(opt.label || opt.value || '');
+          }
+          return String(opt);
+        })
+        .filter(opt => opt !== '');
+    }
+
+    // Ensure validation_rules is a clean object with only primitive values
+    let cleanValidationRules = {};
+    if (field.validation_rules && typeof field.validation_rules === 'object') {
+      const rules = field.validation_rules;
+      // Only copy primitive values
+      for (const key of Object.keys(rules)) {
+        const val = rules[key];
+        if (val === null || val === undefined) continue;
+        if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') {
+          cleanValidationRules[key] = val;
+        }
+      }
+    }
+
+    return {
+      id: field.id ? String(field.id) : '',
+      label: String(field.label || ''),
+      name: String(field.name || ''),
+      field_type: String(field.field_type || 'TEXT'),
+      placeholder: String(field.placeholder || ''),
+      help_text: String(field.help_text || ''),
+      required: field.required === true,
+      width: parseInt(field.width, 10) || 100,
+      default_value: String(field.default_value || ''),
+      options: cleanOptions,
+      validation_rules: cleanValidationRules
+    };
+  };
+
   const handleSaveForm = async () => {
     setSaving(true);
     try {
+      // Sanitize all fields to remove any DOM references or circular structures
+      const sanitizedFields = fields.map(sanitizeField);
+
       // Ensure department is sent as ID (in case it's an object)
       const departmentId = typeof form.department === 'object'
         ? form.department.id
@@ -232,43 +281,31 @@ const FormBuilder = () => {
 
       await api.put(`/forms/${formId}/`, formData);
 
-      // Save all fields - delete existing and recreate
-      // First, delete all existing fields
-      const existingFields = fields.filter(f => !f.id.toString().startsWith('temp_'));
-
       // Then add/update all fields
-      for (const field of fields) {
-        // Ensure options is a clean array of strings
-        const cleanOptions = Array.isArray(field.options)
-          ? field.options.filter(opt => typeof opt === 'string' || typeof opt === 'object')
-              .map(opt => typeof opt === 'string' ? opt : (opt.label || opt.value || String(opt)))
-          : [];
-
-        // Ensure validation_rules is a clean object
-        const cleanValidationRules = typeof field.validation_rules === 'object' && field.validation_rules !== null
-          ? JSON.parse(JSON.stringify(field.validation_rules))
-          : {};
+      for (let i = 0; i < sanitizedFields.length; i++) {
+        const field = sanitizedFields[i];
 
         const fieldData = {
-          label: field.label || '',
-          field_type: field.field_type || 'TEXT',
-          placeholder: field.placeholder || '',
-          help_text: field.help_text || '',
-          required: Boolean(field.required),
-          width: Number(field.width) || 100,
-          default_value: field.default_value || '',
-          options: cleanOptions,
-          validation_rules: cleanValidationRules,
-          order: fields.indexOf(field)
+          label: field.label,
+          field_type: field.field_type,
+          placeholder: field.placeholder,
+          help_text: field.help_text,
+          required: field.required,
+          width: field.width,
+          default_value: field.default_value,
+          options: field.options,
+          validation_rules: field.validation_rules,
+          order: i
         };
 
-        if (field.id.toString().startsWith('temp_')) {
+        const fieldId = field.id;
+        if (fieldId.startsWith('temp_')) {
           // New field - create it
           await api.post(`/forms/${formId}/add_field/`, fieldData);
-        } else {
+        } else if (fieldId) {
           // Existing field - update it
           await api.put(`/forms/${formId}/update_field/`, {
-            field_id: field.id,
+            field_id: fieldId,
             ...fieldData
           });
         }

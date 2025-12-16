@@ -18,7 +18,6 @@ const AIFormGeneration = () => {
   const [selectedDepartment, setSelectedDepartment] = useState(null);
   const [prompt, setPrompt] = useState('');
   const [generatedForm, setGeneratedForm] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -303,51 +302,66 @@ const AIFormGeneration = () => {
     setFormData({ ...formData, fields: updatedFields });
   };
 
-  const handleAddField = () => {
-    const newField = {
-      name: `field_${Date.now()}`,
-      label: 'New Field',
-      type: 'text',
-      required: false
+  // Helper function to save form and return the saved form data
+  const saveFormToBackend = async () => {
+    // Prepare the form data for API
+    const aiFormData = {
+      title: formData.name,
+      code: formData.code,
+      description: formData.description,
+      department: formData.department_id || selectedDepartment,
+      prompt: prompt,
+      fields: formData.fields.map((field, index) => ({
+        name: field.name,
+        label: field.label,
+        type: field.type,
+        placeholder: field.placeholder || '',
+        helpText: field.help_text || '',
+        required: field.required || false,
+        options: field.options || [],
+        validation: field.validation_rules || {},
+        defaultValue: field.default_value || '',
+        width: field.width || 100
+      }))
     };
-    setFormData({ ...formData, fields: [...formData.fields, newField] });
+
+    // Save the form using the formService
+    return await formService.createAIForm(aiFormData);
   };
 
   const handleSaveForm = async () => {
     setLoading(true);
     try {
-      // Prepare the form data for API
-      const aiFormData = {
-        title: formData.name,
-        code: formData.code,
-        description: formData.description,
-        department: formData.department_id || selectedDepartment,
-        prompt: prompt,
-        fields: formData.fields.map((field, index) => ({
-          name: field.name,
-          label: field.label,
-          type: field.type,
-          placeholder: field.placeholder || '',
-          helpText: field.help_text || '',
-          required: field.required || false,
-          options: field.options || [],
-          validation: field.validation_rules || {},
-          defaultValue: field.default_value || '',
-          width: field.width || 100
-        }))
-      };
-
-      // Save the form using the formService
-      const savedForm = await formService.createAIForm(aiFormData);
-
+      const savedForm = await saveFormToBackend();
       message.success('Form created successfully!');
-
-      // Navigate to the form details or forms list
-      navigate(`/forms/${savedForm.id}`);
-
+      // Navigate to the forms list
+      navigate('/forms');
     } catch (error) {
       console.error('Failed to save form:', error);
+      // Show error message to user
+      if (error.response?.data?.error) {
+        message.error(error.response.data.error);
+      } else if (error.response?.data?.message) {
+        message.error(error.response.data.message);
+      } else if (error.message) {
+        message.error(error.message);
+      } else {
+        message.error('Failed to save form. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const handleEditInBuilder = async () => {
+    setLoading(true);
+    try {
+      const savedForm = await saveFormToBackend();
+      message.success('Form created! Opening Form Builder...');
+      // Navigate to FormBuilder for editing
+      navigate(`/forms/${savedForm.id}/builder`);
+    } catch (error) {
+      console.error('Failed to save form:', error);
       // Show error message to user
       if (error.response?.data?.error) {
         message.error(error.response.data.error);
@@ -679,18 +693,15 @@ const AIFormGeneration = () => {
               </span>
             </button>
             <button
-              onClick={() => setIsEditing(!isEditing)}
-              className={`px-4 py-2 rounded-md transition-colors ${
-                isEditing
-                  ? 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300'
-                  : 'bg-sky-500 hover:bg-sky-600 text-white shadow-sm'
-              }`}
+              onClick={handleEditInBuilder}
+              disabled={loading}
+              className="px-4 py-2 rounded-md transition-colors bg-sky-500 hover:bg-sky-600 text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <span className="flex items-center">
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
-                {isEditing ? 'Done Editing' : 'Edit Fields'}
+                Edit in Builder
               </span>
             </button>
           </div>
@@ -707,8 +718,7 @@ const AIFormGeneration = () => {
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  disabled={!isEditing}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
                 />
               </div>
               <div>
@@ -730,9 +740,8 @@ const AIFormGeneration = () => {
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  disabled={!isEditing}
                   rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-50 disabled:text-slate-500"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
                 />
               </div>
             </div>
@@ -742,23 +751,14 @@ const AIFormGeneration = () => {
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-slate-800">Generated Fields ({formData.fields?.length || 0})</h3>
-              {isEditing && (
-                <button
-                  onClick={handleAddField}
-                  className="px-3 py-1 bg-sky-500 hover:bg-sky-600 text-white text-sm rounded-md transition-colors"
-                >
-                  + Add Field
-                </button>
-              )}
+              <span className="text-xs text-slate-500">Use Form Builder to add more fields</span>
             </div>
 
             <div className="max-h-96 overflow-y-auto space-y-2">
               {formData.fields?.map((field, index) => (
                 <div
                   key={index}
-                  className={`p-3 border rounded-lg transition-colors ${
-                    isEditing ? 'border-slate-300 hover:border-sky-400' : 'border-slate-200'
-                  }`}
+                  className="p-3 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -780,16 +780,15 @@ const AIFormGeneration = () => {
                         </p>
                       )}
                     </div>
-                    {isEditing && (
-                      <button
-                        onClick={() => handleDeleteField(index)}
-                        className="text-red-500 hover:text-red-700 transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handleDeleteField(index)}
+                      className="text-slate-400 hover:text-red-500 transition-colors"
+                      title="Remove field"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
               ))}

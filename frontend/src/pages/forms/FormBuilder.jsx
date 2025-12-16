@@ -238,16 +238,27 @@ const FormBuilder = () => {
 
       // Then add/update all fields
       for (const field of fields) {
+        // Ensure options is a clean array of strings
+        const cleanOptions = Array.isArray(field.options)
+          ? field.options.filter(opt => typeof opt === 'string' || typeof opt === 'object')
+              .map(opt => typeof opt === 'string' ? opt : (opt.label || opt.value || String(opt)))
+          : [];
+
+        // Ensure validation_rules is a clean object
+        const cleanValidationRules = typeof field.validation_rules === 'object' && field.validation_rules !== null
+          ? JSON.parse(JSON.stringify(field.validation_rules))
+          : {};
+
         const fieldData = {
-          label: field.label,
-          field_type: field.field_type,
+          label: field.label || '',
+          field_type: field.field_type || 'TEXT',
           placeholder: field.placeholder || '',
           help_text: field.help_text || '',
-          required: field.required || false,
-          width: field.width || 100,
+          required: Boolean(field.required),
+          width: Number(field.width) || 100,
           default_value: field.default_value || '',
-          options: field.options || [],
-          validation_rules: field.validation_rules || {},
+          options: cleanOptions,
+          validation_rules: cleanValidationRules,
           order: fields.indexOf(field)
         };
 

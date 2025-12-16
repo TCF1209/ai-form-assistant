@@ -720,6 +720,16 @@ const Reports = () => {
       const fileName = `submissions_report_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
 
+      // Log export to audit trail
+      try {
+        await api.post('/audit-logs/log_export/', {
+          export_type: 'excel',
+          report_name: 'Submissions Report'
+        });
+      } catch (logError) {
+        console.error('Failed to log export:', logError);
+      }
+
     } catch (error) {
       console.error('Export failed:', error);
       alert('Export failed. Please try again.');
@@ -1136,6 +1146,16 @@ const Reports = () => {
       // Save the PDF
       const fileName = `submissions_report_${new Date().toISOString().split('T')[0]}.pdf`;
       doc.save(fileName);
+
+      // Log export to audit trail
+      try {
+        await api.post('/audit-logs/log_export/', {
+          export_type: 'pdf',
+          report_name: 'Submissions Report'
+        });
+      } catch (logError) {
+        console.error('Failed to log export:', logError);
+      }
 
     } catch (error) {
       console.error('Export failed:', error);

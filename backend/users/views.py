@@ -457,3 +457,32 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         """
         models = self.get_queryset().values_list('model_name', flat=True).distinct()
         return Response(list(models))
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def log_export(self, request):
+        """
+        Log an export action.
+        POST /api/v1/audit-logs/log_export/
+        """
+        export_type = request.data.get('export_type', 'unknown')  # 'excel' or 'pdf'
+        report_name = request.data.get('report_name', 'Report')
+
+        # Get client IP
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+
+        AuditLog.objects.create(
+            user=request.user,
+            action=AuditLog.ActionType.EXPORT,
+            model_name='Report',
+            object_id='',
+            object_repr=f'{report_name} ({export_type.upper()})',
+            changes={'export_type': export_type, 'report_name': report_name},
+            ip_address=ip,
+            user_agent=request.META.get('HTTP_USER_AGENT', '')
+        )
+
+        return Response({'message': 'Export logged successfully'})

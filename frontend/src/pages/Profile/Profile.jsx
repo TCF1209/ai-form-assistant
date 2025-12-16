@@ -106,7 +106,7 @@ const Profile = () => {
       });
 
       if (updateUser) {
-        updateUser(response.data);
+        updateUser(response.data.user);
       }
 
       setMessage({ type: 'success', text: 'Profile updated successfully!' });

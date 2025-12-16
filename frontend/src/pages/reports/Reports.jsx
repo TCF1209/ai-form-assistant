@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 // Icons
 const ReportsIcon = () => (
@@ -456,20 +459,48 @@ const Reports = () => {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      const response = await api.get('/ai/reports/export/', {
-        params: { format: 'excel', days: dateRange },
-        responseType: 'blob',
+      // Fetch submissions data
+      const submissionsRes = await api.get('/submissions/');
+      const submissions = submissionsRes.data.results || submissionsRes.data || [];
+
+      // Filter by date range
+      const now = new Date();
+      const startDate = new Date(now.getTime() - parseInt(dateRange) * 24 * 60 * 60 * 1000);
+      const filteredSubmissions = submissions.filter(s => {
+        const submittedDate = new Date(s.submitted_at || s.created_at);
+        return submittedDate >= startDate;
       });
 
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `submissions_report_${new Date().toISOString().split('T')[0]}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      // Prepare data for Excel
+      const excelData = filteredSubmissions.map(sub => ({
+        'ID': String(sub.id).substring(0, 8),
+        'Form Name': sub.form_detail?.name || sub.form_name || 'N/A',
+        'Submitted By': sub.submitted_by_detail?.username || sub.submitted_by_name || 'N/A',
+        'Status': sub.status || 'N/A',
+        'Submitted At': sub.submitted_at ? new Date(sub.submitted_at).toLocaleString() : 'N/A',
+        'Department': sub.form_detail?.department_name || 'N/A'
+      }));
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 12 }, // ID
+        { wch: 25 }, // Form Name
+        { wch: 18 }, // Submitted By
+        { wch: 15 }, // Status
+        { wch: 20 }, // Submitted At
+        { wch: 18 }  // Department
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Submissions Report');
+
+      // Generate and download file
+      const fileName = `submissions_report_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
     } catch (error) {
       console.error('Export failed:', error);
       alert('Export failed. Please try again.');
@@ -481,20 +512,78 @@ const Reports = () => {
   const handleExportPDF = async () => {
     setExporting(true);
     try {
-      const response = await api.get('/ai/reports/export/', {
-        params: { format: 'pdf', days: dateRange },
-        responseType: 'blob',
+      // Fetch submissions data
+      const submissionsRes = await api.get('/submissions/');
+      const submissions = submissionsRes.data.results || submissionsRes.data || [];
+
+      // Filter by date range
+      const now = new Date();
+      const startDate = new Date(now.getTime() - parseInt(dateRange) * 24 * 60 * 60 * 1000);
+      const filteredSubmissions = submissions.filter(s => {
+        const submittedDate = new Date(s.submitted_at || s.created_at);
+        return submittedDate >= startDate;
       });
 
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `submissions_report_${new Date().toISOString().split('T')[0]}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      // Create PDF document (landscape)
+      const doc = new jsPDF('landscape');
+
+      // Add title
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Submissions Report', doc.internal.pageSize.width / 2, 15, { align: 'center' });
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(
+        `${startDate.toLocaleDateString()} to ${now.toLocaleDateString()}`,
+        doc.internal.pageSize.width / 2,
+        22,
+        { align: 'center' }
+      );
+
+      // Prepare table data
+      const tableData = filteredSubmissions.map(sub => [
+        String(sub.id).substring(0, 8),
+        (sub.form_detail?.name || sub.form_name || 'N/A').substring(0, 30),
+        sub.submitted_by_detail?.username || sub.submitted_by_name || 'N/A',
+        sub.status || 'N/A',
+        sub.submitted_at ? new Date(sub.submitted_at).toLocaleString() : 'N/A',
+        sub.form_detail?.department_name || 'N/A'
+      ]);
+
+      // Add table
+      doc.autoTable({
+        startY: 30,
+        head: [['ID', 'Form Name', 'Submitted By', 'Status', 'Submitted At', 'Department']],
+        body: tableData,
+        headStyles: {
+          fillColor: [14, 165, 233], // Sky blue (#0EA5E9)
+          textColor: 255,
+          fontStyle: 'bold',
+          halign: 'center'
+        },
+        bodyStyles: {
+          halign: 'center'
+        },
+        alternateRowStyles: {
+          fillColor: [248, 250, 252] // Light gray
+        },
+        styles: {
+          fontSize: 9,
+          cellPadding: 3
+        }
+      });
+
+      // Add summary
+      const finalY = doc.lastAutoTable.finalY || 30;
+      doc.setFontSize(10);
+      doc.text(`Total Submissions: ${filteredSubmissions.length}`, 14, finalY + 10);
+      doc.text(`Report Generated: ${new Date().toLocaleString()}`, 14, finalY + 16);
+
+      // Save the PDF
+      const fileName = `submissions_report_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+
     } catch (error) {
       console.error('Export failed:', error);
       alert('Export failed. Please try again.');

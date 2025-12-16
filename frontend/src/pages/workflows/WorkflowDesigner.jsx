@@ -713,7 +713,9 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
         ...formData,
         steps: steps.map((step, index) => ({
           ...step,
-          order: index
+          order: index,
+          // Convert empty strings to null for integer fields
+          time_limit_hours: step.time_limit_hours ? parseInt(step.time_limit_hours, 10) : null
         }))
       };
 

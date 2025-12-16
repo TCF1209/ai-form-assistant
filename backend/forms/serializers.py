@@ -24,7 +24,7 @@ class FormFieldSerializer(serializers.ModelSerializer):
 class FormListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for form lists."""
     department_name = serializers.CharField(source='department.name', read_only=True)
-    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
+    created_by_name = serializers.SerializerMethodField()
     field_count = serializers.IntegerField(source='fields.count', read_only=True)
     submission_count = serializers.IntegerField(source='submissions.count', read_only=True)
 
@@ -38,11 +38,20 @@ class FormListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    def get_created_by_name(self, obj):
+        """Get creator's name with fallback to username."""
+        if obj.created_by:
+            full_name = obj.created_by.get_full_name()
+            if full_name and full_name.strip():
+                return full_name
+            return obj.created_by.username
+        return 'Unknown'
+
 
 class FormDetailSerializer(serializers.ModelSerializer):
     """Detailed serializer for form with all fields."""
     department_name = serializers.CharField(source='department.name', read_only=True)
-    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
+    created_by_name = serializers.SerializerMethodField()
     fields = FormFieldSerializer(many=True, read_only=True)
     submission_count = serializers.IntegerField(source='submissions.count', read_only=True)
 
@@ -56,6 +65,15 @@ class FormDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+    def get_created_by_name(self, obj):
+        """Get creator's name with fallback to username."""
+        if obj.created_by:
+            full_name = obj.created_by.get_full_name()
+            if full_name and full_name.strip():
+                return full_name
+            return obj.created_by.username
+        return 'Unknown'
 
     def create(self, validated_data):
         """Create form with current user as creator."""

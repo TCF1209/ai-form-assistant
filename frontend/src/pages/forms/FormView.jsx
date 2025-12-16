@@ -407,7 +407,7 @@ const FormView = () => {
               <div>
                 <label className="text-sm font-medium text-slate-700">Created By</label>
                 <p className="mt-1 text-slate-900">
-                  {form.created_by_name} on {new Date(form.created_at).toLocaleDateString()}
+                  {form.created_by_name || 'Unknown'} on {new Date(form.created_at).toLocaleDateString()}
                 </p>
               </div>
             </div>

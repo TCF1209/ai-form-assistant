@@ -971,93 +971,18 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Approval Threshold (%)
-                    </label>
+                <div className="flex items-center gap-3">
+                  <label className="relative inline-flex items-center cursor-pointer">
                     <input
-                      type="number"
-                      value={formData.approval_threshold}
-                      onChange={(e) => handleFormChange('approval_threshold', parseInt(e.target.value) || 0)}
+                      type="checkbox"
+                      checked={formData.allow_comments}
+                      onChange={(e) => handleFormChange('allow_comments', e.target.checked)}
                       disabled={isReadOnly}
-                      min="1"
-                      max="100"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-100"
+                      className="sr-only peer"
                     />
-                    <p className="mt-1 text-xs text-slate-500">For parallel workflows</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Auto-escalate after (days)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.escalation_days}
-                      onChange={(e) => handleFormChange('escalation_days', parseInt(e.target.value) || 0)}
-                      disabled={isReadOnly}
-                      min="1"
-                      max="30"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-100"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Initial Status
-                    </label>
-                    <input
-                      type="text"
-                      value="Draft"
-                      disabled
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-100 text-slate-600"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="flex items-center gap-3">
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.allow_delegation}
-                        onChange={(e) => handleFormChange('allow_delegation', e.target.checked)}
-                        disabled={isReadOnly}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500 peer-disabled:opacity-50"></div>
-                    </label>
-                    <span className="text-sm text-slate-700">Allow Delegation</span>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.allow_comments}
-                        onChange={(e) => handleFormChange('allow_comments', e.target.checked)}
-                        disabled={isReadOnly}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500 peer-disabled:opacity-50"></div>
-                    </label>
-                    <span className="text-sm text-slate-700">Allow Comments</span>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.auto_escalate}
-                        onChange={(e) => handleFormChange('auto_escalate', e.target.checked)}
-                        disabled={isReadOnly}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500 peer-disabled:opacity-50"></div>
-                    </label>
-                    <span className="text-sm text-slate-700">Auto-Escalate</span>
-                  </div>
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500 peer-disabled:opacity-50"></div>
+                  </label>
+                  <span className="text-sm text-slate-700">Allow approvers to add comments</span>
                 </div>
               </div>
             )}

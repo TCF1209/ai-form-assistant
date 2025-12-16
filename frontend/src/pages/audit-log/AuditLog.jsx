@@ -77,8 +77,8 @@ const AuditLog = () => {
         if (filters.search) params.append('search', filters.search);
         if (filters.start_date) params.append('start_date', filters.start_date);
         if (filters.end_date) params.append('end_date', filters.end_date);
-        // Include security logs (LOGIN/LOGOUT) only if toggle is on
-        if (showSecurityLogs) params.append('include_security', 'true');
+        // Show only security logs (LOGIN/LOGOUT) if toggle is on
+        if (showSecurityLogs) params.append('security_only', 'true');
 
         const response = await api.get(`/audit-logs/?${params.toString()}`);
         const fetchedLogs = response.data.results || response.data;

@@ -53,6 +53,87 @@ const UserIcon = () => (
   </svg>
 );
 
+// Arrow Right Icon for step indicator
+const ArrowRightIcon = () => (
+  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+  </svg>
+);
+
+// Hourglass/Waiting Icon
+const HourglassIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+// Step Indicator Component - Makes current step visually attractive
+const StepIndicator = ({ stepInfo, workflowStatus }) => {
+  // No workflow
+  if (!stepInfo || stepInfo.text === '-') {
+    return <span className="text-slate-400 text-sm">-</span>;
+  }
+
+  // Determine style based on workflow status
+  const getStepStyle = () => {
+    if (workflowStatus === 'COMPLETED') {
+      return {
+        bg: 'bg-emerald-50',
+        border: 'border-emerald-200',
+        iconBg: 'bg-emerald-500',
+        text: 'text-emerald-700',
+        icon: <CheckCircleIcon />
+      };
+    }
+    if (workflowStatus === 'FAILED' || workflowStatus === 'REJECTED') {
+      return {
+        bg: 'bg-red-50',
+        border: 'border-red-200',
+        iconBg: 'bg-red-500',
+        text: 'text-red-700',
+        icon: <XCircleIcon />
+      };
+    }
+    if (workflowStatus === 'IN_PROGRESS') {
+      return {
+        bg: 'bg-sky-50',
+        border: 'border-sky-200',
+        iconBg: 'bg-sky-500',
+        text: 'text-sky-700',
+        icon: <ArrowRightIcon />
+      };
+    }
+    // Pending/Default
+    return {
+      bg: 'bg-amber-50',
+      border: 'border-amber-200',
+      iconBg: 'bg-amber-500',
+      text: 'text-amber-700',
+      icon: <HourglassIcon />
+    };
+  };
+
+  const style = getStepStyle();
+
+  return (
+    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg ${style.bg} border ${style.border}`}>
+      <div className={`w-5 h-5 rounded-full ${style.iconBg} text-white flex items-center justify-center`}>
+        {stepInfo.stepNumber ? (
+          <span className="text-xs font-bold">{stepInfo.stepNumber}</span>
+        ) : (
+          <span className="w-3 h-3">{style.icon}</span>
+        )}
+      </div>
+      <div>
+        <p className={`text-sm font-medium ${style.text}`}>{stepInfo.text}</p>
+        {stepInfo.subtext && (
+          <p className="text-xs text-slate-500">{stepInfo.subtext}</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // Stat Card Component
 const StatCard = ({ title, value, icon, color }) => {
   const colorClasses = {
@@ -322,19 +403,20 @@ const MySubmissions = () => {
                   // Helper to get current step info
                   const getCurrentStepInfo = () => {
                     const instance = submission.workflow_instance;
-                    if (!instance) return { text: '-', subtext: null };
+                    if (!instance) return null;
 
                     // If workflow has current step, show it
                     if (instance.current_step_detail) {
                       return {
                         text: instance.current_step_detail.name,
-                        subtext: `Step ${instance.current_step_detail.order + 1}`
+                        stepNumber: instance.current_step_detail.order + 1,
+                        subtext: null
                       };
                     }
 
                     // If completed, show "All steps completed"
                     if (instance.status === 'COMPLETED') {
-                      return { text: 'All steps completed', subtext: null };
+                      return { text: 'Completed', stepNumber: null, subtext: null };
                     }
 
                     // If failed/rejected, show last step from approvals
@@ -342,14 +424,17 @@ const MySubmissions = () => {
                       const lastApproval = instance.approvals[instance.approvals.length - 1];
                       return {
                         text: lastApproval.step_detail?.name || 'Rejected',
-                        subtext: 'Rejected'
+                        stepNumber: null,
+                        subtext: null
                       };
                     }
 
-                    return { text: 'Pending', subtext: null };
+                    // Pending - waiting to start
+                    return { text: 'Awaiting Review', stepNumber: null, subtext: null };
                   };
 
                   const stepInfo = getCurrentStepInfo();
+                  const workflowStatus = submission.workflow_instance?.status;
 
                   return (
                     <tr key={submission.id} className="hover:bg-slate-50">
@@ -379,16 +464,7 @@ const MySubmissions = () => {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {submission.workflow_instance ? (
-                          <div>
-                            <p className="text-slate-800">{stepInfo.text}</p>
-                            {stepInfo.subtext && (
-                              <p className="text-sm text-slate-500">{stepInfo.subtext}</p>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-sm">-</span>
-                        )}
+                        <StepIndicator stepInfo={stepInfo} workflowStatus={workflowStatus} />
                       </td>
                       <td className="px-6 py-4">
                         <button

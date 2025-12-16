@@ -78,7 +78,7 @@ class WorkflowSerializer(serializers.ModelSerializer):
             'steps', 'can_edit', 'can_delete',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'code', 'created_at', 'updated_at']  # code is now auto-generated
 
     def get_form_detail(self, obj):
         if obj.form:
@@ -117,9 +117,38 @@ class WorkflowSerializer(serializers.ModelSerializer):
     def get_can_delete(self, obj):
         return self.get_can_edit(obj)
 
+    def _generate_workflow_code(self, name):
+        """Generate a unique workflow code from the name."""
+        import re
+        import uuid
+
+        # Convert name to uppercase, replace spaces and special chars with underscores
+        base_code = re.sub(r'[^A-Z0-9]+', '_', name.upper())
+        base_code = re.sub(r'_+', '_', base_code).strip('_')  # Remove duplicate and trailing underscores
+
+        # Limit length and ensure uniqueness
+        base_code = base_code[:20] if len(base_code) > 20 else base_code
+
+        # Check if code exists, if so append a short unique suffix
+        code = base_code
+        counter = 1
+        while Workflow.objects.filter(code=code).exists():
+            suffix = f"_{counter}"
+            code = f"{base_code[:20-len(suffix)]}{suffix}"
+            counter += 1
+            if counter > 100:  # Fallback to UUID suffix
+                code = f"{base_code[:12]}_{uuid.uuid4().hex[:6].upper()}"
+                break
+
+        return code
+
     @transaction.atomic
     def create(self, validated_data):
         steps_data = validated_data.pop('steps', [])
+
+        # Auto-generate workflow code from name
+        validated_data['code'] = self._generate_workflow_code(validated_data.get('name', 'WORKFLOW'))
+
         workflow = Workflow.objects.create(**validated_data)
 
         # Create workflow steps

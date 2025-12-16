@@ -223,6 +223,59 @@ const formatTime = (dateString) => {
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 };
 
+// Convert snake_case or camelCase to Title Case
+const formatFieldName = (fieldName) => {
+  return fieldName
+    .replace(/_/g, ' ')  // snake_case to spaces
+    .replace(/([A-Z])/g, ' $1')  // camelCase to spaces
+    .replace(/\b\w/g, char => char.toUpperCase())  // Capitalize first letter of each word
+    .trim();
+};
+
+// Check if a string looks like a date (YYYY-MM-DD format)
+const isDateString = (value) => {
+  if (typeof value !== 'string') return false;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+};
+
+// Format a value for display (handles dates, booleans, etc.)
+const formatFieldValue = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
+  if (isDateString(value)) {
+    return formatDate(value);
+  }
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
+
+// Formatted Data Display Component
+const FormattedDataDisplay = ({ data }) => {
+  if (!data || Object.keys(data).length === 0) {
+    return <p className="text-slate-500 text-sm">No data submitted</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {Object.entries(data).map(([key, value]) => (
+        <div key={key} className="flex border-b border-slate-100 pb-2 last:border-0">
+          <div className="w-1/3 text-sm text-slate-500">{formatFieldName(key)}</div>
+          <div className="w-2/3 text-sm font-medium text-slate-800">{formatFieldValue(value)}</div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const MySubmissions = () => {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -521,37 +574,27 @@ const MySubmissions = () => {
 
               {/* Modal Content */}
               <div className="px-6 py-4 space-y-6 max-h-[70vh] overflow-y-auto">
-                {/* Submission Info */}
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <h4 className="font-medium text-slate-800 mb-4">Submission Information</h4>
-                  <div className="grid grid-cols-2 gap-4">
+                {/* Submission Summary - Clean header card */}
+                <div className="bg-gradient-to-r from-sky-50 to-slate-50 rounded-lg p-4 border border-sky-100">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-slate-500">Submission Number</p>
-                      <p className="font-medium text-slate-800">{selectedSubmission.submission_number}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-500">Form</p>
-                      <p className="font-medium text-slate-800">{selectedSubmission.form_detail?.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-500">Status</p>
-                      <StatusBadge status={selectedSubmission.status} />
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-500">Submitted At</p>
-                      <p className="font-medium text-slate-800">
-                        {formatDate(selectedSubmission.created_at)} {formatTime(selectedSubmission.created_at)}
+                      <h4 className="font-semibold text-slate-800">{selectedSubmission.form_detail?.name}</h4>
+                      <p className="text-sm text-slate-500 mt-1">
+                        Submitted on {formatDate(selectedSubmission.created_at)} at {formatTime(selectedSubmission.created_at)}
                       </p>
                     </div>
+                    <StatusBadge status={selectedSubmission.status} />
                   </div>
                 </div>
 
-                {/* Submitted Data */}
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <h4 className="font-medium text-slate-800 mb-4">Submitted Data</h4>
-                  <pre className="bg-white p-4 rounded-lg text-sm overflow-auto max-h-48 border border-slate-200">
-                    {JSON.stringify(selectedSubmission.data, null, 2)}
-                  </pre>
+                {/* Submitted Data - Formatted nicely */}
+                <div className="bg-white rounded-lg border border-slate-200">
+                  <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 rounded-t-lg">
+                    <h4 className="font-medium text-slate-800">Your Submission</h4>
+                  </div>
+                  <div className="p-4">
+                    <FormattedDataDisplay data={selectedSubmission.data} />
+                  </div>
                 </div>
 
                 {/* Workflow Progress */}

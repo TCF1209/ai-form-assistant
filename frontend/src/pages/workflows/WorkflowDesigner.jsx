@@ -952,8 +952,6 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
                       <option value="">Select workflow type</option>
                       <option value="SEQUENTIAL">Sequential (Step by step)</option>
                       <option value="PARALLEL">Parallel (All at once)</option>
-                      <option value="CONDITIONAL">Conditional (Based on rules)</option>
-                      <option value="HYBRID">Hybrid (Mix of sequential and parallel)</option>
                     </select>
                     {errors.workflow_type && <p className="mt-1 text-sm text-red-500">{errors.workflow_type}</p>}
                   </div>

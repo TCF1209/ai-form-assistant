@@ -77,7 +77,7 @@ const StatCard = ({ title, value, icon, color }) => {
   );
 };
 
-// Status Badge Component
+// Status Badge Component with user-friendly labels
 const StatusBadge = ({ status }) => {
   const statusStyles = {
     'DRAFT': 'bg-slate-100 text-slate-700',
@@ -92,9 +92,23 @@ const StatusBadge = ({ status }) => {
     'CANCELLED': 'bg-slate-100 text-slate-700'
   };
 
+  // User-friendly status labels
+  const statusLabels = {
+    'DRAFT': 'Draft',
+    'SUBMITTED': 'Submitted',
+    'PENDING': 'Pending',
+    'IN_PROGRESS': 'In Progress',
+    'IN_REVIEW': 'In Review',
+    'COMPLETED': 'Completed',
+    'APPROVED': 'Approved',
+    'FAILED': 'Failed',
+    'REJECTED': 'Rejected',
+    'CANCELLED': 'Cancelled'
+  };
+
   return (
     <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${statusStyles[status] || statusStyles.DRAFT}`}>
-      {status}
+      {statusLabels[status] || status}
     </span>
   );
 };
@@ -296,77 +310,99 @@ const MySubmissions = () => {
             <table className="w-full">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Submission #</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Form</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Submitted</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Workflow Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Current Step</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {submissions.map((submission) => (
-                  <tr key={submission.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="font-medium text-slate-800">{submission.submission_number}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="text-slate-800">{submission.form_detail?.name || 'N/A'}</p>
-                        <p className="text-sm text-slate-500">{submission.form_detail?.department_name}</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <p className="text-slate-800">{formatDate(submission.created_at)}</p>
-                        <p className="text-sm text-slate-500">{formatTime(submission.created_at)}</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {submission.workflow_instance ? (
-                        <div className="space-y-2">
-                          <StatusBadge status={submission.workflow_instance.status} />
-                          <ProgressBar
-                            percent={getProgressPercent(submission.workflow_instance)}
-                            status={submission.workflow_instance.status}
-                          />
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 text-sm">No Workflow</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      {submission.workflow_instance?.current_step_detail ? (
+                {submissions.map((submission) => {
+                  // Helper to get current step info
+                  const getCurrentStepInfo = () => {
+                    const instance = submission.workflow_instance;
+                    if (!instance) return { text: '-', subtext: null };
+
+                    // If workflow has current step, show it
+                    if (instance.current_step_detail) {
+                      return {
+                        text: instance.current_step_detail.name,
+                        subtext: `Step ${instance.current_step_detail.order + 1}`
+                      };
+                    }
+
+                    // If completed, show "All steps completed"
+                    if (instance.status === 'COMPLETED') {
+                      return { text: 'All steps completed', subtext: null };
+                    }
+
+                    // If failed/rejected, show last step from approvals
+                    if (instance.status === 'FAILED' && instance.approvals?.length > 0) {
+                      const lastApproval = instance.approvals[instance.approvals.length - 1];
+                      return {
+                        text: lastApproval.step_detail?.name || 'Rejected',
+                        subtext: 'Rejected'
+                      };
+                    }
+
+                    return { text: 'Pending', subtext: null };
+                  };
+
+                  const stepInfo = getCurrentStepInfo();
+
+                  return (
+                    <tr key={submission.id} className="hover:bg-slate-50">
+                      <td className="px-6 py-4">
                         <div>
-                          <p className="text-slate-800">{submission.workflow_instance.current_step_detail.name}</p>
-                          <p className="text-sm text-slate-500">Step {submission.workflow_instance.current_step_detail.order + 1}</p>
+                          <p className="font-medium text-slate-800">{submission.form_detail?.name || 'N/A'}</p>
+                          <p className="text-sm text-slate-500">{submission.form_detail?.department_name}</p>
                         </div>
-                      ) : (
-                        <span className="text-slate-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <p className="text-slate-800">{formatDate(submission.created_at)}</p>
+                          <p className="text-sm text-slate-500">{formatTime(submission.created_at)}</p>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {submission.workflow_instance ? (
+                          <div className="space-y-2">
+                            <StatusBadge status={submission.workflow_instance.status} />
+                            <ProgressBar
+                              percent={getProgressPercent(submission.workflow_instance)}
+                              status={submission.workflow_instance.status}
+                            />
+                          </div>
+                        ) : (
+                          <StatusBadge status={submission.status} />
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {submission.workflow_instance ? (
+                          <div>
+                            <p className="text-slate-800">{stepInfo.text}</p>
+                            {stepInfo.subtext && (
+                              <p className="text-sm text-slate-500">{stepInfo.subtext}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-sm">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
                         <button
                           onClick={() => handleViewDetails(submission)}
-                          className="p-2 text-sky-500 hover:bg-sky-50 rounded-lg transition-colors"
+                          className="flex items-center gap-1 px-3 py-1.5 text-sky-600 hover:bg-sky-50 rounded-lg transition-colors text-sm font-medium"
                           title="View Details"
                         >
                           <EyeIcon />
+                          View
                         </button>
-                        {submission.status === 'DRAFT' && (
-                          <button
-                            onClick={() => navigate(`/forms/${submission.form}/submit?draft=${submission.id}`)}
-                            className="p-2 text-sky-500 hover:bg-sky-50 rounded-lg transition-colors"
-                            title="Continue Editing"
-                          >
-                            <RefreshIcon />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

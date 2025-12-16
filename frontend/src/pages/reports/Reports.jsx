@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Icons
 const ReportsIcon = () => (
@@ -551,8 +551,8 @@ const Reports = () => {
         sub.form_detail?.department_name || 'N/A'
       ]);
 
-      // Add table
-      doc.autoTable({
+      // Add table using autoTable
+      autoTable(doc, {
         startY: 30,
         head: [['ID', 'Form Name', 'Submitted By', 'Status', 'Submitted At', 'Department']],
         body: tableData,
@@ -575,7 +575,7 @@ const Reports = () => {
       });
 
       // Add summary
-      const finalY = doc.lastAutoTable.finalY || 30;
+      const finalY = doc.lastAutoTable?.finalY || 30;
       doc.setFontSize(10);
       doc.text(`Total Submissions: ${filteredSubmissions.length}`, 14, finalY + 10);
       doc.text(`Report Generated: ${new Date().toLocaleString()}`, 14, finalY + 16);

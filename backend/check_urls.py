@@ -1,38 +1,64 @@
 #!/usr/bin/env python
+"""Script to debug URL configuration."""
 import os
 import sys
-import django
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import django
 django.setup()
 
-from django.urls import get_resolver
+from django.urls import get_resolver, reverse
 
-def show_urls():
-    resolver = get_resolver()
-    for pattern in resolver.url_patterns:
-        print(f"Pattern: {pattern.pattern}")
+def show_all_urls(urlpatterns, prefix=''):
+    """Recursively list all URL patterns."""
+    urls = []
+    for pattern in urlpatterns:
+        full_pattern = prefix + str(pattern.pattern)
         if hasattr(pattern, 'url_patterns'):
-            for sub in pattern.url_patterns:
-                print(f"  - {sub.pattern}")
-                if hasattr(sub, 'url_patterns'):
-                    for sub2 in sub.url_patterns:
-                        print(f"    - {sub2.pattern}")
+            urls.extend(show_all_urls(pattern.url_patterns, full_pattern))
+        else:
+            urls.append((full_pattern, getattr(pattern, 'name', None)))
+    return urls
 
 # Check FormSubmissionViewSet actions
 from forms.views import FormSubmissionViewSet
-print("\n=== FormSubmissionViewSet Actions ===")
-print("Has export:", hasattr(FormSubmissionViewSet, 'export'))
-print("Has stats:", hasattr(FormSubmissionViewSet, 'stats'))
+print("=" * 60)
+print("FormSubmissionViewSet Action Methods:")
+print("=" * 60)
+print(f"  Has 'export' method: {hasattr(FormSubmissionViewSet, 'export')}")
+print(f"  Has 'stats' method: {hasattr(FormSubmissionViewSet, 'stats')}")
 
-# Check URL patterns
+# Check if export has the action decorator attributes
+if hasattr(FormSubmissionViewSet, 'export'):
+    export_method = getattr(FormSubmissionViewSet, 'export')
+    print(f"  export.kwargs: {getattr(export_method, 'kwargs', 'NO KWARGS')}")
+    print(f"  export.detail: {getattr(export_method, 'detail', 'NO DETAIL')}")
+
+# Check URL patterns from router
 from rest_framework.routers import DefaultRouter
 router = DefaultRouter()
 router.register(r'submissions', FormSubmissionViewSet, basename='submission')
-print("\n=== Router URLs ===")
+
+print("\n" + "=" * 60)
+print("Router Generated URLs for FormSubmissionViewSet:")
+print("=" * 60)
 for url in router.urls:
     print(f"  {url.pattern} -> {url.name}")
 
-if __name__ == '__main__':
-    show_urls()
+# Check actual Django URLs
+print("\n" + "=" * 60)
+print("All Registered URLs containing 'submission' or 'export':")
+print("=" * 60)
+resolver = get_resolver()
+all_urls = show_all_urls(resolver.url_patterns)
+for url_pattern, name in sorted(all_urls):
+    if 'submission' in url_pattern.lower() or 'export' in url_pattern.lower():
+        print(f"  {url_pattern} -> {name}")
+
+print("\n" + "=" * 60)
+print("Top-level URL patterns:")
+print("=" * 60)
+for pattern in resolver.url_patterns:
+    print(f"  {pattern.pattern}")

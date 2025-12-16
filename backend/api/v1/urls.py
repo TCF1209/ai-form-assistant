@@ -24,8 +24,6 @@ from users.views import UserViewSet, DepartmentViewSet
 from forms.views import FormViewSet, FormSubmissionViewSet
 from workflows.views import WorkflowViewSet, WorkflowStepViewSet, WorkflowInstanceViewSet, WorkflowApprovalViewSet, WorkflowNotificationViewSet
 
-app_name = 'api_v1'
-
 # Create router for all API endpoints
 router = DefaultRouter()
 

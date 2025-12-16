@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
@@ -18,8 +18,26 @@ const Workflows = () => {
   const [workflowInstances, setWorkflowInstances] = useState(null);
   const [deletionError, setDeletionError] = useState(null);
   const [actionMenuOpen, setActionMenuOpen] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Handle opening dropdown menu with position calculation
+  const handleMenuOpen = (workflowId, event) => {
+    if (actionMenuOpen === workflowId) {
+      setActionMenuOpen(null);
+      return;
+    }
+
+    const button = event.currentTarget;
+    const rect = button.getBoundingClientRect();
+
+    setMenuPosition({
+      top: rect.bottom + 4,
+      left: rect.right - 192 // 192px = w-48 (menu width)
+    });
+    setActionMenuOpen(workflowId);
+  };
 
   useEffect(() => {
     fetchWorkflows();
@@ -446,96 +464,15 @@ const Workflows = () => {
                         )}
 
                         {/* More Actions Dropdown */}
-                        <div className="relative">
-                          <button
-                            onClick={() => setActionMenuOpen(actionMenuOpen === workflow.id ? null : workflow.id)}
-                            className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
-                            title="More actions"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                            </svg>
-                          </button>
-
-                          {actionMenuOpen === workflow.id && (
-                            <div className="absolute right-0 z-50 mt-2 w-48 rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5">
-                              <div className="py-1">
-                                {(workflow.status === 'DRAFT' || workflow.status === 'INACTIVE') && (
-                                  <button
-                                    onClick={() => {
-                                      handleActivateWorkflow(workflow);
-                                      setActionMenuOpen(null);
-                                    }}
-                                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    Activate
-                                  </button>
-                                )}
-
-                                {workflow.status === 'ACTIVE' && (
-                                  <button
-                                    onClick={() => {
-                                      handleDeactivateWorkflow(workflow);
-                                      setActionMenuOpen(null);
-                                    }}
-                                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    Deactivate
-                                  </button>
-                                )}
-
-                                <button
-                                  onClick={() => {
-                                    handlePreviewWorkflow(workflow);
-                                    setActionMenuOpen(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                  </svg>
-                                  Preview
-                                </button>
-
-                                <hr className="my-1" />
-
-                                <button
-                                  onClick={() => {
-                                    if (workflow.status === 'ACTIVE' || workflow.status === 'ARCHIVED') {
-                                      alert(
-                                        workflow.status === 'ACTIVE'
-                                          ? 'Please deactivate the workflow before deleting'
-                                          : 'Archived workflows cannot be deleted'
-                                      );
-                                    } else {
-                                      handleDeleteWorkflow(workflow);
-                                    }
-                                    setActionMenuOpen(null);
-                                  }}
-                                  disabled={workflow.status === 'ACTIVE' || workflow.status === 'ARCHIVED'}
-                                  className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
-                                    workflow.status === 'ACTIVE' || workflow.status === 'ARCHIVED'
-                                      ? 'text-slate-400 cursor-not-allowed'
-                                      : 'text-red-600 hover:bg-red-50'
-                                  }`}
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          onClick={(e) => handleMenuOpen(workflow.id, e)}
+                          className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
+                          title="More actions"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                          </svg>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -651,10 +588,98 @@ const Workflows = () => {
       {/* Click outside to close action menu */}
       {actionMenuOpen && (
         <div
-          className="fixed inset-0 z-0"
+          className="fixed inset-0 z-40"
           onClick={() => setActionMenuOpen(null)}
         />
       )}
+
+      {/* Fixed-position dropdown menu */}
+      {actionMenuOpen && (() => {
+        const workflow = workflows.find(w => w.id === actionMenuOpen);
+        if (!workflow) return null;
+
+        return (
+          <div
+            className="fixed z-50 w-48 rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5"
+            style={{ top: menuPosition.top, left: menuPosition.left }}
+          >
+            <div className="py-1">
+              {(workflow.status === 'DRAFT' || workflow.status === 'INACTIVE') && (
+                <button
+                  onClick={() => {
+                    handleActivateWorkflow(workflow);
+                    setActionMenuOpen(null);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Activate
+                </button>
+              )}
+
+              {workflow.status === 'ACTIVE' && (
+                <button
+                  onClick={() => {
+                    handleDeactivateWorkflow(workflow);
+                    setActionMenuOpen(null);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Deactivate
+                </button>
+              )}
+
+              <button
+                onClick={() => {
+                  handlePreviewWorkflow(workflow);
+                  setActionMenuOpen(null);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                Preview
+              </button>
+
+              <hr className="my-1" />
+
+              <button
+                onClick={() => {
+                  if (workflow.status === 'ACTIVE' || workflow.status === 'ARCHIVED') {
+                    alert(
+                      workflow.status === 'ACTIVE'
+                        ? 'Please deactivate the workflow before deleting'
+                        : 'Archived workflows cannot be deleted'
+                    );
+                  } else {
+                    handleDeleteWorkflow(workflow);
+                  }
+                  setActionMenuOpen(null);
+                }}
+                disabled={workflow.status === 'ACTIVE' || workflow.status === 'ARCHIVED'}
+                className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${
+                  workflow.status === 'ACTIVE' || workflow.status === 'ARCHIVED'
+                    ? 'text-slate-400 cursor-not-allowed'
+                    : 'text-red-600 hover:bg-red-50'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Delete
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

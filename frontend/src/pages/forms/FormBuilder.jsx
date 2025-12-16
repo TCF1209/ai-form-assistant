@@ -434,7 +434,7 @@ const FormBuilder = () => {
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-medium text-slate-900">Form Fields</h2>
                 <button
-                  onClick={handleAddField}
+                  onClick={() => handleAddField()}
                   className="px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600 text-sm"
                 >
                   Add Field

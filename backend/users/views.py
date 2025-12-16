@@ -374,8 +374,17 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         """
         Filter audit logs with select_related for optimization.
+        Excludes LOGIN/LOGOUT by default unless include_security=true.
         """
         queryset = super().get_queryset().select_related('user')
+
+        # Exclude security logs (LOGIN/LOGOUT) by default
+        include_security = self.request.query_params.get('include_security', 'false').lower() == 'true'
+        action_filter = self.request.query_params.get('action')
+
+        # Only exclude if not explicitly filtering by action and not including security
+        if not include_security and not action_filter:
+            queryset = queryset.exclude(action__in=['LOGIN', 'LOGOUT'])
 
         # Date range filtering
         start_date = self.request.query_params.get('start_date')

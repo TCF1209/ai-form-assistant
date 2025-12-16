@@ -77,14 +77,11 @@ const AuditLog = () => {
         if (filters.search) params.append('search', filters.search);
         if (filters.start_date) params.append('start_date', filters.start_date);
         if (filters.end_date) params.append('end_date', filters.end_date);
+        // Include security logs (LOGIN/LOGOUT) only if toggle is on
+        if (showSecurityLogs) params.append('include_security', 'true');
 
         const response = await api.get(`/audit-logs/?${params.toString()}`);
-        let fetchedLogs = response.data.results || response.data;
-
-        // Filter out security logs if toggle is off (client-side filtering)
-        if (!showSecurityLogs && !filters.action) {
-          fetchedLogs = fetchedLogs.filter(log => !SECURITY_ACTIONS.includes(log.action));
-        }
+        const fetchedLogs = response.data.results || response.data;
 
         setLogs(fetchedLogs);
         setTotalCount(response.data.count || response.data.length);

@@ -4,6 +4,10 @@ import api from '../../services/api';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Chart, registerables } from 'chart.js';
+
+// Register Chart.js components
+Chart.register(...registerables);
 
 // Icons
 const ReportsIcon = () => (
@@ -543,6 +547,25 @@ const Reports = () => {
     }
   };
 
+  // Helper function to create chart image
+  const createChartImage = (config, width, height) => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+
+      const chart = new Chart(ctx, config);
+
+      // Wait for chart to render
+      setTimeout(() => {
+        const imageData = canvas.toDataURL('image/png');
+        chart.destroy();
+        resolve(imageData);
+      }, 100);
+    });
+  };
+
   const handleExportPDF = async () => {
     setExporting(true);
     try {
@@ -568,33 +591,17 @@ const Reports = () => {
       const success = [16, 185, 129];      // #10B981 - Success
       const errorColor = [239, 68, 68];    // #EF4444 - Error
 
-      // Create PDF document (landscape for better table display)
-      const doc = new jsPDF('landscape');
-      const pageWidth = doc.internal.pageSize.width;
-
-      // Header background
-      doc.setFillColor(...skyBlue);
-      doc.rect(0, 0, pageWidth, 35, 'F');
-
-      // Title
-      doc.setTextColor(...white);
-      doc.setFontSize(20);
-      doc.setFont('helvetica', 'bold');
-      doc.text('AI Office Assistant', pageWidth / 2, 15, { align: 'center' });
-
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Submissions Report', pageWidth / 2, 25, { align: 'center' });
-
-      // Subtitle with date range
-      doc.setTextColor(...darkGray);
-      doc.setFontSize(10);
-      doc.text(
-        `Report Period: ${startDate.toLocaleDateString()} to ${now.toLocaleDateString()}`,
-        pageWidth / 2,
-        45,
-        { align: 'center' }
-      );
+      // Chart colors matching design system
+      const chartColors = {
+        skyBlue: '#0EA5E9',
+        skyBlueHover: '#0284C7',
+        success: '#10B981',
+        error: '#EF4444',
+        warning: '#F59E0B',
+        purple: '#8B5CF6',
+        pink: '#EC4899',
+        gray: '#64748B'
+      };
 
       // Count by status for summary
       const statusCounts = {};
@@ -603,47 +610,275 @@ const Reports = () => {
         statusCounts[status] = (statusCounts[status] || 0) + 1;
       });
 
-      // Summary cards
-      const cardY = 52;
-      const cardHeight = 18;
-      const cardSpacing = 5;
-      const totalCards = Object.keys(statusCounts).length + 1;
-      const cardWidth = Math.min(50, (pageWidth - 28 - (cardSpacing * (totalCards - 1))) / totalCards);
-      let cardX = 14;
-
-      // Total submissions card
-      doc.setFillColor(...skyBlue);
-      doc.roundedRect(cardX, cardY, cardWidth, cardHeight, 2, 2, 'F');
-      doc.setTextColor(...white);
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.text('TOTAL', cardX + cardWidth / 2, cardY + 6, { align: 'center' });
-      doc.setFontSize(12);
-      doc.text(String(filteredSubmissions.length), cardX + cardWidth / 2, cardY + 14, { align: 'center' });
-      cardX += cardWidth + cardSpacing;
-
-      // Status cards
-      Object.entries(statusCounts).forEach(([status, count]) => {
-        let cardColor = mediumGray;
-        if (status === 'APPROVED' || status === 'COMPLETED') cardColor = success;
-        else if (status === 'REJECTED') cardColor = errorColor;
-        else if (status === 'PENDING' || status === 'SUBMITTED') cardColor = skyBlueHover;
-
-        doc.setFillColor(...cardColor);
-        doc.roundedRect(cardX, cardY, cardWidth, cardHeight, 2, 2, 'F');
-        doc.setTextColor(...white);
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'bold');
-        doc.text(status.substring(0, 10).toUpperCase(), cardX + cardWidth / 2, cardY + 6, { align: 'center' });
-        doc.setFontSize(12);
-        doc.text(String(count), cardX + cardWidth / 2, cardY + 14, { align: 'center' });
-        cardX += cardWidth + cardSpacing;
+      // Count by form
+      const formCounts = {};
+      filteredSubmissions.forEach(s => {
+        const formName = s.form_detail?.name || s.form_name || 'Unknown';
+        formCounts[formName] = (formCounts[formName] || 0) + 1;
       });
+
+      // Count by department
+      const deptCounts = {};
+      filteredSubmissions.forEach(s => {
+        const dept = s.form_detail?.department_name || 'Unknown';
+        deptCounts[dept] = (deptCounts[dept] || 0) + 1;
+      });
+
+      // Create PDF document (portrait for better chart display)
+      const doc = new jsPDF('portrait');
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+
+      // ============ PAGE 1: Cover & Summary ============
+
+      // Header background
+      doc.setFillColor(...skyBlue);
+      doc.rect(0, 0, pageWidth, 50, 'F');
+
+      // Title
+      doc.setTextColor(...white);
+      doc.setFontSize(24);
+      doc.setFont('helvetica', 'bold');
+      doc.text('AI Office Assistant', pageWidth / 2, 20, { align: 'center' });
+
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Submissions Report', pageWidth / 2, 32, { align: 'center' });
+
+      doc.setFontSize(10);
+      doc.text(`${startDate.toLocaleDateString()} - ${now.toLocaleDateString()}`, pageWidth / 2, 42, { align: 'center' });
+
+      // Summary section title
+      doc.setTextColor(...darkGray);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Executive Summary', 14, 65);
+
+      // Summary line
+      doc.setDrawColor(...skyBlue);
+      doc.setLineWidth(1);
+      doc.line(14, 68, 80, 68);
+
+      // Summary stats
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...darkGray);
+      doc.text(`Total Submissions: ${filteredSubmissions.length}`, 14, 80);
+      doc.text(`Report Period: ${dateRange} days`, 14, 88);
+      doc.text(`Generated: ${now.toLocaleString()}`, 14, 96);
+
+      // Status breakdown
+      let yPos = 110;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Status Breakdown:', 14, yPos);
+      yPos += 8;
+      doc.setFont('helvetica', 'normal');
+      Object.entries(statusCounts).forEach(([status, count]) => {
+        const percentage = ((count / filteredSubmissions.length) * 100).toFixed(1);
+        doc.text(`• ${status}: ${count} (${percentage}%)`, 20, yPos);
+        yPos += 7;
+      });
+
+      // Create Pie Chart for Status Distribution
+      const statusLabels = Object.keys(statusCounts);
+      const statusData = Object.values(statusCounts);
+      const statusColors = statusLabels.map(status => {
+        if (status === 'APPROVED' || status === 'COMPLETED') return chartColors.success;
+        if (status === 'REJECTED') return chartColors.error;
+        if (status === 'PENDING') return chartColors.warning;
+        if (status === 'SUBMITTED') return chartColors.skyBlue;
+        if (status === 'DRAFT') return chartColors.gray;
+        return chartColors.purple;
+      });
+
+      const pieChartConfig = {
+        type: 'doughnut',
+        data: {
+          labels: statusLabels,
+          datasets: [{
+            data: statusData,
+            backgroundColor: statusColors,
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: false,
+          animation: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: {
+                font: { size: 11 },
+                padding: 10
+              }
+            },
+            title: {
+              display: true,
+              text: 'Submissions by Status',
+              font: { size: 14, weight: 'bold' },
+              color: '#1E293B'
+            }
+          }
+        }
+      };
+
+      const pieChartImage = await createChartImage(pieChartConfig, 400, 250);
+      doc.addImage(pieChartImage, 'PNG', 100, 60, 100, 62);
+
+      // ============ PAGE 2: Charts ============
+      doc.addPage();
+
+      // Page header
+      doc.setFillColor(...skyBlue);
+      doc.rect(0, 0, pageWidth, 25, 'F');
+      doc.setTextColor(...white);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Analytics & Charts', pageWidth / 2, 16, { align: 'center' });
+
+      // Bar Chart - Submissions by Form
+      const formLabels = Object.keys(formCounts).slice(0, 8).map(name =>
+        name.length > 15 ? name.substring(0, 15) + '...' : name
+      );
+      const formData = Object.values(formCounts).slice(0, 8);
+
+      const barChartConfig = {
+        type: 'bar',
+        data: {
+          labels: formLabels,
+          datasets: [{
+            label: 'Submissions',
+            data: formData,
+            backgroundColor: chartColors.skyBlue,
+            borderColor: chartColors.skyBlueHover,
+            borderWidth: 1,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: false,
+          animation: false,
+          indexAxis: 'y',
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'Submissions by Form',
+              font: { size: 14, weight: 'bold' },
+              color: '#1E293B'
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              grid: { color: '#E2E8F0' }
+            },
+            y: {
+              grid: { display: false }
+            }
+          }
+        }
+      };
+
+      const barChartImage = await createChartImage(barChartConfig, 500, 300);
+      doc.addImage(barChartImage, 'PNG', 14, 35, 180, 80);
+
+      // Pie Chart - Submissions by Department
+      const deptLabels = Object.keys(deptCounts);
+      const deptData = Object.values(deptCounts);
+      const deptColors = [
+        chartColors.skyBlue, chartColors.success, chartColors.warning,
+        chartColors.purple, chartColors.pink, chartColors.error, chartColors.gray
+      ];
+
+      const deptPieConfig = {
+        type: 'pie',
+        data: {
+          labels: deptLabels,
+          datasets: [{
+            data: deptData,
+            backgroundColor: deptColors.slice(0, deptLabels.length),
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: false,
+          animation: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { font: { size: 10 }, padding: 8 }
+            },
+            title: {
+              display: true,
+              text: 'Submissions by Department',
+              font: { size: 14, weight: 'bold' },
+              color: '#1E293B'
+            }
+          }
+        }
+      };
+
+      const deptPieImage = await createChartImage(deptPieConfig, 400, 250);
+      doc.addImage(deptPieImage, 'PNG', 14, 125, 90, 56);
+
+      // Status distribution bar chart
+      const statusBarConfig = {
+        type: 'bar',
+        data: {
+          labels: statusLabels,
+          datasets: [{
+            label: 'Count',
+            data: statusData,
+            backgroundColor: statusColors,
+            borderWidth: 0,
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: false,
+          animation: false,
+          plugins: {
+            legend: { display: false },
+            title: {
+              display: true,
+              text: 'Status Distribution',
+              font: { size: 14, weight: 'bold' },
+              color: '#1E293B'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: '#E2E8F0' }
+            },
+            x: {
+              grid: { display: false }
+            }
+          }
+        }
+      };
+
+      const statusBarImage = await createChartImage(statusBarConfig, 400, 250);
+      doc.addImage(statusBarImage, 'PNG', 110, 125, 90, 56);
+
+      // ============ PAGE 3: Data Table ============
+      doc.addPage('landscape');
+
+      // Page header
+      doc.setFillColor(...skyBlue);
+      doc.rect(0, 0, doc.internal.pageSize.width, 25, 'F');
+      doc.setTextColor(...white);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Detailed Submissions Data', doc.internal.pageSize.width / 2, 16, { align: 'center' });
 
       // Prepare table data
       const tableData = filteredSubmissions.map(sub => [
         String(sub.id).substring(0, 8),
-        (sub.form_detail?.name || sub.form_name || 'N/A').substring(0, 35),
+        (sub.form_detail?.name || sub.form_name || 'N/A').substring(0, 30),
         sub.submitted_by_detail?.username || sub.submitted_by_name || 'N/A',
         sub.status || 'N/A',
         sub.submitted_at ? new Date(sub.submitted_at).toLocaleString() : 'N/A',
@@ -652,7 +887,7 @@ const Reports = () => {
 
       // Add table using autoTable
       autoTable(doc, {
-        startY: 78,
+        startY: 35,
         head: [['ID', 'Form Name', 'Submitted By', 'Status', 'Submitted At', 'Department']],
         body: tableData,
         headStyles: {
@@ -678,11 +913,11 @@ const Reports = () => {
         },
         columnStyles: {
           0: { halign: 'center', cellWidth: 25 },
-          1: { halign: 'left', cellWidth: 70 },
-          2: { halign: 'center', cellWidth: 40 },
-          3: { halign: 'center', cellWidth: 30 },
-          4: { halign: 'center', cellWidth: 45 },
-          5: { halign: 'center', cellWidth: 40 }
+          1: { halign: 'left', cellWidth: 65 },
+          2: { halign: 'center', cellWidth: 35 },
+          3: { halign: 'center', cellWidth: 28 },
+          4: { halign: 'center', cellWidth: 42 },
+          5: { halign: 'center', cellWidth: 35 }
         },
         didParseCell: function(data) {
           if (data.column.index === 3 && data.section === 'body') {
@@ -701,17 +936,17 @@ const Reports = () => {
         }
       });
 
-      // Footer
-      const finalY = doc.lastAutoTable?.finalY || 78;
+      // Footer on last page
+      const lastPageHeight = doc.internal.pageSize.height;
       doc.setDrawColor(...skyBlue);
       doc.setLineWidth(0.5);
-      doc.line(14, finalY + 8, pageWidth - 14, finalY + 8);
+      doc.line(14, lastPageHeight - 15, doc.internal.pageSize.width - 14, lastPageHeight - 15);
 
       doc.setTextColor(...mediumGray);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Generated: ${now.toLocaleString()}`, 14, finalY + 14);
-      doc.text('AI Office Assistant - Powered by OpenAI', pageWidth - 14, finalY + 14, { align: 'right' });
+      doc.text(`Generated: ${now.toLocaleString()}`, 14, lastPageHeight - 8);
+      doc.text('AI Office Assistant - Powered by OpenAI', doc.internal.pageSize.width - 14, lastPageHeight - 8, { align: 'right' });
 
       // Save the PDF
       const fileName = `submissions_report_${new Date().toISOString().split('T')[0]}.pdf`;

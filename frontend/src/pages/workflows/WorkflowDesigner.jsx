@@ -391,7 +391,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [selectedForm, setSelectedForm] = useState(null);
-  const [activeTab, setActiveTab] = useState('basic');
+  const [currentStep, setCurrentStep] = useState(0); // Wizard step (0: Basic Info, 1: Add Steps, 2: Review)
   const [existingWorkflows, setExistingWorkflows] = useState([]);
   const [deleteModal, setDeleteModal] = useState({ open: false, index: null });
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -504,7 +504,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
     setSteps([]);
     setEditingStepIndex(null);
     setSelectedForm(null);
-    setActiveTab('basic');
+    setCurrentStep(0);
     setErrors({});
     setMessage({ type: '', text: '' });
   };
@@ -598,13 +598,13 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
 
   const handleSubmit = async () => {
     if (!validateForm()) {
-      setActiveTab('basic');
+      setCurrentStep(0);
       return;
     }
 
-    if (steps.length === 0 && formData.workflow_type !== 'NOTIFICATION') {
-      setMessage({ type: 'error', text: 'Please add at least one step to the workflow' });
-      setActiveTab('steps');
+    if (steps.length === 0) {
+      setMessage({ type: 'error', text: 'Please add at least one approval step' });
+      setCurrentStep(1);
       return;
     }
 
@@ -657,14 +657,422 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
 
   const isReadOnly = workflow && workflow.status === 'ACTIVE';
 
+  // Helper to get user name by ID
+  const getUserName = (userId) => {
+    const user = users.find(u => String(u.id) === String(userId));
+    if (user) {
+      return user.first_name && user.last_name
+        ? `${user.first_name} ${user.last_name}`
+        : user.username;
+    }
+    return 'Unknown';
+  };
+
+  // Helper to get form name by ID
+  const getFormName = (formId) => {
+    const form = availableForms.find(f => String(f.id) === String(formId));
+    return form ? form.name : 'Unknown Form';
+  };
+
+  // Validate current step before proceeding
+  const validateCurrentStep = () => {
+    if (currentStep === 0) {
+      return validateForm();
+    }
+    if (currentStep === 1) {
+      if (steps.length === 0) {
+        setMessage({ type: 'error', text: 'Please add at least one approval step' });
+        return false;
+      }
+      // Check all steps have approvers assigned
+      const unassignedStep = steps.find(s => !s.assigned_user);
+      if (unassignedStep) {
+        setMessage({ type: 'error', text: 'Please assign an approver to all steps' });
+        return false;
+      }
+      setMessage({ type: '', text: '' });
+      return true;
+    }
+    return true;
+  };
+
+  // Handle next step
+  const handleNextStep = () => {
+    if (validateCurrentStep()) {
+      setCurrentStep(prev => Math.min(prev + 1, 2));
+    }
+  };
+
+  // Handle previous step
+  const handlePrevStep = () => {
+    setCurrentStep(prev => Math.max(prev - 1, 0));
+    setMessage({ type: '', text: '' });
+  };
+
   if (!visible) return null;
+
+  // Step indicator component
+  const StepIndicator = () => (
+    <div className="px-6 py-4 border-b border-slate-200 bg-white">
+      <div className="flex items-center justify-between max-w-2xl mx-auto">
+        {[
+          { title: 'Basic Information', desc: 'Name, form & type' },
+          { title: 'Approval Steps', desc: 'Add approvers' },
+          { title: 'Review & Create', desc: 'Confirm details' }
+        ].map((step, index) => (
+          <div key={index} className="flex-1 flex items-center">
+            <div className="flex items-center">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-colors ${
+                currentStep > index
+                  ? 'bg-emerald-500 text-white'
+                  : currentStep === index
+                    ? 'bg-sky-500 text-white'
+                    : 'bg-slate-200 text-slate-500'
+              }`}>
+                {currentStep > index ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  index + 1
+                )}
+              </div>
+              <div className="ml-3 hidden sm:block">
+                <p className={`text-sm font-medium ${currentStep >= index ? 'text-slate-800' : 'text-slate-500'}`}>
+                  {step.title}
+                </p>
+                <p className="text-xs text-slate-500">{step.desc}</p>
+              </div>
+            </div>
+            {index < 2 && (
+              <div className={`flex-1 h-0.5 mx-4 transition-colors ${
+                currentStep > index ? 'bg-emerald-500' : 'bg-slate-200'
+              }`} />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Step 0: Basic Information
+  const renderBasicInfoStep = () => (
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-sky-50 rounded-full mb-4">
+          <ForkIcon className="w-8 h-8 text-sky-500" />
+        </div>
+        <h2 className="text-xl font-semibold text-slate-800">Basic Information</h2>
+        <p className="text-slate-600 mt-1">Set up the basic details for your workflow</p>
+      </div>
+
+      {!workflow && (
+        <div className="bg-sky-50 border border-sky-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <InfoIcon className="flex-shrink-0 mt-0.5 text-sky-500" />
+            <div>
+              <p className="text-sm font-medium text-sky-800">One Workflow Per Form</p>
+              <p className="text-sm text-sky-600">Each form can only have one workflow.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+          Workflow Name <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          value={formData.name}
+          onChange={(e) => handleFormChange('name', e.target.value)}
+          disabled={isReadOnly}
+          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-100 ${
+            errors.name ? 'border-red-300' : 'border-slate-300'
+          }`}
+          placeholder="e.g., Leave Request Approval"
+        />
+        {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+          Associated Form <span className="text-red-500">*</span>
+        </label>
+        <select
+          value={formData.form}
+          onChange={(e) => {
+            const selectedValue = e.target.value;
+            if (selectedValue && formsWithWorkflows.has(String(selectedValue))) {
+              return;
+            }
+            handleFormChange('form', selectedValue);
+            setSelectedForm(selectedValue);
+          }}
+          disabled={isReadOnly || workflow !== null}
+          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-100 ${
+            errors.form ? 'border-red-300' : 'border-slate-300'
+          }`}
+        >
+          <option value="">Select a form</option>
+          {availableForms
+            .filter(f => !formsWithWorkflows.has(String(f.id)))
+            .map(f => (
+              <option key={f.id} value={f.id}>
+                {f.name} ({f.department_name})
+              </option>
+            ))}
+        </select>
+        {errors.form && <p className="mt-1 text-sm text-red-500">{errors.form}</p>}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+          Workflow Type <span className="text-red-500">*</span>
+        </label>
+        <div className="grid grid-cols-2 gap-4">
+          <button
+            type="button"
+            onClick={() => !isReadOnly && handleFormChange('workflow_type', 'SEQUENTIAL')}
+            disabled={isReadOnly}
+            className={`p-4 border-2 rounded-lg text-left transition-colors ${
+              formData.workflow_type === 'SEQUENTIAL'
+                ? 'border-sky-500 bg-sky-50'
+                : 'border-slate-200 hover:border-slate-300'
+            } ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                formData.workflow_type === 'SEQUENTIAL' ? 'bg-sky-500 text-white' : 'bg-slate-200'
+              }`}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </div>
+              <span className="font-medium text-slate-800">Sequential</span>
+            </div>
+            <p className="text-sm text-slate-600">Approvers review one after another in order</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => !isReadOnly && handleFormChange('workflow_type', 'PARALLEL')}
+            disabled={isReadOnly}
+            className={`p-4 border-2 rounded-lg text-left transition-colors ${
+              formData.workflow_type === 'PARALLEL'
+                ? 'border-sky-500 bg-sky-50'
+                : 'border-slate-200 hover:border-slate-300'
+            } ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                formData.workflow_type === 'PARALLEL' ? 'bg-sky-500 text-white' : 'bg-slate-200'
+              }`}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </div>
+              <span className="font-medium text-slate-800">Parallel</span>
+            </div>
+            <p className="text-sm text-slate-600">All approvers review at the same time</p>
+          </button>
+        </div>
+        {errors.workflow_type && <p className="mt-1 text-sm text-red-500">{errors.workflow_type}</p>}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">
+          Description (Optional)
+        </label>
+        <textarea
+          value={formData.description}
+          onChange={(e) => handleFormChange('description', e.target.value)}
+          disabled={isReadOnly}
+          rows={3}
+          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-100"
+          placeholder="Describe the workflow purpose..."
+        />
+      </div>
+    </div>
+  );
+
+  // Step 1: Add Approval Steps
+  const renderStepsStep = () => (
+    <div className="max-w-4xl mx-auto">
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-sky-50 rounded-full mb-4">
+          <UsersIcon className="w-8 h-8 text-sky-500" />
+        </div>
+        <h2 className="text-xl font-semibold text-slate-800">Add Approval Steps</h2>
+        <p className="text-slate-600 mt-1">
+          {formData.workflow_type === 'SEQUENTIAL'
+            ? 'Add approvers in the order they should review'
+            : 'Add all approvers who will review simultaneously'}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-6">
+        {/* Steps List */}
+        <div className="bg-white border border-slate-200 rounded-lg">
+          <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-800">
+              {formData.workflow_type === 'SEQUENTIAL' ? 'Approval Order' : 'Approvers'}
+            </h3>
+            {!isReadOnly && (
+              <button
+                onClick={handleAddStep}
+                className="flex items-center gap-2 px-3 py-1.5 bg-sky-500 text-white text-sm rounded-lg hover:bg-sky-600 transition-colors"
+              >
+                <PlusIcon />
+                Add {formData.workflow_type === 'SEQUENTIAL' ? 'Step' : 'Approver'}
+              </button>
+            )}
+          </div>
+
+          <div className="p-4">
+            {steps.length === 0 ? (
+              <div className="text-center py-8">
+                <EmptyIcon className="mx-auto mb-3" />
+                <p className="text-slate-500 mb-4">No {formData.workflow_type === 'SEQUENTIAL' ? 'steps' : 'approvers'} added yet</p>
+                {!isReadOnly && (
+                  <button
+                    onClick={handleAddStep}
+                    className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
+                  >
+                    Add First {formData.workflow_type === 'SEQUENTIAL' ? 'Step' : 'Approver'}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={steps.map((s, i) => s.id || `temp-${i}`)} strategy={verticalListSortingStrategy}>
+                  {steps.map((step, index) => (
+                    <SortableStep
+                      key={step.id || `temp-${index}`}
+                      step={step}
+                      index={index}
+                      onEdit={handleEditStep}
+                      onDelete={handleDeleteStep}
+                      isReadOnly={isReadOnly}
+                      users={users}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+            )}
+          </div>
+        </div>
+
+        {/* Step Editor */}
+        <div>
+          {editingStepIndex !== null ? (
+            <StepEditor
+              step={steps[editingStepIndex]}
+              onSave={handleSaveStep}
+              onCancel={() => setEditingStepIndex(null)}
+              users={users}
+            />
+          ) : (
+            <div className="bg-slate-50 border border-slate-200 border-dashed rounded-lg p-8 text-center h-full flex flex-col items-center justify-center">
+              <SettingsIcon className="w-12 h-12 text-slate-300 mb-3" />
+              <p className="text-slate-500">Click on a step to configure it</p>
+              <p className="text-slate-400 text-sm mt-1">or add a new step to get started</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Step 2: Review & Create
+  const renderReviewStep = () => (
+    <div className="max-w-2xl mx-auto">
+      <div className="text-center mb-8">
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-50 rounded-full mb-4">
+          <svg className="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-semibold text-slate-800">Review & Create</h2>
+        <p className="text-slate-600 mt-1">Review your workflow before creating it</p>
+      </div>
+
+      {/* Summary Card */}
+      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+          <h3 className="font-semibold text-slate-800">Workflow Summary</h3>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Workflow Name</p>
+              <p className="text-sm font-medium text-slate-800 mt-1">{formData.name}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Workflow Type</p>
+              <p className="text-sm font-medium text-slate-800 mt-1">
+                {formData.workflow_type === 'SEQUENTIAL' ? 'Sequential (Step by step)' : 'Parallel (All at once)'}
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs text-slate-500 uppercase tracking-wide">Associated Form</p>
+            <p className="text-sm font-medium text-slate-800 mt-1">{getFormName(formData.form)}</p>
+          </div>
+
+          {formData.description && (
+            <div>
+              <p className="text-xs text-slate-500 uppercase tracking-wide">Description</p>
+              <p className="text-sm text-slate-600 mt-1">{formData.description}</p>
+            </div>
+          )}
+
+          <div className="border-t border-slate-200 pt-4">
+            <p className="text-xs text-slate-500 uppercase tracking-wide mb-3">
+              {formData.workflow_type === 'SEQUENTIAL' ? 'Approval Order' : 'Approvers'} ({steps.length})
+            </p>
+            <div className="space-y-2">
+              {steps.map((step, index) => (
+                <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+                    formData.workflow_type === 'SEQUENTIAL' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'
+                  }`}>
+                    {index + 1}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-800">{step.name}</p>
+                    <p className="text-xs text-slate-500">Approver: {getUserName(step.assigned_user)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Info Box */}
+      <div className="mt-4 bg-sky-50 border border-sky-200 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <InfoIcon className="flex-shrink-0 mt-0.5 text-sky-500" />
+          <div>
+            <p className="text-sm font-medium text-sky-800">What happens next?</p>
+            <p className="text-sm text-sky-600">
+              After creating, the workflow will be in Draft status. Activate it when you're ready to start using it with form submissions.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20">
         <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={onClose}></div>
 
-        <div className="relative bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden z-10">
+        <div className="relative bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden z-10">
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
             <div className="flex items-center gap-3">
@@ -690,6 +1098,9 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
             </button>
           </div>
 
+          {/* Step Indicator */}
+          {!isReadOnly && <StepIndicator />}
+
           {/* Message */}
           {message.text && (
             <div className={`mx-6 mt-4 p-3 rounded-lg ${
@@ -701,264 +1112,71 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
             </div>
           )}
 
-          {/* Tabs */}
-          <div className="border-b border-slate-200">
-            <div className="flex px-6">
-              <button
-                onClick={() => setActiveTab('basic')}
-                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'basic'
-                    ? 'text-sky-600 border-sky-500'
-                    : 'text-slate-500 border-transparent hover:text-slate-700'
-                }`}
-              >
-                Basic Information
-              </button>
-              <button
-                onClick={() => setActiveTab('steps')}
-                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'steps'
-                    ? 'text-sky-600 border-sky-500'
-                    : 'text-slate-500 border-transparent hover:text-slate-700'
-                }`}
-              >
-                Workflow Steps
-              </button>
-            </div>
-          </div>
-
           {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
-            {activeTab === 'basic' && (
-              <div className="space-y-6">
-                {!workflow && (
-                  <div className="bg-sky-50 border border-sky-200 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <InfoIcon className="flex-shrink-0 mt-0.5 text-sky-500" />
-                      <div>
-                        <p className="text-sm font-medium text-sky-800">One Workflow Per Form</p>
-                        <p className="text-sm text-sky-600">Each form can only have one workflow. Only forms without workflows are available for selection.</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Workflow Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => handleFormChange('name', e.target.value)}
-                    disabled={isReadOnly}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-100 ${
-                      errors.name ? 'border-red-300' : 'border-slate-300'
-                    }`}
-                    placeholder="e.g., Leave Request Approval"
-                  />
-                  {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Associated Form <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formData.form}
-                      onChange={(e) => {
-                        const selectedValue = e.target.value;
-                        // Prevent selecting forms that already have workflows
-                        if (selectedValue && formsWithWorkflows.has(String(selectedValue))) {
-                          return;
-                        }
-                        handleFormChange('form', selectedValue);
-                        setSelectedForm(selectedValue);
-                      }}
-                      disabled={isReadOnly || workflow !== null}
-                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-100 ${
-                        errors.form ? 'border-red-300' : 'border-slate-300'
-                      }`}
-                    >
-                      <option value="">Select a form</option>
-                      {availableForms
-                        .filter(f => !formsWithWorkflows.has(String(f.id)))
-                        .map(f => (
-                          <option key={f.id} value={f.id}>
-                            {f.name} ({f.department_name})
-                          </option>
-                        ))}
-                      {availableForms.some(f => formsWithWorkflows.has(String(f.id))) && (
-                        <optgroup label="── Unavailable (already have workflow) ──">
-                          {availableForms
-                            .filter(f => formsWithWorkflows.has(String(f.id)))
-                            .map(f => (
-                              <option key={f.id} value={f.id} disabled className="text-slate-400">
-                                {f.name} ({f.department_name})
-                              </option>
-                            ))}
-                        </optgroup>
-                      )}
-                    </select>
-                    {errors.form && <p className="mt-1 text-sm text-red-500">{errors.form}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Workflow Type <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      value={formData.workflow_type}
-                      onChange={(e) => handleFormChange('workflow_type', e.target.value)}
-                      disabled={isReadOnly}
-                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-100 ${
-                        errors.workflow_type ? 'border-red-300' : 'border-slate-300'
-                      }`}
-                    >
-                      <option value="">Select workflow type</option>
-                      <option value="SEQUENTIAL">Sequential (Step by step)</option>
-                      <option value="PARALLEL">Parallel (All at once)</option>
-                    </select>
-                    {errors.workflow_type && <p className="mt-1 text-sm text-red-500">{errors.workflow_type}</p>}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => handleFormChange('description', e.target.value)}
-                    disabled={isReadOnly}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 disabled:bg-slate-100"
-                    placeholder="Describe the workflow purpose and process"
-                  />
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.allow_comments}
-                      onChange={(e) => handleFormChange('allow_comments', e.target.checked)}
-                      disabled={isReadOnly}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500 peer-disabled:opacity-50"></div>
-                  </label>
-                  <span className="text-sm text-slate-700">Allow approvers to add comments</span>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'steps' && (
-              <div className="grid grid-cols-2 gap-6" style={{ minHeight: 400 }}>
-                <div>
-                  <div className="bg-white border border-slate-200 rounded-lg">
-                    <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-slate-800">Workflow Steps</h3>
-                      {!isReadOnly && (
-                        <button
-                          onClick={handleAddStep}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-sky-500 text-white text-sm rounded-lg hover:bg-sky-600 transition-colors"
-                        >
-                          <PlusIcon />
-                          Add Step
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="p-4">
-                      {steps.length === 0 ? (
-                        <div className="text-center py-8">
-                          <EmptyIcon className="mx-auto mb-3" />
-                          <p className="text-slate-500 mb-4">No steps added yet</p>
-                          {!isReadOnly && (
-                            <button
-                              onClick={handleAddStep}
-                              className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
-                            >
-                              Add First Step
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        <DndContext
-                          sensors={sensors}
-                          collisionDetection={closestCenter}
-                          onDragEnd={handleDragEnd}
-                        >
-                          <SortableContext
-                            items={steps.map((s, i) => s.id || `temp-${i}`)}
-                            strategy={verticalListSortingStrategy}
-                          >
-                            {steps.map((step, index) => (
-                              <SortableStep
-                                key={step.id || `temp-${index}`}
-                                step={step}
-                                index={index}
-                                onEdit={handleEditStep}
-                                onDelete={handleDeleteStep}
-                                isReadOnly={isReadOnly}
-                                users={users}
-                              />
-                            ))}
-                          </SortableContext>
-                        </DndContext>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  {editingStepIndex !== null ? (
-                    <StepEditor
-                      step={steps[editingStepIndex]}
-                      onSave={handleSaveStep}
-                      onCancel={() => setEditingStepIndex(null)}
-                      users={users}
-                    />
-                  ) : (
-                    <div className="bg-slate-50 border border-slate-200 border-dashed rounded-lg p-8 text-center">
-                      <SettingsIcon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                      <p className="text-slate-500">Select a step to configure or add a new step</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+          <div className="p-6 overflow-y-auto max-h-[calc(90vh-280px)]">
+            {currentStep === 0 && renderBasicInfoStep()}
+            {currentStep === 1 && renderStepsStep()}
+            {currentStep === 2 && renderReviewStep()}
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
-            >
-              Cancel
-            </button>
-            {!isReadOnly && (
+          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between">
+            <div>
+              {currentStep > 0 && !isReadOnly && (
+                <button
+                  onClick={handlePrevStep}
+                  className="flex items-center gap-2 px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  Back
+                </button>
+              )}
+            </div>
+
+            <div className="flex gap-3">
               <button
-                onClick={handleSubmit}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={onClose}
+                className="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
               >
-                {loading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <SaveIcon />
-                    {workflow ? 'Update Workflow' : 'Create Workflow'}
-                  </>
-                )}
+                Cancel
               </button>
-            )}
+
+              {!isReadOnly && (
+                currentStep < 2 ? (
+                  <button
+                    onClick={handleNextStep}
+                    className="flex items-center gap-2 px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
+                  >
+                    Next
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        {workflow ? 'Update Workflow' : 'Create Workflow'}
+                      </>
+                    )}
+                  </button>
+                )
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -111,8 +111,20 @@ const getStepTypeStyles = (type) => {
   return styles[type] || styles['APPROVAL'];
 };
 
+// User-friendly step type labels
+const getStepTypeLabel = (type) => {
+  const labels = {
+    'APPROVAL': 'Approval',
+    'REVIEW': 'Review',
+    'NOTIFICATION': 'Notification',
+    'CONDITIONAL': 'Conditional',
+    'SYSTEM': 'System Action'
+  };
+  return labels[type] || type;
+};
+
 // Sortable Step Component
-const SortableStep = ({ step, index, onEdit, onDelete, isReadOnly }) => {
+const SortableStep = ({ step, index, onEdit, onDelete, isReadOnly, users }) => {
   const {
     attributes,
     listeners,
@@ -129,6 +141,36 @@ const SortableStep = ({ step, index, onEdit, onDelete, isReadOnly }) => {
   };
 
   const typeStyles = getStepTypeStyles(step.step_type);
+
+  // Get the assigned user name
+  const getAssignedUserName = () => {
+    // First check if assigned_user_name is already provided (from API)
+    if (step.assigned_user_name) return step.assigned_user_name;
+    // Otherwise look up from users array
+    if (step.assigned_user && users) {
+      const user = users.find(u => u.id === step.assigned_user || u.id === parseInt(step.assigned_user));
+      if (user) {
+        return user.first_name && user.last_name
+          ? `${user.first_name} ${user.last_name}`
+          : user.username;
+      }
+    }
+    return null;
+  };
+
+  const assignedUserName = getAssignedUserName();
+
+  // User-friendly role labels
+  const getRoleLabel = (role) => {
+    const labels = {
+      'MANAGER': 'Manager',
+      'ADMIN': 'Admin',
+      'USER': 'User',
+      'DEPARTMENT_HEAD': 'Department Head',
+      'SUPERVISOR': 'Supervisor'
+    };
+    return labels[role] || role;
+  };
 
   return (
     <div ref={setNodeRef} style={style} className="mb-2">
@@ -152,21 +194,21 @@ const SortableStep = ({ step, index, onEdit, onDelete, isReadOnly }) => {
             <div className="font-medium text-slate-800 truncate">{step.name}</div>
             <div className="flex flex-wrap gap-1 mt-1">
               <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${typeStyles.bg} ${typeStyles.text}`}>
-                {step.step_type}
+                {getStepTypeLabel(step.step_type)}
               </span>
-              {step.assigned_user_name && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
-                  <UserIcon /> {step.assigned_user_name}
+              {assignedUserName && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-sky-100 text-sky-700">
+                  <UserIcon /> {assignedUserName}
                 </span>
               )}
               {step.assigned_role && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
-                  <UsersIcon /> {step.assigned_role}
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
+                  <UsersIcon /> {getRoleLabel(step.assigned_role)}
                 </span>
               )}
               {step.time_limit_hours && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
-                  <ClockIcon /> {step.time_limit_hours}h
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+                  <ClockIcon /> {step.time_limit_hours}h limit
                 </span>
               )}
             </div>
@@ -1081,6 +1123,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
                                 onEdit={handleEditStep}
                                 onDelete={handleDeleteStep}
                                 isReadOnly={isReadOnly}
+                                users={users}
                               />
                             ))}
                           </SortableContext>

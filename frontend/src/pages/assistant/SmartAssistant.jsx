@@ -102,7 +102,7 @@ const ChatMessage = ({ message, isUser, user }) => {
         </div>
       </div>
       {isUser && (
-        <div className={`flex-shrink-0 w-8 h-8 rounded-full ${getUserColor(user)} flex items-center justify-center ml-3 shadow-md`}>
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center ml-3 shadow-md">
           <span className="text-white text-sm font-bold">{getUserInitials(user)}</span>
         </div>
       )}

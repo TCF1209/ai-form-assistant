@@ -1,7 +1,28 @@
 """
 Audit logging utility functions.
 """
+from django.db.models import Model
 from .models import AuditLog
+
+
+def make_json_serializable(obj):
+    """Convert an object to a JSON-serializable format."""
+    if obj is None:
+        return None
+    if isinstance(obj, Model):
+        # For Django models, return their ID and string representation
+        return {'id': str(obj.pk), 'repr': str(obj)}
+    if isinstance(obj, dict):
+        return {k: make_json_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [make_json_serializable(item) for item in obj]
+    if isinstance(obj, (str, int, float, bool)):
+        return obj
+    # For other types, try to convert to string
+    try:
+        return str(obj)
+    except Exception:
+        return repr(obj)
 
 
 def log_action(user, action, model_name, object_id, object_repr='', changes=None, request=None):
@@ -27,13 +48,16 @@ def log_action(user, action, model_name, object_id, object_repr='', changes=None
         ip_address = get_client_ip(request)
         user_agent = request.META.get('HTTP_USER_AGENT', '')
 
+    # Make changes JSON-serializable
+    safe_changes = make_json_serializable(changes) if changes else {}
+
     return AuditLog.objects.create(
         user=user,
         action=action,
         model_name=model_name,
         object_id=str(object_id),
         object_repr=object_repr,
-        changes=changes or {},
+        changes=safe_changes,
         ip_address=ip_address,
         user_agent=user_agent
     )

@@ -194,6 +194,35 @@ const getFullName = (userDetail) => {
   return userDetail.username || 'Unknown';
 };
 
+// Format field name to readable label (e.g., "employee_name" → "Employee Name")
+const formatFieldLabel = (fieldName) => {
+  if (!fieldName) return '';
+  return fieldName
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+// Format workflow type to user-friendly label
+const formatWorkflowType = (type) => {
+  const types = {
+    'PARALLEL': 'Parallel',
+    'SEQUENTIAL': 'Sequential',
+    'CONDITIONAL': 'Conditional'
+  };
+  return types[type] || type;
+};
+
+// Format field value for display
+const formatFieldValue = (value) => {
+  if (value === null || value === undefined) return '-';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (Array.isArray(value)) return value.join(', ');
+  return String(value);
+};
+
 const SubmissionsManagement = () => {
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -556,11 +585,7 @@ const SubmissionsManagement = () => {
                 {/* Submission Info */}
                 <div className="bg-slate-50 rounded-lg p-4">
                   <h4 className="font-medium text-slate-800 mb-4">Submission Information</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-sm text-slate-500">Submission Number</p>
-                      <p className="font-medium text-slate-800">{selectedSubmission.submission_number}</p>
-                    </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <p className="text-sm text-slate-500">Form</p>
                       <p className="font-medium text-slate-800">{selectedSubmission.form_detail?.name}</p>
@@ -570,12 +595,8 @@ const SubmissionsManagement = () => {
                       <p className="font-medium text-slate-800">{selectedSubmission.form_detail?.department_name || 'N/A'}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-slate-500">Status</p>
-                      <StatusBadge status={selectedSubmission.status} />
-                    </div>
-                    <div>
                       <p className="text-sm text-slate-500">Submitted By</p>
-                      <p className="font-medium text-slate-800">{selectedSubmission.submitted_by_detail?.username}</p>
+                      <p className="font-medium text-slate-800">{getFullName(selectedSubmission.submitted_by_detail)}</p>
                     </div>
                     <div>
                       <p className="text-sm text-slate-500">Submitted At</p>
@@ -587,23 +608,20 @@ const SubmissionsManagement = () => {
                 {/* Workflow Info */}
                 {workflowInstance && (
                   <div className="bg-slate-50 rounded-lg p-4">
-                    <h4 className="font-medium text-slate-800 mb-4">Workflow Information</h4>
-                    <div className="grid grid-cols-3 gap-4 mb-4">
-                      <div>
-                        <p className="text-sm text-slate-500">Workflow</p>
-                        <p className="font-medium text-slate-800">{workflowInstance.workflow_detail?.name}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-slate-500">Type</p>
-                        <p className="font-medium text-slate-800">{workflowInstance.workflow_detail?.type}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-slate-500">Status</p>
+                    <h4 className="font-medium text-slate-800 mb-4">Workflow Status</h4>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-4">
                         <StatusBadge status={workflowInstance.status} />
+                        <span className="text-sm text-slate-500">
+                          {workflowInstance.workflow_detail?.name} ({formatWorkflowType(workflowInstance.workflow_detail?.type)})
+                        </span>
                       </div>
                     </div>
                     <div>
-                      <p className="text-sm text-slate-500 mb-2">Progress</p>
+                      <div className="flex justify-between text-sm text-slate-500 mb-1">
+                        <span>Progress</span>
+                        <span>{getProgressPercent(workflowInstance)}%</span>
+                      </div>
                       <ProgressBar
                         percent={getProgressPercent(workflowInstance)}
                         status={workflowInstance.status}
@@ -614,10 +632,23 @@ const SubmissionsManagement = () => {
 
                 {/* Submitted Data */}
                 <div className="bg-slate-50 rounded-lg p-4">
-                  <h4 className="font-medium text-slate-800 mb-4">Submitted Data</h4>
-                  <pre className="bg-white p-4 rounded-lg text-sm overflow-auto max-h-48 border border-slate-200">
-                    {JSON.stringify(selectedSubmission.data, null, 2)}
-                  </pre>
+                  <h4 className="font-medium text-slate-800 mb-4">Form Responses</h4>
+                  <div className="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
+                    {selectedSubmission.data && Object.keys(selectedSubmission.data).length > 0 ? (
+                      Object.entries(selectedSubmission.data).map(([key, value]) => (
+                        <div key={key} className="flex px-4 py-3">
+                          <div className="w-1/3 text-sm text-slate-500">
+                            {formatFieldLabel(key)}
+                          </div>
+                          <div className="w-2/3 text-sm font-medium text-slate-800">
+                            {formatFieldValue(value)}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-4 py-3 text-sm text-slate-500">No data submitted</div>
+                    )}
+                  </div>
                 </div>
               </div>
 

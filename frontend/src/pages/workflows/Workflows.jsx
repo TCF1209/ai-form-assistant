@@ -193,6 +193,28 @@ const Workflows = () => {
     }
   };
 
+  // User-friendly type labels
+  const getTypeLabel = (type) => {
+    const labels = {
+      'SEQUENTIAL': 'Sequential',
+      'PARALLEL': 'Parallel',
+      'CONDITIONAL': 'Conditional',
+      'HYBRID': 'Hybrid'
+    };
+    return labels[type] || type;
+  };
+
+  // User-friendly status labels
+  const getStatusLabel = (status) => {
+    const labels = {
+      'ACTIVE': 'Active',
+      'INACTIVE': 'Inactive',
+      'DRAFT': 'Draft',
+      'ARCHIVED': 'Archived'
+    };
+    return labels[status] || status;
+  };
+
   const filteredWorkflows = workflows.filter(workflow => {
     const matchesSearch = !searchText ||
       workflow.name.toLowerCase().includes(searchText.toLowerCase()) ||
@@ -354,13 +376,7 @@ const Workflows = () => {
                     Name
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Code
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                     Form
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Department
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                     Type
@@ -390,23 +406,20 @@ const Workflows = () => {
                         {workflow.name}
                       </button>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <code className="text-sm text-slate-600">{workflow.code}</code>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">
-                      {workflow.form_name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">
-                      {workflow.department_name}
+                    <td className="px-6 py-4">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">{workflow.form_name}</p>
+                        <p className="text-sm text-slate-500">{workflow.department_name}</p>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded ${getTypeColor(workflow.workflow_type)}`}>
-                        {workflow.workflow_type}
+                        {getTypeLabel(workflow.workflow_type)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded ${getStatusColor(workflow.status)}`}>
-                        {workflow.status}
+                        {getStatusLabel(workflow.status)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -415,7 +428,7 @@ const Workflows = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                      {new Date(workflow.created_at).toLocaleDateString()}
+                      {new Date(workflow.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="relative inline-block text-left">

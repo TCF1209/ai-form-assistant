@@ -43,7 +43,8 @@ const AuditLog = () => {
           api.get('/audit-logs/models/')
         ]);
         setActions(actionsRes.data);
-        setModels(modelsRes.data);
+        // Deduplicate models to prevent React key warning
+        setModels([...new Set(modelsRes.data)]);
       } catch (err) {
         console.error('Error fetching filter options:', err);
       }

@@ -262,12 +262,28 @@ class WorkflowApprovalSerializer(serializers.ModelSerializer):
     def get_submission_detail(self, obj):
         if obj.workflow_instance and obj.workflow_instance.submission:
             submission = obj.workflow_instance.submission
+            form_detail = None
+            if submission.form:
+                form_detail = {
+                    'id': str(submission.form.id),
+                    'name': submission.form.name,
+                    'code': submission.form.code,
+                    'department_name': submission.form.department.name if submission.form.department else None
+                }
+            submitted_by_detail = None
+            if submission.submitted_by:
+                full_name = f"{submission.submitted_by.first_name} {submission.submitted_by.last_name}".strip()
+                submitted_by_detail = {
+                    'id': str(submission.submitted_by.id),
+                    'username': submission.submitted_by.username,
+                    'email': submission.submitted_by.email,
+                    'full_name': full_name if full_name else submission.submitted_by.username
+                }
             return {
                 'id': str(submission.id),
                 'submission_number': submission.submission_number,
-                'form_name': submission.form.name if submission.form else None,
-                'form_code': submission.form.code if submission.form else None,
-                'submitted_by': submission.submitted_by.username if submission.submitted_by else None,
+                'form_detail': form_detail,
+                'submitted_by_detail': submitted_by_detail,
                 'status': submission.status,
                 'data': submission.data
             }

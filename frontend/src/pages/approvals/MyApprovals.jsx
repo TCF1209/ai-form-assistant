@@ -108,7 +108,7 @@ const StatCard = ({ title, value, icon, color }) => {
   );
 };
 
-// Status Badge Component
+// Status Badge Component with user-friendly labels
 const StatusBadge = ({ status }) => {
   const statusStyles = {
     'PENDING': 'bg-amber-100 text-amber-700',
@@ -118,10 +118,63 @@ const StatusBadge = ({ status }) => {
     'SKIPPED': 'bg-slate-100 text-slate-700'
   };
 
+  const statusLabels = {
+    'PENDING': 'Pending',
+    'APPROVED': 'Approved',
+    'REJECTED': 'Rejected',
+    'DELEGATED': 'Delegated',
+    'SKIPPED': 'Skipped'
+  };
+
   return (
     <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${statusStyles[status] || statusStyles.PENDING}`}>
-      {status}
+      {statusLabels[status] || status}
     </span>
+  );
+};
+
+// Format field name helper (snake_case to Title Case)
+const formatFieldName = (fieldName) => {
+  return fieldName
+    .replace(/_/g, ' ')
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/\b\w/g, char => char.toUpperCase())
+    .trim();
+};
+
+// Check if value is a date string
+const isDateString = (value) => {
+  if (typeof value !== 'string') return false;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+};
+
+// Format field value
+const formatFieldValue = (value) => {
+  if (value === null || value === undefined || value === '') return '-';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (isDateString(value)) {
+    return new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  if (Array.isArray(value)) return value.join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
+// Formatted Data Display Component
+const FormattedDataDisplay = ({ data }) => {
+  if (!data || Object.keys(data).length === 0) {
+    return <p className="text-slate-500 text-sm">No data</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {Object.entries(data).map(([key, value]) => (
+        <div key={key} className="flex border-b border-slate-100 pb-2 last:border-0">
+          <div className="w-1/3 text-sm text-slate-500">{formatFieldName(key)}</div>
+          <div className="w-2/3 text-sm font-medium text-slate-800">{formatFieldValue(value)}</div>
+        </div>
+      ))}
+    </div>
   );
 };
 
@@ -397,8 +450,8 @@ const MyApprovals = () => {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        {/* Cards Layout */}
+        <div className="p-4">
           {loading ? (
             <div className="flex justify-center items-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
@@ -414,109 +467,133 @@ const MyApprovals = () => {
               </p>
             </div>
           ) : (
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Step
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Workflow
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Due Date
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-slate-200">
-                {approvals.map((approval) => (
-                  <tr key={approval.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <p className="font-medium text-slate-800">{approval.step_detail?.name || 'N/A'}</p>
-                        <p className="text-xs text-slate-500">
-                          Step {(approval.step_detail?.order || 0) + 1} • {approval.step_detail?.type}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {approvals.map((approval) => (
+                <div
+                  key={approval.id}
+                  className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-md transition-shadow"
+                >
+                  {/* Card Header - Form Name & Status */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-slate-800 truncate">
+                        {approval.submission_detail?.form_detail?.name || 'Form Submission'}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {approval.submission_detail?.form_detail?.code || 'N/A'}
+                      </p>
+                    </div>
+                    <StatusBadge status={approval.status} />
+                  </div>
+
+                  {/* Card Body - Details */}
+                  <div className="space-y-2 mb-4">
+                    {/* Submitted By */}
+                    <div className="flex items-center gap-2 text-sm">
+                      <div className="w-6 h-6 rounded-full bg-sky-100 flex items-center justify-center">
+                        <UserIcon className="text-sky-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-slate-600 truncate">
+                          {approval.submission_detail?.submitted_by_detail?.full_name ||
+                           approval.submission_detail?.submitted_by_detail?.username ||
+                           'Unknown User'}
                         </p>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <p className="text-sm text-slate-700">{approval.workflow_instance}</p>
-                        <p className="text-xs text-slate-500">
-                          Assigned: {formatTimeAgo(approval.assigned_at)}
+                    </div>
+
+                    {/* Step Info */}
+                    <div className="flex items-center gap-2 text-sm">
+                      <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center">
+                        <span className="text-xs font-bold text-amber-600">
+                          {(approval.step_detail?.order || 0) + 1}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-slate-600 truncate">
+                          {approval.step_detail?.name || 'Review Step'}
                         </p>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <StatusBadge status={approval.status} />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {approval.due_date ? (
-                        <div className="flex items-center gap-1 text-sm">
-                          <CalendarIcon />
-                          <span className={new Date(approval.due_date) < new Date() ? 'text-red-600' : 'text-slate-600'}>
-                            {new Date(approval.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
+                    </div>
+
+                    {/* Time Assigned */}
+                    <div className="flex items-center gap-2 text-sm">
+                      <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
+                        <ClockIcon className="w-3.5 h-3.5 text-slate-500" />
+                      </div>
+                      <p className="text-slate-500">
+                        {formatTimeAgo(approval.assigned_at)}
+                      </p>
+                    </div>
+
+                    {/* Due Date (if exists) */}
+                    {approval.due_date && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                          new Date(approval.due_date) < new Date() ? 'bg-red-100' : 'bg-emerald-100'
+                        }`}>
+                          <CalendarIcon className={`w-3.5 h-3.5 ${
+                            new Date(approval.due_date) < new Date() ? 'text-red-500' : 'text-emerald-500'
+                          }`} />
                         </div>
-                      ) : (
-                        <span className="text-slate-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleViewSubmission(approval)}
-                          className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors"
-                          title="View Submission"
-                        >
-                          <EyeIcon />
-                        </button>
-                        {approval.status === 'PENDING' && (
-                          <>
-                            <button
-                              onClick={() => {
-                                setSelectedApproval(approval);
-                                setActionModal({ visible: true, type: 'approve' });
-                              }}
-                              className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
-                              title="Approve"
-                            >
-                              <CheckCircleIcon />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedApproval(approval);
-                                setActionModal({ visible: true, type: 'reject' });
-                              }}
-                              className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Reject"
-                            >
-                              <XCircleIcon />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedApproval(approval);
-                                setActionModal({ visible: true, type: 'delegate' });
-                              }}
-                              className="p-2 text-sky-500 hover:bg-sky-50 rounded-lg transition-colors"
-                              title="Delegate"
-                            >
-                              <SwapIcon />
-                            </button>
-                          </>
-                        )}
+                        <p className={new Date(approval.due_date) < new Date() ? 'text-red-600 font-medium' : 'text-slate-500'}>
+                          Due: {new Date(approval.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </p>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    )}
+                  </div>
+
+                  {/* Card Footer - Actions */}
+                  <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      onClick={() => handleViewSubmission(approval)}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                      <EyeIcon className="w-4 h-4" />
+                      View
+                    </button>
+                    {approval.status === 'PENDING' && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedApproval(approval);
+                            setActionModal({ visible: true, type: 'approve' });
+                          }}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg transition-colors"
+                        >
+                          <CheckCircleIcon className="w-4 h-4" />
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedApproval(approval);
+                            setActionModal({ visible: true, type: 'reject' });
+                          }}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
+                        >
+                          <XCircleIcon className="w-4 h-4" />
+                          Reject
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Delegate option for pending (smaller button) */}
+                  {approval.status === 'PENDING' && (
+                    <button
+                      onClick={() => {
+                        setSelectedApproval(approval);
+                        setActionModal({ visible: true, type: 'delegate' });
+                      }}
+                      className="w-full mt-2 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs text-sky-600 hover:bg-sky-50 rounded-lg transition-colors border border-sky-200"
+                    >
+                      <SwapIcon className="w-3.5 h-3.5" />
+                      Delegate to someone else
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
@@ -655,7 +732,11 @@ const MyApprovals = () => {
                   </div>
                   <div>
                     <p className="text-xs text-slate-500">Submitted By</p>
-                    <p className="font-medium text-slate-800">{viewModal.data.submission?.submitted_by_detail?.username}</p>
+                    <p className="font-medium text-slate-800">
+                      {viewModal.data.submission?.submitted_by_detail?.full_name ||
+                       viewModal.data.submission?.submitted_by_detail?.username ||
+                       'Unknown'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500">Form</p>
@@ -672,10 +753,10 @@ const MyApprovals = () => {
 
               {/* Form Data */}
               <div className="bg-slate-50 rounded-lg p-4">
-                <h4 className="font-medium text-slate-800 mb-3">Form Data</h4>
-                <pre className="bg-white p-3 rounded-lg text-sm overflow-auto max-h-64 border border-slate-200">
-                  {JSON.stringify(viewModal.data.submission?.data, null, 2)}
-                </pre>
+                <h4 className="font-medium text-slate-800 mb-3">Submitted Data</h4>
+                <div className="bg-white p-4 rounded-lg border border-slate-200">
+                  <FormattedDataDisplay data={viewModal.data.submission?.data} />
+                </div>
               </div>
 
               {/* Workflow Progress */}

@@ -99,22 +99,24 @@ const StatCard = ({ title, value, icon, color }) => {
 
 // Status Badge Component
 const StatusBadge = ({ status }) => {
-  const statusStyles = {
-    'DRAFT': 'bg-slate-100 text-slate-700',
-    'SUBMITTED': 'bg-sky-100 text-sky-700',
-    'PENDING': 'bg-amber-100 text-amber-700',
-    'IN_PROGRESS': 'bg-sky-100 text-sky-700',
-    'IN_REVIEW': 'bg-sky-100 text-sky-700',
-    'COMPLETED': 'bg-emerald-100 text-emerald-700',
-    'APPROVED': 'bg-emerald-100 text-emerald-700',
-    'FAILED': 'bg-red-100 text-red-700',
-    'REJECTED': 'bg-red-100 text-red-700',
-    'CANCELLED': 'bg-slate-100 text-slate-700'
+  const statusConfig = {
+    'DRAFT': { style: 'bg-slate-100 text-slate-700', label: 'Draft' },
+    'SUBMITTED': { style: 'bg-sky-100 text-sky-700', label: 'Submitted' },
+    'PENDING': { style: 'bg-amber-100 text-amber-700', label: 'Pending' },
+    'IN_PROGRESS': { style: 'bg-amber-100 text-amber-700', label: 'In Progress' },
+    'IN_REVIEW': { style: 'bg-sky-100 text-sky-700', label: 'In Review' },
+    'COMPLETED': { style: 'bg-emerald-100 text-emerald-700', label: 'Approved' },
+    'APPROVED': { style: 'bg-emerald-100 text-emerald-700', label: 'Approved' },
+    'FAILED': { style: 'bg-red-100 text-red-700', label: 'Rejected' },
+    'REJECTED': { style: 'bg-red-100 text-red-700', label: 'Rejected' },
+    'CANCELLED': { style: 'bg-slate-100 text-slate-700', label: 'Cancelled' }
   };
 
+  const config = statusConfig[status] || { style: 'bg-slate-100 text-slate-700', label: status };
+
   return (
-    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${statusStyles[status] || statusStyles.DRAFT}`}>
-      {status}
+    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${config.style}`}>
+      {config.label}
     </span>
   );
 };
@@ -167,6 +169,29 @@ const formatDate = (dateString) => {
 const formatDateTime = (dateString) => {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+// Get combined status from submission and workflow
+const getCombinedStatus = (submission) => {
+  // If there's a workflow, use workflow status
+  if (submission.workflow_instance) {
+    const workflowStatus = submission.workflow_instance.status;
+    if (workflowStatus === 'COMPLETED') return 'APPROVED';
+    if (workflowStatus === 'FAILED') return 'REJECTED';
+    if (workflowStatus === 'IN_PROGRESS') return 'IN_PROGRESS';
+    return workflowStatus;
+  }
+  // Otherwise use submission status
+  return submission.status;
+};
+
+// Get full name from user detail
+const getFullName = (userDetail) => {
+  if (!userDetail) return 'Unknown';
+  const fullName = userDetail.full_name?.trim();
+  if (fullName) return fullName;
+  // Fallback to username if no full name
+  return userDetail.username || 'Unknown';
 };
 
 const SubmissionsManagement = () => {
@@ -422,65 +447,46 @@ const SubmissionsManagement = () => {
             <table className="w-full">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Submission #</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Form</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Submitted By</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Workflow</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {submissions.map((submission) => (
                   <tr key={submission.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="font-medium text-slate-800">{submission.submission_number}</span>
-                    </td>
                     <td className="px-6 py-4">
                       <div>
-                        <p className="text-slate-800">{submission.form_detail?.name || 'N/A'}</p>
+                        <p className="font-medium text-slate-800">{submission.form_detail?.name || 'N/A'}</p>
                         <p className="text-sm text-slate-500">{submission.form_detail?.department_name || 'No Department'}</p>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <UserIcon />
-                        <span className="text-slate-700">{submission.submitted_by_detail?.username || 'Unknown'}</span>
+                        <span className="text-slate-700">{getFullName(submission.submitted_by_detail)}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-slate-600">
-                      {formatDateTime(submission.created_at)}
+                      {formatDate(submission.created_at)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <StatusBadge status={submission.status} />
-                    </td>
-                    <td className="px-6 py-4">
-                      {submission.workflow_instance ? (
-                        <div className="space-y-1.5 w-32">
-                          <StatusBadge status={submission.workflow_instance.status} />
-                          <ProgressBar
-                            percent={getProgressPercent(submission.workflow_instance)}
-                            status={submission.workflow_instance.status}
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-400 text-sm">No Workflow</span>
-                          {submission.status === 'SUBMITTED' && (
-                            <button
-                              onClick={() => handleStartWorkflow(submission)}
-                              className="p-1 text-sky-500 hover:bg-sky-50 rounded transition-colors"
-                              title="Start Workflow"
-                            >
-                              <PlayIcon />
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
+                        <StatusBadge status={getCombinedStatus(submission)} />
+                        {submission.workflow_instance && submission.workflow_instance.status === 'IN_PROGRESS' && (
+                          <div className="w-16">
+                            <ProgressBar
+                              percent={getProgressPercent(submission.workflow_instance)}
+                              status={submission.workflow_instance.status}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleViewDetails(submission)}
                           className="p-2 text-sky-500 hover:bg-sky-50 rounded-lg transition-colors"
@@ -495,6 +501,15 @@ const SubmissionsManagement = () => {
                             title="View Workflow"
                           >
                             <WorkflowIcon />
+                          </button>
+                        )}
+                        {!submission.workflow_instance && submission.status === 'SUBMITTED' && (
+                          <button
+                            onClick={() => handleStartWorkflow(submission)}
+                            className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
+                            title="Start Workflow"
+                          >
+                            <PlayIcon />
                           </button>
                         )}
                       </div>

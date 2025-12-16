@@ -188,7 +188,7 @@ class WorkflowListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Workflow
         fields = [
-            'id', 'name', 'code', 'workflow_type', 'status',
+            'id', 'name', 'code', 'form', 'workflow_type', 'status',
             'form_name', 'department_name', 'steps_count',
             'created_at'
         ]

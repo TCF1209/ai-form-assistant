@@ -473,10 +473,10 @@ const SubmissionsManagement = () => {
                       {formatDate(submission.created_at)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
+                      <div className="space-y-1.5">
                         <StatusBadge status={getCombinedStatus(submission)} />
                         {submission.workflow_instance && submission.workflow_instance.status === 'IN_PROGRESS' && (
-                          <div className="w-16">
+                          <div className="w-24">
                             <ProgressBar
                               percent={getProgressPercent(submission.workflow_instance)}
                               status={submission.workflow_instance.status}

@@ -456,7 +456,7 @@ const Reports = () => {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      const response = await api.get('/submissions/export/', {
+      const response = await api.get('/ai/reports/export/', {
         params: { format: 'excel', days: dateRange },
         responseType: 'blob',
       });
@@ -481,7 +481,7 @@ const Reports = () => {
   const handleExportPDF = async () => {
     setExporting(true);
     try {
-      const response = await api.get('/submissions/export/', {
+      const response = await api.get('/ai/reports/export/', {
         params: { format: 'pdf', days: dateRange },
         responseType: 'blob',
       });

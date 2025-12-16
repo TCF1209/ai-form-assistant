@@ -69,13 +69,7 @@ urlpatterns = [
     # AI Integration endpoints
     path('ai/', include('ai_integration.urls')),
 
-    # Explicit submission action endpoints (to ensure they're registered properly)
-    path('submissions/export/', FormSubmissionViewSet.as_view({'get': 'export'}), name='submission-export'),
-    path('submissions/stats/', FormSubmissionViewSet.as_view({'get': 'stats'}), name='submission-stats'),
-
     # All API endpoints (forms, users, departments, workflows, etc.)
+    # Note: export/stats endpoints are defined in core/urls.py to avoid routing issues
     path('', include(router.urls)),
-
-    # Additional app endpoints can be added here
-    # path('analytics/', include('analytics.urls')),
 ]

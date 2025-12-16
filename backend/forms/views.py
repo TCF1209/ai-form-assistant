@@ -813,9 +813,10 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(submission)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'])
-    def export(self, request):
-        """Export submissions to Excel or PDF format (Manager/Admin only)."""
+    # NOTE: export functionality moved to core/urls.py to fix routing issues
+    # The @action decorator was removed to prevent router conflicts
+    def _export_disabled(self, request):
+        """Export submissions - DISABLED, use /api/v1/submissions/export/ instead."""
         if request.user.role not in ['ADMIN', 'MANAGER']:
             return Response(
                 {"error": "Only Form Managers and Admins can export submissions."},
@@ -1012,9 +1013,10 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="submissions_report_{timezone.now().strftime("%Y%m%d")}.pdf"'
         return response
 
-    @action(detail=False, methods=['get'])
-    def stats(self, request):
-        """Get submission statistics for reports dashboard (Manager/Admin only)."""
+    # NOTE: stats functionality can be added to core/urls.py if needed
+    # The @action decorator was removed to prevent router conflicts
+    def _stats_disabled(self, request):
+        """Get submission statistics - DISABLED."""
         if request.user.role not in ['ADMIN', 'MANAGER']:
             return Response(
                 {"error": "Only Form Managers and Admins can view statistics."},

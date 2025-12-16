@@ -35,6 +35,39 @@ const AIIcon = () => (
   </svg>
 );
 
+// Sparkles icon for AI avatar
+const SparklesIcon = () => (
+  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+  </svg>
+);
+
+// Helper to get user initials
+const getUserInitials = (user) => {
+  if (!user) return 'U';
+  const firstName = user.first_name || '';
+  const lastName = user.last_name || '';
+  if (firstName && lastName) {
+    return `${firstName[0]}${lastName[0]}`.toUpperCase();
+  }
+  if (firstName) return firstName[0].toUpperCase();
+  if (user.username) return user.username[0].toUpperCase();
+  return 'U';
+};
+
+// Helper to get consistent color based on user name
+const getUserColor = (user) => {
+  if (!user) return 'bg-slate-400';
+  const colors = [
+    'bg-rose-500', 'bg-pink-500', 'bg-fuchsia-500', 'bg-purple-500',
+    'bg-violet-500', 'bg-indigo-500', 'bg-blue-500', 'bg-cyan-500',
+    'bg-teal-500', 'bg-emerald-500', 'bg-green-500', 'bg-amber-500'
+  ];
+  const name = user.username || user.first_name || 'user';
+  const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return colors[hash % colors.length];
+};
+
 const FormIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -48,12 +81,12 @@ const EditIcon = () => (
 );
 
 // Message component
-const ChatMessage = ({ message, isUser }) => {
+const ChatMessage = ({ message, isUser, user }) => {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
       {!isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center mr-3">
-          <span className="text-white text-sm font-bold">AI</span>
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center mr-3 shadow-md text-white">
+          <SparklesIcon />
         </div>
       )}
       <div
@@ -69,8 +102,8 @@ const ChatMessage = ({ message, isUser }) => {
         </div>
       </div>
       {isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-300 flex items-center justify-center ml-3">
-          <span className="text-slate-600 text-sm font-bold">U</span>
+        <div className={`flex-shrink-0 w-8 h-8 rounded-full ${getUserColor(user)} flex items-center justify-center ml-3 shadow-md`}>
+          <span className="text-white text-sm font-bold">{getUserInitials(user)}</span>
         </div>
       )}
     </div>
@@ -496,8 +529,8 @@ const FormCompletionCard = ({ form, formData, onSubmit, onEdit, isSubmitting }) 
 // Typing indicator component
 const TypingIndicator = () => (
   <div className="flex justify-start mb-4">
-    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center mr-3">
-      <span className="text-white text-sm font-bold">AI</span>
+    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center mr-3 shadow-md text-white">
+      <SparklesIcon />
     </div>
     <div className="bg-white px-4 py-3 rounded-2xl rounded-bl-md shadow-md">
       <div className="flex gap-1">
@@ -1007,8 +1040,8 @@ const SmartAssistant = () => {
       <div className="flex-shrink-0 bg-white border-b border-slate-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-sky-500 flex items-center justify-center">
-              <span className="text-white text-lg font-bold">AI</span>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-md text-white">
+              <SparklesIcon />
             </div>
             <div>
               <h1 className="text-lg font-bold text-slate-800">Smart Form Assistant</h1>
@@ -1039,7 +1072,7 @@ const SmartAssistant = () => {
           </div>
         ) : (
           messages.map((message, index) => (
-            <ChatMessage key={index} message={message} isUser={message.isUser} />
+            <ChatMessage key={index} message={message} isUser={message.isUser} user={user} />
           ))
         )}
 

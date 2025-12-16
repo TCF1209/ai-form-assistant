@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from forms.models import Form, FormSubmission
 from workflows.models import Workflow, WorkflowInstance
+from core.throttling import AIRateThrottle
 from .serializers import (
     FormGenerationRequestSerializer,
     FormGenerationResponseSerializer,
@@ -41,6 +42,7 @@ logger = logging.getLogger(__name__)
 class AIFormGenerationViewSet(viewsets.ViewSet):
     """ViewSet for AI-powered form generation"""
     permission_classes = [IsAuthenticated]
+    throttle_classes = [AIRateThrottle]
 
     @action(detail=False, methods=['post'])
     def generate(self, request):
@@ -120,6 +122,7 @@ class AIFormGenerationViewSet(viewsets.ViewSet):
 class ConversationalAssistantViewSet(viewsets.ViewSet):
     """ViewSet for conversational form filling assistance"""
     permission_classes = [IsAuthenticated]
+    throttle_classes = [AIRateThrottle]
 
     @action(detail=False, methods=['post'])
     def search_forms(self, request):
@@ -399,6 +402,7 @@ class NaturalLanguageQueryView(APIView):
     3. OpenAI formats the response in natural language
     """
     permission_classes = [IsAuthenticated]
+    throttle_classes = [AIRateThrottle]
 
     def post(self, request):
         """Process natural language query with AI assistance"""

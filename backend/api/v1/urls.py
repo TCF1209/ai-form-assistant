@@ -18,7 +18,7 @@ from .auth_views import (
 )
 
 # Import ViewSets for user management
-from users.views import UserViewSet, DepartmentViewSet
+from users.views import UserViewSet, DepartmentViewSet, AuditLogViewSet
 
 # Import ViewSets for forms and workflows
 from forms.views import FormViewSet, FormSubmissionViewSet
@@ -30,6 +30,7 @@ router = DefaultRouter()
 # User management
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'departments', DepartmentViewSet, basename='department')
+router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
 
 # Forms management
 router.register(r'forms', FormViewSet, basename='form')

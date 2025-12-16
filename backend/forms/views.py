@@ -22,6 +22,7 @@ from .serializers import (
 )
 from .templates import FORM_TEMPLATES
 from users.permissions import IsAdmin, IsManager, IsOwnerOrAdmin
+from users.audit import log_create, log_update, log_delete, log_submit, log_approve, log_reject
 
 
 class IsFormManager(permissions.BasePermission):
@@ -105,16 +106,19 @@ class FormViewSet(viewsets.ModelViewSet):
             # Admin can specify any department (use what's provided in request)
             if 'department' not in serializer.validated_data:
                 raise ValidationError("Department is required when creating a form.")
-            serializer.save(created_by=self.request.user)
+            form = serializer.save(created_by=self.request.user)
         else:  # MANAGER
             # Manager can only create forms for their own department
             if not self.request.user.department:
                 raise PermissionDenied("You must be assigned to a department to create forms.")
             # Force the form to be created for the manager's department (ignore client-provided department)
-            serializer.save(
+            form = serializer.save(
                 created_by=self.request.user,
                 department=self.request.user.department  # Always use manager's department
             )
+
+        # Log the form creation
+        log_create(self.request.user, 'Form', form, self.request)
 
     def perform_update(self, serializer):
         """Check permissions when updating form."""
@@ -124,16 +128,21 @@ class FormViewSet(viewsets.ModelViewSet):
         if self.request.user.role == 'USER':
             raise PermissionDenied("Users can only view and submit forms, not edit them.")
 
+        # Track changes for audit log
+        old_data = {'name': instance.name, 'status': instance.status}
+
         # ADMIN can edit any form
         if self.request.user.role == 'ADMIN':
-            serializer.save()
+            form = serializer.save()
+            log_update(self.request.user, 'Form', form, {'old': old_data, 'new': serializer.validated_data}, self.request)
             return
 
         # MANAGER can only edit forms from their own department
         if self.request.user.role == 'MANAGER':
             if instance.department != self.request.user.department:
                 raise PermissionDenied("You can only edit forms from your own department.")
-            serializer.save()
+            form = serializer.save()
+            log_update(self.request.user, 'Form', form, {'old': old_data, 'new': serializer.validated_data}, self.request)
             return
 
         raise PermissionDenied("You don't have permission to edit forms.")
@@ -144,9 +153,14 @@ class FormViewSet(viewsets.ModelViewSet):
         if self.request.user.role == 'USER':
             raise PermissionDenied("Users can only view and submit forms, not delete them.")
 
+        # Store info before deletion for audit log
+        form_id = str(instance.id)
+        form_repr = str(instance)
+
         # ADMIN can delete any form
         if self.request.user.role == 'ADMIN':
             instance.delete()
+            log_delete(self.request.user, 'Form', form_id, form_repr, self.request)
             return
 
         # MANAGER can only delete forms from their own department
@@ -154,6 +168,7 @@ class FormViewSet(viewsets.ModelViewSet):
             if instance.department != self.request.user.department:
                 raise PermissionDenied("You can only delete forms from your own department.")
             instance.delete()
+            log_delete(self.request.user, 'Form', form_id, form_repr, self.request)
             return
 
         raise PermissionDenied("You don't have permission to delete forms.")
@@ -557,8 +572,8 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
-        # Add select_related for optimization
-        queryset = queryset.select_related('form', 'submitted_by')
+        # Add select_related for optimization (includes form__department for Reports page)
+        queryset = queryset.select_related('form', 'form__department', 'submitted_by')
 
         return queryset
 
@@ -583,6 +598,12 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
                 field_name=field_name,
                 file=file
             )
+
+        # Log the submission creation
+        if submission.status == 'SUBMITTED':
+            log_submit(self.request.user, 'FormSubmission', submission, self.request)
+        else:
+            log_create(self.request.user, 'FormSubmission', submission, self.request)
 
         # Check if submission is being submitted (not draft) and start workflow
         if submission.status == 'SUBMITTED':
@@ -784,6 +805,9 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
         submission.status = FormSubmission.SubmissionStatus.APPROVED
         submission.save()
 
+        # Log the approval
+        log_approve(request.user, 'FormSubmission', submission, request=request)
+
         serializer = self.get_serializer(submission)
         return Response(serializer.data)
 
@@ -809,6 +833,10 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
 
         submission.status = FormSubmission.SubmissionStatus.REJECTED
         submission.save()
+
+        # Log the rejection
+        reason = request.data.get('reason', '')
+        log_reject(request.user, 'FormSubmission', submission, comments=reason, request=request)
 
         serializer = self.get_serializer(submission)
         return Response(serializer.data)

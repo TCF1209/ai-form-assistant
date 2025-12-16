@@ -25,6 +25,7 @@ from users.serializers import (
 )
 from users.permissions import IsSelfOrAdmin
 from users.models import AuditLog
+from core.throttling import LoginRateThrottle
 
 User = get_user_model()
 
@@ -84,6 +85,7 @@ class LoginView(APIView):
     POST /api/v1/auth/login/
     """
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)

@@ -6,7 +6,7 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from .models import User, Department
+from .models import User, Department, AuditLog
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
@@ -386,3 +386,33 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             })
 
         return attrs
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    """
+    Serializer for AuditLog model - Admin only.
+    """
+    user_name = serializers.SerializerMethodField()
+    user_email = serializers.SerializerMethodField()
+    action_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AuditLog
+        fields = [
+            'id', 'user', 'user_name', 'user_email', 'action', 'action_display',
+            'model_name', 'object_id', 'object_repr', 'changes',
+            'ip_address', 'user_agent', 'timestamp'
+        ]
+        read_only_fields = fields
+
+    def get_user_name(self, obj):
+        """Get the user's full name."""
+        return obj.user.full_name if obj.user else 'System'
+
+    def get_user_email(self, obj):
+        """Get the user's email."""
+        return obj.user.email if obj.user else None
+
+    def get_action_display(self, obj):
+        """Get the human-readable action name."""
+        return obj.get_action_display()

@@ -229,6 +229,9 @@ class FormSubmission(models.Model):
             models.Index(fields=['form', 'status']),
             models.Index(fields=['submitted_by']),
             models.Index(fields=['submission_number']),
+            models.Index(fields=['status']),  # For status filtering
+            models.Index(fields=['-submitted_at']),  # For date-based queries (Reports)
+            models.Index(fields=['status', '-submitted_at']),  # Combined for Reports
         ]
 
     def __str__(self):

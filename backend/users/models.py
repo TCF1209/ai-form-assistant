@@ -207,6 +207,8 @@ class AuditLog(models.Model):
             models.Index(fields=['user', '-timestamp']),
             models.Index(fields=['action', '-timestamp']),
             models.Index(fields=['model_name', 'object_id']),
+            models.Index(fields=['-timestamp']),  # For date filtering
+            models.Index(fields=['model_name', '-timestamp']),  # For filtering by model type
         ]
 
     def __str__(self):

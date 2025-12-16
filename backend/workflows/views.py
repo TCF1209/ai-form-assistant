@@ -25,6 +25,7 @@ from .serializers import (
 from .engine import WorkflowEngine
 from forms.models import FormSubmission
 from users.permissions import IsAdmin, IsFormManager, IsOwnerOrAdmin
+from users.audit import log_create, log_update, log_delete, log_approve, log_reject
 
 
 class WorkflowViewSet(viewsets.ModelViewSet):
@@ -53,7 +54,9 @@ class WorkflowViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related(
+            'form', 'form__department', 'created_by'
+        ).prefetch_related('steps')
 
         # Filter based on user role
         if user.role == 'ADMIN':
@@ -85,7 +88,10 @@ class WorkflowViewSet(viewsets.ModelViewSet):
                 "Please delete the existing workflow first if you want to create a new one."
             )
 
-        serializer.save(created_by=user)
+        workflow = serializer.save(created_by=user)
+
+        # Log the workflow creation
+        log_create(user, 'Workflow', workflow, self.request)
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -95,7 +101,12 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         if user.role == 'MANAGER' and instance.form.department != user.department:
             raise PermissionDenied("You can only edit workflows for forms in your department.")
 
-        serializer.save()
+        # Track old data for audit log
+        old_data = {'name': instance.name, 'status': instance.status}
+        workflow = serializer.save()
+
+        # Log the workflow update
+        log_update(user, 'Workflow', workflow, {'old': old_data, 'new': serializer.validated_data}, self.request)
 
     def perform_destroy(self, instance):
         user = self.request.user
@@ -117,7 +128,14 @@ class WorkflowViewSet(viewsets.ModelViewSet):
                 f"Please complete or cancel these instances before deleting the workflow."
             )
 
+        # Store info before deletion for audit log
+        workflow_id = str(instance.id)
+        workflow_repr = str(instance)
+
         instance.delete()
+
+        # Log the workflow deletion
+        log_delete(user, 'Workflow', workflow_id, workflow_repr, self.request)
 
     @action(detail=True, methods=['post'])
     def activate(self, request, pk=None):
@@ -224,7 +242,9 @@ class WorkflowStepViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related(
+            'workflow', 'workflow__form', 'assigned_user', 'assigned_department'
+        )
 
         # Filter based on workflow permissions
         if user.role == 'ADMIN':
@@ -289,7 +309,10 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related(
+            'workflow', 'workflow__form', 'submission', 'submission__submitted_by',
+            'current_step', 'cancelled_by'
+        ).prefetch_related('approvals')
 
         if user.role == 'ADMIN':
             return queryset
@@ -443,9 +466,13 @@ class WorkflowApprovalViewSet(viewsets.ModelViewSet):
 
             if action == 'approve':
                 engine.approve_step(approval, request.user, comments)
+                # Log the approval
+                log_approve(request.user, 'WorkflowApproval', approval, comments=comments, request=request)
                 return Response({'status': 'Approved'})
             elif action == 'reject':
                 engine.reject_step(approval, request.user, comments)
+                # Log the rejection
+                log_reject(request.user, 'WorkflowApproval', approval, comments=comments, request=request)
                 return Response({'status': 'Rejected'})
             elif action == 'delegate':
                 delegate_to = serializer.validated_data['delegate_to']
@@ -471,7 +498,10 @@ class WorkflowNotificationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         # Users can only see their own notifications
-        return super().get_queryset().filter(recipient=user)
+        return super().get_queryset().filter(recipient=user).select_related(
+            'workflow_approval', 'workflow_approval__workflow_instance',
+            'workflow_approval__workflow_step', 'recipient'
+        )
 
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):

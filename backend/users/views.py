@@ -15,8 +15,10 @@ from .serializers import (
     UserSerializer,
     UserRegistrationSerializer,
     UserProfileSerializer,
-    DepartmentSerializer
+    DepartmentSerializer,
+    AuditLogSerializer
 )
+from django_filters.rest_framework import DjangoFilterBackend
 from .permissions import (
     IsAdmin,
     IsManager,
@@ -353,3 +355,96 @@ class DepartmentViewSet(viewsets.ModelViewSet):
         }
 
         return Response(stats)
+
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for AuditLog model.
+    Provides read-only access to audit logs for admins only.
+    """
+    queryset = AuditLog.objects.all()
+    serializer_class = AuditLogSerializer
+    permission_classes = [IsAdmin]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['action', 'model_name', 'user']
+    search_fields = ['object_repr', 'user__email', 'user__first_name', 'user__last_name', 'model_name']
+    ordering_fields = ['timestamp', 'action', 'model_name']
+    ordering = ['-timestamp']
+
+    def get_queryset(self):
+        """
+        Filter audit logs with select_related for optimization.
+        """
+        queryset = super().get_queryset().select_related('user')
+
+        # Date range filtering
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+
+        if start_date:
+            queryset = queryset.filter(timestamp__date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(timestamp__date__lte=end_date)
+
+        return queryset
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """
+        Get audit log statistics.
+        GET /api/v1/audit-logs/stats/
+        """
+        from django.db.models import Count
+        from django.db.models.functions import TruncDate
+
+        queryset = self.get_queryset()
+
+        # Action breakdown
+        action_stats = queryset.values('action').annotate(count=Count('id'))
+
+        # Model breakdown
+        model_stats = queryset.values('model_name').annotate(count=Count('id')).order_by('-count')[:10]
+
+        # Daily activity (last 30 days)
+        from datetime import timedelta
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        daily_stats = queryset.filter(timestamp__gte=thirty_days_ago).annotate(
+            date=TruncDate('timestamp')
+        ).values('date').annotate(count=Count('id')).order_by('date')
+
+        # Most active users
+        user_stats = queryset.values(
+            'user__email', 'user__first_name', 'user__last_name'
+        ).annotate(count=Count('id')).order_by('-count')[:10]
+
+        return Response({
+            'total_logs': queryset.count(),
+            'action_breakdown': {item['action']: item['count'] for item in action_stats},
+            'model_breakdown': list(model_stats),
+            'daily_activity': [
+                {'date': item['date'].strftime('%Y-%m-%d') if item['date'] else None, 'count': item['count']}
+                for item in daily_stats
+            ],
+            'most_active_users': list(user_stats)
+        })
+
+    @action(detail=False, methods=['get'])
+    def actions(self, request):
+        """
+        Get list of available action types.
+        GET /api/v1/audit-logs/actions/
+        """
+        actions = [
+            {'value': choice[0], 'label': choice[1]}
+            for choice in AuditLog.ActionType.choices
+        ]
+        return Response(actions)
+
+    @action(detail=False, methods=['get'])
+    def models(self, request):
+        """
+        Get list of models that have been logged.
+        GET /api/v1/audit-logs/models/
+        """
+        models = self.get_queryset().values_list('model_name', flat=True).distinct()
+        return Response(list(models))

@@ -158,6 +158,17 @@ REST_FRAMEWORK = {
     ],
     'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',
     'DATE_FORMAT': '%Y-%m-%d',
+    # Rate Limiting / Throttling
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('THROTTLE_RATE_ANON', '100/hour'),  # Anonymous users
+        'user': os.getenv('THROTTLE_RATE_USER', '1000/hour'),  # Authenticated users
+        'login': os.getenv('THROTTLE_RATE_LOGIN', '5/minute'),  # Login attempts
+        'ai': os.getenv('THROTTLE_RATE_AI', '30/hour'),  # AI API calls (expensive)
+    },
 }
 
 # JWT Configuration
@@ -245,19 +256,30 @@ OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
 OPENAI_MAX_TOKENS = int(os.getenv('OPENAI_MAX_TOKENS', 2000))
 OPENAI_TEMPERATURE = float(os.getenv('OPENAI_TEMPERATURE', 0.7))
 
-# Redis Cache Configuration (optional)
+# Cache Configuration
+CACHE_TTL = int(os.getenv('CACHE_TTL', 300))  # 5 minutes default
+
 if os.getenv('REDIS_HOST'):
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.redis.RedisCache',
             'LOCATION': f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', 6379)}/{os.getenv('REDIS_DB', 0)}",
+            'TIMEOUT': CACHE_TTL,
+            'OPTIONS': {
+                'MAX_ENTRIES': 1000
+            }
         }
     }
 else:
+    # Use database cache for persistence without Redis
     CACHES = {
         'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'unique-snowflake',
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': 'django_cache_table',
+            'TIMEOUT': CACHE_TTL,
+            'OPTIONS': {
+                'MAX_ENTRIES': 1000
+            }
         }
     }
 
@@ -270,13 +292,45 @@ if os.getenv('CELERY_BROKER_URL'):
     CELERY_RESULT_SERIALIZER = 'json'
     CELERY_TIMEZONE = TIME_ZONE
 
-# Security Settings (adjust for production)
+# Security Settings
+# These settings are configured for development. Enable the env variables for production.
+
+# SSL/HTTPS Settings
 SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'False') == 'True'
 SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False') == 'True'
 CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False') == 'True'
+
+# HTTP Strict Transport Security (HSTS)
+SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', 0))  # Set to 31536000 (1 year) in production
+SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'False') == 'True'
+SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD', 'False') == 'True'
+
+# XSS and Content Type Protection
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# Clickjacking Protection
 X_FRAME_OPTIONS = 'DENY'
+
+# Cookie Settings
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+# Content Security Policy (via headers - configure in web server for production)
+# SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+# Prevent host header attacks
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',')
+
+# Password Hashers - Use strong defaults
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+]
 
 # Session settings
 SESSION_COOKIE_AGE = 86400  # 24 hours

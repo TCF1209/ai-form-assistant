@@ -718,7 +718,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
     }
     if (!formData.form) {
       newErrors.form = 'Please select a form';
-    } else if (formsWithWorkflows.has(formData.form) || formsWithWorkflows.has(parseInt(formData.form))) {
+    } else if (formsWithWorkflows.has(String(formData.form))) {
       newErrors.form = 'This form already has a workflow';
     }
     if (!formData.workflow_type) {
@@ -781,11 +781,11 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
       ? forms
       : forms.filter(f => f.department === user.department || f.department === user.department_id);
 
-  // Check which forms already have workflows
+  // Check which forms already have workflows (convert to strings for consistent comparison)
   const formsWithWorkflows = new Set(
     existingWorkflows
       .filter(w => w.id !== workflow?.id)
-      .map(w => w.form)
+      .map(w => String(w.form))
   );
 
   const isReadOnly = workflow && workflow.status === 'ACTIVE';
@@ -903,7 +903,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
                       onChange={(e) => {
                         const selectedValue = e.target.value;
                         // Prevent selecting forms that already have workflows
-                        if (selectedValue && (formsWithWorkflows.has(selectedValue) || formsWithWorkflows.has(parseInt(selectedValue)))) {
+                        if (selectedValue && formsWithWorkflows.has(String(selectedValue))) {
                           return;
                         }
                         handleFormChange('form', selectedValue);
@@ -916,16 +916,16 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
                     >
                       <option value="">Select a form</option>
                       {availableForms
-                        .filter(f => !formsWithWorkflows.has(f.id) && !formsWithWorkflows.has(parseInt(f.id)))
+                        .filter(f => !formsWithWorkflows.has(String(f.id)))
                         .map(f => (
                           <option key={f.id} value={f.id}>
                             {f.name} ({f.department_name})
                           </option>
                         ))}
-                      {availableForms.some(f => formsWithWorkflows.has(f.id) || formsWithWorkflows.has(parseInt(f.id))) && (
+                      {availableForms.some(f => formsWithWorkflows.has(String(f.id))) && (
                         <optgroup label="── Unavailable (already have workflow) ──">
                           {availableForms
-                            .filter(f => formsWithWorkflows.has(f.id) || formsWithWorkflows.has(parseInt(f.id)))
+                            .filter(f => formsWithWorkflows.has(String(f.id)))
                             .map(f => (
                               <option key={f.id} value={f.id} disabled className="text-slate-400">
                                 {f.name} ({f.department_name})

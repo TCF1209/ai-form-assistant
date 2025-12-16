@@ -475,65 +475,246 @@ const Reports = () => {
         return submittedDate >= startDate;
       });
 
+      // Calculate statistics
+      const statusCounts = {};
+      const formCounts = {};
+      const deptCounts = {};
+      const userCounts = {};
+
+      filteredSubmissions.forEach(s => {
+        // Status counts
+        const status = s.status || 'UNKNOWN';
+        statusCounts[status] = (statusCounts[status] || 0) + 1;
+
+        // Form counts
+        const formName = s.form_detail?.name || s.form_name || 'Unknown';
+        formCounts[formName] = (formCounts[formName] || 0) + 1;
+
+        // Department counts
+        const dept = s.form_detail?.department_name || 'Unknown';
+        deptCounts[dept] = (deptCounts[dept] || 0) + 1;
+
+        // User counts
+        const user = s.submitted_by_detail?.username || s.submitted_by_name || 'Unknown';
+        userCounts[user] = (userCounts[user] || 0) + 1;
+      });
+
+      // Calculate rates
+      const approvedCount = (statusCounts['APPROVED'] || 0) + (statusCounts['COMPLETED'] || 0);
+      const rejectedCount = statusCounts['REJECTED'] || 0;
+      const pendingCount = (statusCounts['PENDING'] || 0) + (statusCounts['SUBMITTED'] || 0);
+      const totalProcessed = approvedCount + rejectedCount;
+      const approvalRate = totalProcessed > 0 ? ((approvedCount / totalProcessed) * 100).toFixed(1) : 'N/A';
+
       // Create workbook
       const wb = XLSX.utils.book_new();
 
-      // Create worksheet data with title and headers
-      const wsData = [
-        ['AI Office Assistant - Submissions Report'],
-        [`Report Period: ${startDate.toLocaleDateString()} to ${now.toLocaleDateString()}`],
-        [`Generated: ${now.toLocaleString()}`],
-        [], // Empty row for spacing
-        ['ID', 'Form Name', 'Submitted By', 'Status', 'Submitted At', 'Department'],
+      // ============ SHEET 1: Summary Dashboard ============
+      const summaryData = [
+        ['AI OFFICE ASSISTANT'],
+        ['SUBMISSIONS REPORT - EXECUTIVE SUMMARY'],
+        [],
+        ['Report Information'],
+        ['Report Period:', `${startDate.toLocaleDateString()} to ${now.toLocaleDateString()}`],
+        ['Days Covered:', dateRange],
+        ['Generated:', now.toLocaleString()],
+        [],
+        ['Key Metrics'],
+        ['Total Submissions:', filteredSubmissions.length],
+        ['Approved/Completed:', approvedCount],
+        ['Rejected:', rejectedCount],
+        ['Pending/Submitted:', pendingCount],
+        ['Approval Rate:', approvalRate !== 'N/A' ? `${approvalRate}%` : 'N/A'],
+        [],
+        ['Status Breakdown'],
+        ['Status', 'Count', 'Percentage'],
       ];
 
-      // Add data rows
-      filteredSubmissions.forEach(sub => {
-        wsData.push([
-          String(sub.id).substring(0, 8),
-          sub.form_detail?.name || sub.form_name || 'N/A',
-          sub.submitted_by_detail?.username || sub.submitted_by_name || 'N/A',
-          sub.status || 'N/A',
-          sub.submitted_at ? new Date(sub.submitted_at).toLocaleString() : 'N/A',
-          sub.form_detail?.department_name || 'N/A'
-        ]);
-      });
+      // Add status breakdown
+      Object.entries(statusCounts)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([status, count]) => {
+          const percentage = ((count / filteredSubmissions.length) * 100).toFixed(1);
+          summaryData.push([status, count, `${percentage}%`]);
+        });
 
-      // Add summary section
-      wsData.push([]);
-      wsData.push(['Summary']);
-      wsData.push([`Total Submissions: ${filteredSubmissions.length}`]);
+      summaryData.push([]);
+      summaryData.push(['Department Breakdown']);
+      summaryData.push(['Department', 'Count', 'Percentage']);
 
-      // Count by status
-      const statusCounts = {};
-      filteredSubmissions.forEach(s => {
-        const status = s.status || 'UNKNOWN';
-        statusCounts[status] = (statusCounts[status] || 0) + 1;
-      });
-      Object.entries(statusCounts).forEach(([status, count]) => {
-        wsData.push([`${status}: ${count}`]);
-      });
+      // Add department breakdown
+      Object.entries(deptCounts)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([dept, count]) => {
+          const percentage = ((count / filteredSubmissions.length) * 100).toFixed(1);
+          summaryData.push([dept, count, `${percentage}%`]);
+        });
 
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      summaryData.push([]);
+      summaryData.push(['Top Forms by Submissions']);
+      summaryData.push(['Form Name', 'Count', 'Percentage']);
 
-      // Set column widths
-      ws['!cols'] = [
-        { wch: 12 }, // ID
-        { wch: 30 }, // Form Name
-        { wch: 18 }, // Submitted By
-        { wch: 15 }, // Status
-        { wch: 22 }, // Submitted At
-        { wch: 20 }  // Department
+      // Add top forms (top 10)
+      Object.entries(formCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .forEach(([form, count]) => {
+          const percentage = ((count / filteredSubmissions.length) * 100).toFixed(1);
+          summaryData.push([form, count, `${percentage}%`]);
+        });
+
+      summaryData.push([]);
+      summaryData.push(['Top Submitters']);
+      summaryData.push(['User', 'Submissions', 'Percentage']);
+
+      // Add top users (top 10)
+      Object.entries(userCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .forEach(([user, count]) => {
+          const percentage = ((count / filteredSubmissions.length) * 100).toFixed(1);
+          summaryData.push([user, count, `${percentage}%`]);
+        });
+
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+
+      // Set column widths for summary sheet
+      summarySheet['!cols'] = [
+        { wch: 30 },
+        { wch: 15 },
+        { wch: 15 }
       ];
 
-      // Merge title cell across all columns
-      ws['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }, // Title row
-        { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } }, // Date range row
-        { s: { r: 2, c: 0 }, e: { r: 2, c: 5 } }, // Generated row
+      // Merge title cells
+      summarySheet['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 2 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 2 } },
       ];
 
-      XLSX.utils.book_append_sheet(wb, ws, 'Submissions Report');
+      XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+
+      // ============ SHEET 2: Detailed Data ============
+      const dataHeaders = ['ID', 'Form Name', 'Submitted By', 'Status', 'Submitted At', 'Department'];
+
+      const detailData = filteredSubmissions.map(sub => [
+        String(sub.id).substring(0, 8),
+        sub.form_detail?.name || sub.form_name || 'N/A',
+        sub.submitted_by_detail?.username || sub.submitted_by_name || 'N/A',
+        sub.status || 'N/A',
+        sub.submitted_at ? new Date(sub.submitted_at).toLocaleString() : 'N/A',
+        sub.form_detail?.department_name || 'N/A'
+      ]);
+
+      const dataSheet = XLSX.utils.aoa_to_sheet([dataHeaders, ...detailData]);
+
+      // Set column widths for data sheet
+      dataSheet['!cols'] = [
+        { wch: 12 },  // ID
+        { wch: 35 },  // Form Name
+        { wch: 18 },  // Submitted By
+        { wch: 15 },  // Status
+        { wch: 22 },  // Submitted At
+        { wch: 20 }   // Department
+      ];
+
+      // Add auto-filter to header row
+      dataSheet['!autofilter'] = { ref: `A1:F${detailData.length + 1}` };
+
+      XLSX.utils.book_append_sheet(wb, dataSheet, 'Submissions Data');
+
+      // ============ SHEET 3: Status Analysis ============
+      const statusData = [
+        ['STATUS ANALYSIS'],
+        [],
+        ['Status', 'Count', 'Percentage', 'Category'],
+      ];
+
+      Object.entries(statusCounts)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([status, count]) => {
+          const percentage = ((count / filteredSubmissions.length) * 100).toFixed(1);
+          let category = 'Other';
+          if (status === 'APPROVED' || status === 'COMPLETED') category = 'Success';
+          else if (status === 'REJECTED') category = 'Rejected';
+          else if (status === 'PENDING' || status === 'SUBMITTED') category = 'In Progress';
+          else if (status === 'DRAFT') category = 'Draft';
+          statusData.push([status, count, `${percentage}%`, category]);
+        });
+
+      statusData.push([]);
+      statusData.push(['Summary by Category']);
+      statusData.push(['Category', 'Count', 'Percentage']);
+      statusData.push(['Success (Approved/Completed)', approvedCount, totalProcessed > 0 ? `${((approvedCount / filteredSubmissions.length) * 100).toFixed(1)}%` : '0%']);
+      statusData.push(['Rejected', rejectedCount, `${((rejectedCount / filteredSubmissions.length) * 100).toFixed(1)}%`]);
+      statusData.push(['In Progress (Pending/Submitted)', pendingCount, `${((pendingCount / filteredSubmissions.length) * 100).toFixed(1)}%`]);
+      statusData.push(['Draft', statusCounts['DRAFT'] || 0, `${(((statusCounts['DRAFT'] || 0) / filteredSubmissions.length) * 100).toFixed(1)}%`]);
+
+      const statusSheet = XLSX.utils.aoa_to_sheet(statusData);
+      statusSheet['!cols'] = [
+        { wch: 30 },
+        { wch: 12 },
+        { wch: 15 },
+        { wch: 15 }
+      ];
+      statusSheet['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+      ];
+
+      XLSX.utils.book_append_sheet(wb, statusSheet, 'Status Analysis');
+
+      // ============ SHEET 4: Department Analysis ============
+      const deptData = [
+        ['DEPARTMENT ANALYSIS'],
+        [],
+        ['Department', 'Total Submissions', 'Percentage', 'Rank'],
+      ];
+
+      Object.entries(deptCounts)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([dept, count], index) => {
+          const percentage = ((count / filteredSubmissions.length) * 100).toFixed(1);
+          deptData.push([dept, count, `${percentage}%`, index + 1]);
+        });
+
+      const deptSheet = XLSX.utils.aoa_to_sheet(deptData);
+      deptSheet['!cols'] = [
+        { wch: 25 },
+        { wch: 18 },
+        { wch: 15 },
+        { wch: 8 }
+      ];
+      deptSheet['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+      ];
+
+      XLSX.utils.book_append_sheet(wb, deptSheet, 'Department Analysis');
+
+      // ============ SHEET 5: Form Analysis ============
+      const formData = [
+        ['FORM ANALYSIS'],
+        [],
+        ['Form Name', 'Submissions', 'Percentage', 'Rank'],
+      ];
+
+      Object.entries(formCounts)
+        .sort((a, b) => b[1] - a[1])
+        .forEach(([form, count], index) => {
+          const percentage = ((count / filteredSubmissions.length) * 100).toFixed(1);
+          formData.push([form, count, `${percentage}%`, index + 1]);
+        });
+
+      const formSheet = XLSX.utils.aoa_to_sheet(formData);
+      formSheet['!cols'] = [
+        { wch: 40 },
+        { wch: 15 },
+        { wch: 15 },
+        { wch: 8 }
+      ];
+      formSheet['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+      ];
+
+      XLSX.utils.book_append_sheet(wb, formSheet, 'Form Analysis');
 
       // Generate and download file
       const fileName = `submissions_report_${new Date().toISOString().split('T')[0]}.xlsx`;

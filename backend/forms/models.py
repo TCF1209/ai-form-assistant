@@ -28,6 +28,7 @@ class Form(models.Model):
     code = models.CharField(
         max_length=50,
         unique=True,
+        blank=True,  # Allow blank - will be auto-generated if not provided
         help_text=_('Unique form identifier code')
     )
     description = models.TextField(blank=True)

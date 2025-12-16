@@ -121,19 +121,18 @@ const AuditLog = () => {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    // Show relative time for recent events
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} min ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    // For recent events, return object with relative time and date
+    if (diffMins < 1) return { relative: 'Just now', date: null };
+    if (diffMins < 60) return { relative: `${diffMins} min ago`, date: 'Today' };
+    if (diffHours < 24) return { relative: `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`, date: 'Today' };
+    if (diffDays === 1) return { relative: 'Yesterday', date: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) };
+    if (diffDays < 7) return { relative: `${diffDays} days ago`, date: date.toLocaleDateString('en-US', { weekday: 'short' }) };
 
-    return date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    // For older events, just show the date
+    return {
+      relative: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      date: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    };
   };
 
   const getActionConfig = (action) => {
@@ -345,12 +344,17 @@ const AuditLog = () => {
                     return (
                       <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                         <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                          <div className="font-medium">{formatDate(log.timestamp)}</div>
-                          {new Date(log.timestamp).toLocaleDateString() !== new Date().toLocaleDateString() && (
-                            <div className="text-xs text-slate-400">
-                              {new Date(log.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                            </div>
-                          )}
+                          {(() => {
+                            const timeInfo = formatDate(log.timestamp);
+                            return (
+                              <>
+                                <div className="font-medium">{timeInfo.relative}</div>
+                                {timeInfo.date && (
+                                  <div className="text-xs text-slate-400">{timeInfo.date}</div>
+                                )}
+                              </>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">

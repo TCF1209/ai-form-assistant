@@ -1,11 +1,20 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
 
+// Security actions that are hidden by default
+const SECURITY_ACTIONS = ['LOGIN', 'LOGOUT'];
+
+// Business actions (always shown)
+const BUSINESS_ACTIONS = ['CREATE', 'UPDATE', 'DELETE', 'SUBMIT', 'APPROVE', 'REJECT', 'EXPORT'];
+
 const AuditLog = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState(null);
+
+  // Show security logs toggle
+  const [showSecurityLogs, setShowSecurityLogs] = useState(false);
 
   // Filters
   const [filters, setFilters] = useState({
@@ -69,7 +78,14 @@ const AuditLog = () => {
         if (filters.end_date) params.append('end_date', filters.end_date);
 
         const response = await api.get(`/audit-logs/?${params.toString()}`);
-        setLogs(response.data.results || response.data);
+        let fetchedLogs = response.data.results || response.data;
+
+        // Filter out security logs if toggle is off (client-side filtering)
+        if (!showSecurityLogs && !filters.action) {
+          fetchedLogs = fetchedLogs.filter(log => !SECURITY_ACTIONS.includes(log.action));
+        }
+
+        setLogs(fetchedLogs);
         setTotalCount(response.data.count || response.data.length);
         setTotalPages(Math.ceil((response.data.count || response.data.length) / 20));
         setError(null);
@@ -81,11 +97,11 @@ const AuditLog = () => {
       }
     };
     fetchLogs();
-  }, [page, filters]);
+  }, [page, filters, showSecurityLogs]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
-    setPage(1); // Reset to first page when filter changes
+    setPage(1);
   };
 
   const clearFilters = () => {
@@ -100,7 +116,20 @@ const AuditLog = () => {
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString('en-US', {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    // Show relative time for recent events
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+
+    return date.toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -109,21 +138,54 @@ const AuditLog = () => {
     });
   };
 
-  const getActionColor = (action) => {
-    const colors = {
-      CREATE: 'bg-emerald-100 text-emerald-700',
-      UPDATE: 'bg-sky-100 text-sky-700',
-      DELETE: 'bg-red-100 text-red-700',
-      LOGIN: 'bg-indigo-100 text-indigo-700',
-      LOGOUT: 'bg-slate-100 text-slate-700',
-      APPROVE: 'bg-emerald-100 text-emerald-700',
-      REJECT: 'bg-red-100 text-red-700',
-      SUBMIT: 'bg-amber-100 text-amber-700',
-      EXPORT: 'bg-purple-100 text-purple-700',
-      VIEW: 'bg-slate-100 text-slate-700',
+  const getActionConfig = (action) => {
+    const configs = {
+      CREATE: { color: 'bg-emerald-100 text-emerald-700', icon: '➕', label: 'Created' },
+      UPDATE: { color: 'bg-sky-100 text-sky-700', icon: '✏️', label: 'Updated' },
+      DELETE: { color: 'bg-red-100 text-red-700', icon: '🗑️', label: 'Deleted' },
+      LOGIN: { color: 'bg-indigo-100 text-indigo-700', icon: '🔓', label: 'Logged In' },
+      LOGOUT: { color: 'bg-slate-100 text-slate-600', icon: '🔒', label: 'Logged Out' },
+      APPROVE: { color: 'bg-emerald-100 text-emerald-700', icon: '✅', label: 'Approved' },
+      REJECT: { color: 'bg-red-100 text-red-700', icon: '❌', label: 'Rejected' },
+      SUBMIT: { color: 'bg-amber-100 text-amber-700', icon: '📤', label: 'Submitted' },
+      EXPORT: { color: 'bg-purple-100 text-purple-700', icon: '📊', label: 'Exported' },
+      VIEW: { color: 'bg-slate-100 text-slate-600', icon: '👁️', label: 'Viewed' },
     };
-    return colors[action] || 'bg-slate-100 text-slate-700';
+    return configs[action] || { color: 'bg-slate-100 text-slate-600', icon: '📋', label: action };
   };
+
+  const getModelIcon = (model) => {
+    const icons = {
+      'Form': '📄',
+      'FormSubmission': '📝',
+      'User': '👤',
+      'Workflow': '🔄',
+      'WorkflowApproval': '✔️',
+      'Department': '🏢',
+    };
+    return icons[model] || '📋';
+  };
+
+  const formatDescription = (log) => {
+    const modelIcon = getModelIcon(log.model_name);
+    const actionConfig = getActionConfig(log.action);
+
+    if (log.action === 'LOGIN') {
+      return `${log.user_name} logged into the system`;
+    }
+    if (log.action === 'LOGOUT') {
+      return `${log.user_name} logged out of the system`;
+    }
+    if (log.object_repr) {
+      return `${modelIcon} ${log.object_repr}`;
+    }
+    return `${modelIcon} ${log.model_name}`;
+  };
+
+  // Filter actions based on toggle
+  const filteredActions = showSecurityLogs
+    ? actions
+    : actions.filter(a => !SECURITY_ACTIONS.includes(a.value));
 
   return (
     <div className="p-6 space-y-6">
@@ -131,7 +193,7 @@ const AuditLog = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Audit Log</h1>
-          <p className="text-slate-500 mt-1">Track all system activities and user actions</p>
+          <p className="text-slate-500 mt-1">Track important activities like form creation, submissions, and approvals</p>
         </div>
       </div>
 
@@ -139,32 +201,44 @@ const AuditLog = () => {
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="text-sm text-slate-500">Total Logs</div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📊</span>
+              <div className="text-sm text-slate-500">Total Activities</div>
+            </div>
             <div className="text-2xl font-bold text-slate-800 mt-1">{stats.total_logs.toLocaleString()}</div>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="text-sm text-slate-500">Create Actions</div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">➕</span>
+              <div className="text-sm text-slate-500">Items Created</div>
+            </div>
             <div className="text-2xl font-bold text-emerald-600 mt-1">{(stats.action_breakdown?.CREATE || 0).toLocaleString()}</div>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="text-sm text-slate-500">Update Actions</div>
-            <div className="text-2xl font-bold text-sky-600 mt-1">{(stats.action_breakdown?.UPDATE || 0).toLocaleString()}</div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">✅</span>
+              <div className="text-sm text-slate-500">Approvals</div>
+            </div>
+            <div className="text-2xl font-bold text-sky-600 mt-1">{(stats.action_breakdown?.APPROVE || 0).toLocaleString()}</div>
           </div>
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="text-sm text-slate-500">Login Actions</div>
-            <div className="text-2xl font-bold text-indigo-600 mt-1">{(stats.action_breakdown?.LOGIN || 0).toLocaleString()}</div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📤</span>
+              <div className="text-sm text-slate-500">Submissions</div>
+            </div>
+            <div className="text-2xl font-bold text-amber-600 mt-1">{(stats.action_breakdown?.SUBMIT || 0).toLocaleString()}</div>
           </div>
         </div>
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4">
-        <div className="flex flex-wrap gap-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
+        <div className="flex flex-wrap gap-4 items-center">
           {/* Search */}
           <div className="flex-1 min-w-[200px]">
             <input
               type="text"
-              placeholder="Search logs..."
+              placeholder="Search by user, form name, or details..."
               value={filters.search}
               onChange={(e) => handleFilterChange('search', e.target.value)}
               className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-transparent"
@@ -175,10 +249,10 @@ const AuditLog = () => {
           <select
             value={filters.action}
             onChange={(e) => handleFilterChange('action', e.target.value)}
-            className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
           >
             <option value="">All Actions</option>
-            {actions.map(action => (
+            {filteredActions.map(action => (
               <option key={action.value} value={action.value}>{action.label}</option>
             ))}
           </select>
@@ -187,27 +261,31 @@ const AuditLog = () => {
           <select
             value={filters.model_name}
             onChange={(e) => handleFilterChange('model_name', e.target.value)}
-            className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
           >
-            <option value="">All Models</option>
+            <option value="">All Types</option>
             {models.map(model => (
               <option key={model} value={model}>{model}</option>
             ))}
           </select>
 
           {/* Date Range */}
-          <input
-            type="date"
-            value={filters.start_date}
-            onChange={(e) => handleFilterChange('start_date', e.target.value)}
-            className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-          />
-          <input
-            type="date"
-            value={filters.end_date}
-            onChange={(e) => handleFilterChange('end_date', e.target.value)}
-            className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-          />
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-500">From</span>
+            <input
+              type="date"
+              value={filters.start_date}
+              onChange={(e) => handleFilterChange('start_date', e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
+            />
+            <span className="text-sm text-slate-500">To</span>
+            <input
+              type="date"
+              value={filters.end_date}
+              onChange={(e) => handleFilterChange('end_date', e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
+            />
+          </div>
 
           {/* Clear Filters */}
           <button
@@ -216,6 +294,23 @@ const AuditLog = () => {
           >
             Clear
           </button>
+        </div>
+
+        {/* Security Logs Toggle */}
+        <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showSecurityLogs}
+              onChange={(e) => {
+                setShowSecurityLogs(e.target.checked);
+                setPage(1);
+              }}
+              className="w-4 h-4 rounded border-slate-300 text-sky-500 focus:ring-sky-500"
+            />
+            <span className="text-sm text-slate-600">Show Security Logs</span>
+            <span className="text-xs text-slate-400">(Login/Logout activities)</span>
+          </label>
         </div>
       </div>
 
@@ -228,47 +323,68 @@ const AuditLog = () => {
         ) : error ? (
           <div className="text-center py-12 text-red-500">{error}</div>
         ) : logs.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">No audit logs found</div>
+          <div className="text-center py-12">
+            <div className="text-4xl mb-2">📋</div>
+            <div className="text-slate-500">No audit logs found</div>
+            <div className="text-sm text-slate-400 mt-1">Activities will appear here when users perform actions</div>
+          </div>
         ) : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Timestamp</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">User</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">When</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Who</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Action</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Model</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">What</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Details</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">IP Address</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {logs.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                        {formatDate(log.timestamp)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm font-medium text-slate-800">{log.user_name}</div>
-                        <div className="text-xs text-slate-500">{log.user_email}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getActionColor(log.action)}`}>
-                          {log.action_display}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
-                        {log.model_name}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-600 max-w-xs truncate" title={log.object_repr}>
-                        {log.object_repr || '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-500 font-mono">
-                        {log.ip_address || '-'}
-                      </td>
-                    </tr>
-                  ))}
+                  {logs.map((log) => {
+                    const actionConfig = getActionConfig(log.action);
+                    return (
+                      <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                          <div className="font-medium">{formatDate(log.timestamp)}</div>
+                          {new Date(log.timestamp).toLocaleDateString() !== new Date().toLocaleDateString() && (
+                            <div className="text-xs text-slate-400">
+                              {new Date(log.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-sm">
+                              {log.user_name?.charAt(0) || '?'}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-slate-800">{log.user_name}</div>
+                              <div className="text-xs text-slate-500">{log.user_email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${actionConfig.color}`}>
+                            <span>{actionConfig.icon}</span>
+                            <span>{actionConfig.label}</span>
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{getModelIcon(log.model_name)}</span>
+                            <span className="text-sm text-slate-600">{log.model_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-600 max-w-xs">
+                          <div className="truncate" title={log.object_repr || '-'}>
+                            {log.object_repr || '-'}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -276,7 +392,7 @@ const AuditLog = () => {
             {/* Pagination */}
             <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-t border-slate-200">
               <div className="text-sm text-slate-600">
-                Showing {((page - 1) * 20) + 1} to {Math.min(page * 20, totalCount)} of {totalCount} logs
+                Showing {logs.length > 0 ? ((page - 1) * 20) + 1 : 0} to {Math.min(page * 20, totalCount)} of {totalCount} activities
               </div>
               <div className="flex gap-2">
                 <button
@@ -287,11 +403,11 @@ const AuditLog = () => {
                   Previous
                 </button>
                 <span className="px-3 py-1 text-sm text-slate-600">
-                  Page {page} of {totalPages}
+                  Page {page} of {Math.max(1, totalPages)}
                 </span>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
+                  disabled={page >= totalPages}
                   className="px-3 py-1 text-sm border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
@@ -300,6 +416,11 @@ const AuditLog = () => {
             </div>
           </>
         )}
+      </div>
+
+      {/* Help Text */}
+      <div className="text-center text-xs text-slate-400">
+        This log tracks important business activities. Enable "Show Security Logs" to see login/logout history.
       </div>
     </div>
   );

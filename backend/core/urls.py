@@ -23,17 +23,8 @@ urlpatterns = [
     # Django Admin
     path('admin/', admin.site.urls),
 
-    # API v1 endpoints
+    # API v1 endpoints (includes all routes: users, forms, workflows, ai)
     path('api/v1/', include('api.v1.urls')),
-
-    # Users app endpoints (for ViewSets)
-    path('api/v1/', include('users.urls')),
-
-    # Forms app endpoints
-    path('api/v1/', include('forms.urls')),
-
-    # Workflows app endpoints
-    path('api/v1/', include('workflows.urls')),
 ]
 
 # Serve media files in development

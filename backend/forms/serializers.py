@@ -2,10 +2,33 @@
 Form serializers for REST API.
 """
 
+import random
 from rest_framework import serializers
 from .models import Form, FormField, FormSubmission, FormFile
 from users.models import User, Department
 from django.utils import timezone
+
+
+def generate_form_code(name, department):
+    """Generate a unique form code based on name and department."""
+    code = ''
+
+    # Add department code if available
+    if department and hasattr(department, 'code') and department.code:
+        code = department.code + '_'
+
+    # Add name abbreviation
+    if name:
+        words = name.strip().split()
+        if len(words) == 1:
+            code += words[0][:3].upper()
+        else:
+            code += ''.join(word[0] for word in words if word)[:4].upper()
+
+    # Add random number to ensure uniqueness
+    code += str(random.randint(100, 999))
+
+    return code
 
 
 class FormFieldSerializer(serializers.ModelSerializer):
@@ -54,6 +77,8 @@ class FormDetailSerializer(serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     fields = FormFieldSerializer(many=True, read_only=True)
     submission_count = serializers.IntegerField(source='submissions.count', read_only=True)
+    # Make code optional - will be auto-generated if not provided
+    code = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Form
@@ -76,8 +101,26 @@ class FormDetailSerializer(serializers.ModelSerializer):
         return 'Unknown'
 
     def create(self, validated_data):
-        """Create form with current user as creator."""
+        """Create form with current user as creator and auto-generate code if needed."""
         validated_data['created_by'] = self.context['request'].user
+
+        # Auto-generate code if not provided
+        if not validated_data.get('code'):
+            department = validated_data.get('department')
+            name = validated_data.get('name', '')
+
+            # Generate unique code
+            max_attempts = 10
+            for _ in range(max_attempts):
+                code = generate_form_code(name, department)
+                if not Form.objects.filter(code=code).exists():
+                    validated_data['code'] = code
+                    break
+            else:
+                # Fallback with timestamp if all attempts fail
+                import time
+                validated_data['code'] = f"FORM_{int(time.time())}"
+
         return super().create(validated_data)
 
 

@@ -9,31 +9,25 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
 
   // Initialize with Form Manager's department if applicable
   const getDepartmentId = () => {
-    // Form Manager: use their department
     if (isFormManager && user?.department) {
       return typeof user.department === 'object' ? user.department.id : user.department;
     }
-    // Admin: can select any department
     return '';
   };
 
   const [formData, setFormData] = useState({
     name: '',
-    code: '',
     description: '',
     department: getDepartmentId(),
     status: 'DRAFT',
-    requires_approval: true,
-    is_template: false
+    requires_approval: true
   });
-  const [useTemplate, setUseTemplate] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState('');
-  const [templates, setTemplates] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
 
-  // Pre-fill department for Form Managers (they can only create in their department)
+  // Pre-fill department for Form Managers
   useEffect(() => {
     if (isFormManager && user?.department) {
-      // Handle both possible formats: department as object or as ID
       const deptId = typeof user.department === 'object' ? user.department.id : user.department;
       if (deptId) {
         setFormData(prev => ({
@@ -42,49 +36,7 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
         }));
       }
     }
-    // Fetch available templates
-    fetchTemplates();
   }, [isFormManager, user]);
-
-  const fetchTemplates = async () => {
-    try {
-      const response = await api.get('/forms/templates/');
-      setTemplates(response.data);
-    } catch (error) {
-      console.error('Failed to fetch templates:', error);
-    }
-  };
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
-
-  // Generate form code based on name and department
-  const generateFormCode = () => {
-    if (!formData.name) return '';
-
-    let code = '';
-
-    // Get department code if selected
-    if (formData.department) {
-      const dept = departments.find(d => d.id === formData.department);
-      if (dept && dept.code) {
-        code = dept.code + '_';
-      }
-    }
-
-    // Add name abbreviation
-    const words = formData.name.trim().split(' ');
-    if (words.length === 1) {
-      code += words[0].substring(0, 3).toUpperCase();
-    } else {
-      code += words.map(word => word.charAt(0)).join('').toUpperCase().substring(0, 4);
-    }
-
-    // Add random number
-    const randomNum = Math.floor(Math.random() * 900) + 100;
-    code += randomNum;
-
-    return code;
-  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -107,11 +59,8 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
 
     // Validate required fields
     const newErrors = {};
-    if (!useTemplate && !formData.name) newErrors.name = 'Name is required';
-    if (!formData.code) newErrors.code = 'Code is required';
-    // Department is required for everyone
+    if (!formData.name) newErrors.name = 'Form name is required';
     if (!formData.department) newErrors.department = 'Department is required';
-    if (useTemplate && !selectedTemplate) newErrors.template = 'Please select a template';
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -120,32 +69,11 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
 
     try {
       setLoading(true);
-
-      if (useTemplate) {
-        // Create from template - include status and department for Admin
-        const templateData = {
-          template: selectedTemplate,
-          code: formData.code,
-          name: formData.name || undefined,
-          status: formData.status  // Include status for templates
-        };
-
-        // Admin needs to send department
-        if (isAdmin) {
-          templateData.department = formData.department;
-        }
-
-        await api.post('/forms/create_from_template/', templateData);
-      } else {
-        // Create regular form - ensure all fields are sent
-        console.log('Creating form with data:', formData);
-        await api.post('/forms/', formData);
-      }
-
+      // Backend will auto-generate the form code
+      await api.post('/forms/', formData);
       onSave();
     } catch (error) {
       if (error.response?.data) {
-        // Handle validation errors from backend
         const backendErrors = {};
         Object.keys(error.response.data).forEach(key => {
           if (Array.isArray(error.response.data[key])) {
@@ -165,10 +93,10 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-auto">
+      <div className="bg-white rounded-lg max-w-lg w-full">
         <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-slate-800">Create New Form</h2>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-slate-800">Create New Form</h2>
             <button
               onClick={onClose}
               className="text-slate-400 hover:text-slate-600"
@@ -186,60 +114,10 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
               </div>
             )}
 
-            {/* Template Toggle */}
-            <div className="mb-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={useTemplate}
-                  onChange={(e) => setUseTemplate(e.target.checked)}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-slate-300 rounded"
-                />
-                <span className="ml-2 text-sm text-slate-700">
-                  Use a template
-                </span>
-              </label>
-            </div>
-
-            {/* Template Selection */}
-            {useTemplate && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Select Template *
-                </label>
-                <select
-                  value={selectedTemplate}
-                  onChange={(e) => {
-                    setSelectedTemplate(e.target.value);
-                    const template = templates.find(t => t.key === e.target.value);
-                    if (template) {
-                      setFormData(prev => ({
-                        ...prev,
-                        name: template.name,
-                        description: template.description
-                      }));
-                    }
-                  }}
-                  className={`w-full px-3 py-2 border ${
-                    errors.template ? 'border-red-300' : 'border-slate-300'
-                  } rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500`}
-                >
-                  <option value="">Choose a template...</option>
-                  {templates.map(template => (
-                    <option key={template.key} value={template.key}>
-                      {template.name} ({template.field_count} fields)
-                    </option>
-                  ))}
-                </select>
-                {errors.template && (
-                  <p className="mt-1 text-sm text-red-600">{errors.template}</p>
-                )}
-              </div>
-            )}
-
+            {/* Form Name */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
-                Form Name *
+                Form Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -249,46 +127,14 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
                 placeholder="e.g., Employee Leave Request"
                 className={`w-full px-3 py-2 border ${
                   errors.name ? 'border-red-300' : 'border-slate-300'
-                } rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500`}
+                } rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500`}
               />
               {errors.name && (
                 <p className="mt-1 text-sm text-red-600">{errors.name}</p>
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Form Code *
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  name="code"
-                  value={formData.code}
-                  onChange={handleChange}
-                  placeholder="e.g., HR_LEAVE_001"
-                  className={`flex-1 px-3 py-2 border ${
-                    errors.code ? 'border-red-300' : 'border-slate-300'
-                  } rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500`}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const generatedCode = generateFormCode();
-                    setFormData({ ...formData, code: generatedCode });
-                  }}
-                  disabled={!formData.name}
-                  className="px-3 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
-                  title={!formData.name ? 'Enter form name first' : 'Generate code from name'}
-                >
-                  Generate
-                </button>
-              </div>
-              {errors.code && (
-                <p className="mt-1 text-sm text-red-600">{errors.code}</p>
-              )}
-            </div>
-
+            {/* Description */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Description
@@ -299,23 +145,24 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
                 onChange={handleChange}
                 rows={3}
                 placeholder="Describe the purpose of this form..."
-                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
               />
             </div>
 
+            {/* Department and Status */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Department *
+                  Department <span className="text-red-500">*</span>
                 </label>
                 <select
                   name="department"
                   value={formData.department}
                   onChange={handleChange}
-                  disabled={isFormManager} // Form Managers can't change department, Admin can select any
+                  disabled={isFormManager}
                   className={`w-full px-3 py-2 border ${
                     errors.department ? 'border-red-300' : 'border-slate-300'
-                  } rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500 ${
+                  } rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 ${
                     isFormManager ? 'bg-slate-100 cursor-not-allowed' : ''
                   }`}
                 >
@@ -339,7 +186,7 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
                   name="status"
                   value={formData.status}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
                 >
                   <option value="DRAFT">Draft</option>
                   <option value="ACTIVE">Active</option>
@@ -348,7 +195,8 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
               </div>
             </div>
 
-            <div className="space-y-2">
+            {/* Requires Approval */}
+            <div>
               <label className="flex items-center">
                 <input
                   type="checkbox"
@@ -361,39 +209,29 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
                   Requires approval after submission
                 </span>
               </label>
-
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="is_template"
-                  checked={formData.is_template}
-                  onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-slate-300 rounded"
-                />
-                <span className="ml-2 text-sm text-slate-700">
-                  Save as template for reuse
-                </span>
-              </label>
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <p className="text-sm text-amber-800">
-                <strong>Note:</strong> After creating the form, you'll be able to add fields and configure the form structure. Forms must be set to "Active" status before users can submit them.
+            {/* Info Note */}
+            <div className="bg-sky-50 border border-sky-200 rounded-lg p-4">
+              <p className="text-sm text-sky-800">
+                After creating the form, you can add fields and configure its structure.
+                Set status to "Active" when ready for users to submit.
               </p>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4">
+            {/* Buttons */}
+            <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 border border-slate-300 rounded-md text-slate-700 hover:bg-slate-50"
+                className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
                 disabled={loading}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-sky-500 text-white rounded-md hover:bg-sky-600 disabled:opacity-50"
+                className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 disabled:opacity-50 transition-colors"
                 disabled={loading}
               >
                 {loading ? 'Creating...' : 'Create Form'}

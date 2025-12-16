@@ -146,7 +146,6 @@ const AuditLog = () => {
       REJECT: { color: 'bg-red-100 text-red-700', icon: '❌', label: 'Rejected' },
       SUBMIT: { color: 'bg-amber-100 text-amber-700', icon: '📤', label: 'Submitted' },
       EXPORT: { color: 'bg-purple-100 text-purple-700', icon: '📊', label: 'Exported' },
-      VIEW: { color: 'bg-slate-100 text-slate-600', icon: '👁️', label: 'Viewed' },
     };
     return configs[action] || { color: 'bg-slate-100 text-slate-600', icon: '📋', label: action };
   };

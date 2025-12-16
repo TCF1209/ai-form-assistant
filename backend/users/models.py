@@ -170,7 +170,6 @@ class AuditLog(models.Model):
         CREATE = 'CREATE', _('Create')
         UPDATE = 'UPDATE', _('Update')
         DELETE = 'DELETE', _('Delete')
-        VIEW = 'VIEW', _('View')
         LOGIN = 'LOGIN', _('Login')
         LOGOUT = 'LOGOUT', _('Logout')
         APPROVE = 'APPROVE', _('Approve')

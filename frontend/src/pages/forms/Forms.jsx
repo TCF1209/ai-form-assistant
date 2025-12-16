@@ -1,9 +1,100 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
 import CreateFormModal from './CreateFormModal';
 import FormSubmitModal from './FormSubmitModal';
+
+// Icons
+const EyeIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+  </svg>
+);
+
+const EditIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+  </svg>
+);
+
+const MoreIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+  </svg>
+);
+
+const CopyIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
+
+// Dropdown Menu Component
+const ActionDropdown = ({ form, onDuplicate, onDelete, canEdit, canDelete }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  if (!canEdit && !canDelete) return null;
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+        title="More actions"
+      >
+        <MoreIcon />
+      </button>
+      {isOpen && (
+        <div className="absolute right-0 mt-1 w-36 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-10">
+          {canEdit && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onDuplicate(form);
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+            >
+              <CopyIcon />
+              Duplicate
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onDelete(form);
+              }}
+              className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+            >
+              <TrashIcon />
+              Delete
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Forms = () => {
   const { user } = useAuth();
@@ -332,70 +423,66 @@ const Forms = () => {
                           <div className="text-sm font-medium text-slate-900">
                             {form.name}
                           </div>
-                          <div className="text-sm text-slate-500">
-                            Code: {form.code} | Version: {form.version}
-                          </div>
                           {form.description && (
-                            <div className="text-xs text-slate-400 mt-1">
-                              {form.description.substring(0, 80)}
-                              {form.description.length > 80 && '...'}
+                            <div className="text-xs text-slate-500 mt-1 max-w-xs truncate">
+                              {form.description}
                             </div>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-slate-900">{form.department_name}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadge(form.status)}`}>
-                          {form.status}
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                          {form.department_name}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                        {form.field_count || 0}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2.5 py-1 inline-flex text-xs font-medium rounded-full ${getStatusBadge(form.status)}`}>
+                          {form.status === 'ACTIVE' ? 'Active' :
+                           form.status === 'DRAFT' ? 'Draft' :
+                           form.status === 'INACTIVE' ? 'Inactive' :
+                           form.status === 'ARCHIVED' ? 'Archived' : form.status}
+                        </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                        {form.submission_count || 0}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm text-slate-600 font-medium">
+                          {form.field_count || 0}
+                        </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex gap-2">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm text-slate-600 font-medium">
+                          {form.submission_count || 0}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          {/* View button */}
                           <button
                             onClick={() => navigate(`/forms/${form.id}`)}
-                            className="text-slate-600 hover:text-slate-900"
+                            className="p-2 text-slate-400 hover:text-sky-500 hover:bg-sky-50 rounded-lg transition-colors"
+                            title="View details"
                           >
-                            View
+                            <EyeIcon />
                           </button>
 
-                          {/* Edit/Build button - only for Form Manager on their department's forms */}
+                          {/* Edit button */}
                           {canEditForm(form) && (
                             <button
                               onClick={() => navigate(`/forms/${form.id}/builder`)}
-                              className="text-sky-600 hover:text-sky-900"
-                              title="Build/Edit form fields"
+                              className="p-2 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-colors"
+                              title="Edit form"
                             >
-                              Build
+                              <EditIcon />
                             </button>
                           )}
 
-                          {/* Duplicate button - only for Form Manager on their department's forms */}
-                          {canEditForm(form) && (
-                            <button
-                              onClick={() => handleDuplicateForm(form)}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              Duplicate
-                            </button>
-                          )}
-
-                          {/* Delete button - Admin can delete any, Manager can delete from own dept */}
-                          {canDeleteForm(form) && (
-                            <button
-                              onClick={() => handleDeleteForm(form)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              Delete
-                            </button>
-                          )}
+                          {/* More actions dropdown */}
+                          <ActionDropdown
+                            form={form}
+                            onDuplicate={handleDuplicateForm}
+                            onDelete={handleDeleteForm}
+                            canEdit={canEditForm(form)}
+                            canDelete={canDeleteForm(form)}
+                          />
                         </div>
                       </td>
                     </tr>

@@ -238,36 +238,26 @@ const SortableStep = ({ step, index, onEdit, onDelete, isReadOnly, users }) => {
   );
 };
 
-// Step Editor Component
-const StepEditor = ({ step, onSave, onCancel, users, departments }) => {
+// Step Editor Component (Simplified)
+const StepEditor = ({ step, onSave, onCancel, users }) => {
   const [formData, setFormData] = useState({
     name: step?.name || '',
-    step_type: step?.step_type || 'APPROVAL',
+    step_type: 'APPROVAL',  // Always APPROVAL
     assigned_user: step?.assigned_user || '',
-    assigned_role: step?.assigned_role || '',
-    assigned_department: step?.assigned_department || '',
-    is_required: step?.is_required ?? true,
-    can_skip: step?.can_skip ?? false,
-    time_limit_hours: step?.time_limit_hours || '',
-    conditions: step?.conditions || {}
+    is_required: true,  // Always required
+    can_skip: false  // Cannot skip
   });
-  const [showConditions, setShowConditions] = useState(!!step?.conditions && Object.keys(step.conditions).length > 0);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (step) {
       setFormData({
         name: step.name || '',
-        step_type: step.step_type || 'APPROVAL',
+        step_type: 'APPROVAL',
         assigned_user: step.assigned_user || '',
-        assigned_role: step.assigned_role || '',
-        assigned_department: step.assigned_department || '',
-        is_required: step.is_required ?? true,
-        can_skip: step.can_skip ?? false,
-        time_limit_hours: step.time_limit_hours || '',
-        conditions: step.conditions || {}
+        is_required: true,
+        can_skip: false
       });
-      setShowConditions(!!step.conditions && Object.keys(step.conditions).length > 0);
     }
   }, [step]);
 
@@ -283,16 +273,16 @@ const StepEditor = ({ step, onSave, onCancel, users, departments }) => {
     if (!formData.name.trim()) {
       newErrors.name = 'Step name is required';
     }
+    if (!formData.assigned_user) {
+      newErrors.assigned_user = 'Please select an approver';
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
-    onSave({
-      ...formData,
-      conditions: showConditions ? formData.conditions : {}
-    });
+    onSave(formData);
   };
 
   // Filter out admins and form managers from user list
@@ -305,172 +295,43 @@ const StepEditor = ({ step, onSave, onCancel, users, departments }) => {
       </div>
 
       <div className="p-4 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Step Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => handleChange('name', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 ${
-                errors.name ? 'border-red-300' : 'border-slate-300'
-              }`}
-              placeholder="e.g., Manager Approval"
-            />
-            {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Step Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={formData.step_type}
-              onChange={(e) => handleChange('step_type', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-            >
-              <option value="APPROVAL">Approval</option>
-              <option value="REVIEW">Review</option>
-              <option value="NOTIFICATION">Notification</option>
-              <option value="CONDITIONAL">Conditional</option>
-              <option value="SYSTEM">System Action</option>
-            </select>
-          </div>
-        </div>
-
-        {formData.step_type === 'APPROVAL' && (
-          <>
-            <div className="bg-sky-50 border border-sky-200 rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <InfoIcon className="flex-shrink-0 mt-0.5 text-sky-500" />
-                <div>
-                  <p className="text-sm font-medium text-sky-800">Approver Assignment</p>
-                  <p className="text-sm text-sky-600">Only regular users can be approvers. Admins and Form Managers cannot approve.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Assign to User
-                </label>
-                <select
-                  value={formData.assigned_user}
-                  onChange={(e) => handleChange('assigned_user', e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                >
-                  <option value="">Select a user</option>
-                  {eligibleUsers.map(user => (
-                    <option key={user.id} value={user.id}>
-                      {user.first_name} {user.last_name} ({user.username})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Or Assign to Role
-                </label>
-                <select
-                  value={formData.assigned_role}
-                  onChange={(e) => handleChange('assigned_role', e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                >
-                  <option value="">Select a role</option>
-                  <option value="USER">Regular User</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  In Department
-                </label>
-                <select
-                  value={formData.assigned_department}
-                  onChange={(e) => handleChange('assigned_department', e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-                >
-                  <option value="">Select department</option>
-                  {departments.map(dept => (
-                    <option key={dept.id} value={dept.id}>{dept.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </>
-        )}
-
-        <div className="grid grid-cols-3 gap-4">
-          <div className="flex items-center gap-2">
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.is_required}
-                onChange={(e) => handleChange('is_required', e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
-            </label>
-            <span className="text-sm text-slate-700">{formData.is_required ? 'Required' : 'Optional'}</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.can_skip}
-                onChange={(e) => handleChange('can_skip', e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
-            </label>
-            <span className="text-sm text-slate-700">{formData.can_skip ? 'Can Skip' : 'Cannot Skip'}</span>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Time Limit (hours)
-            </label>
-            <input
-              type="number"
-              value={formData.time_limit_hours}
-              onChange={(e) => handleChange('time_limit_hours', e.target.value)}
-              min="1"
-              max="720"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
-              placeholder="No limit"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showConditions}
-              onChange={(e) => setShowConditions(e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Step Name <span className="text-red-500">*</span>
           </label>
-          <span className="text-sm text-slate-700">{showConditions ? 'Has Conditions' : 'No Conditions'}</span>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => handleChange('name', e.target.value)}
+            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 ${
+              errors.name ? 'border-red-300' : 'border-slate-300'
+            }`}
+            placeholder="e.g., Manager Approval"
+          />
+          {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
         </div>
 
-        {showConditions && (
-          <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Step Conditions
-            </label>
-            <ConditionBuilder
-              value={formData.conditions}
-              onChange={(conditions) => handleChange('conditions', conditions)}
-            />
-          </div>
-        )}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Approver <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={formData.assigned_user}
+            onChange={(e) => handleChange('assigned_user', e.target.value)}
+            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 ${
+              errors.assigned_user ? 'border-red-300' : 'border-slate-300'
+            }`}
+          >
+            <option value="">Select an approver</option>
+            {eligibleUsers.map(user => (
+              <option key={user.id} value={user.id}>
+                {user.first_name} {user.last_name} ({user.username})
+              </option>
+            ))}
+          </select>
+          {errors.assigned_user && <p className="mt-1 text-sm text-red-500">{errors.assigned_user}</p>}
+          <p className="mt-1 text-xs text-slate-500">Only regular users can be approvers</p>
+        </div>
 
         <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
           <button
@@ -670,8 +531,14 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
   };
 
   const handleAddStep = () => {
+    // Generate step name based on workflow type
+    const stepNumber = steps.length + 1;
+    const stepName = formData.workflow_type === 'PARALLEL'
+      ? `Approver ${stepNumber}`
+      : `Step ${stepNumber}`;
+
     const newStep = {
-      name: `Step ${steps.length + 1}`,
+      name: stepName,
       step_type: 'APPROVAL',
       order: steps.length,
       is_required: true,
@@ -1053,7 +920,6 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
                       onSave={handleSaveStep}
                       onCancel={() => setEditingStepIndex(null)}
                       users={users}
-                      departments={departments}
                     />
                   ) : (
                     <div className="bg-slate-50 border border-slate-200 border-dashed rounded-lg p-8 text-center">

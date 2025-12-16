@@ -865,15 +865,20 @@ const Reports = () => {
       doc.addImage(statusBarImage, 'PNG', 110, 125, 90, 56);
 
       // ============ PAGE 3: Data Table ============
-      doc.addPage('landscape');
+      // Add landscape page (format: 'a4', orientation: 'l' for landscape)
+      doc.addPage('a4', 'l');
+
+      // Get landscape page dimensions
+      const landscapeWidth = doc.internal.pageSize.width;
+      const landscapeHeight = doc.internal.pageSize.height;
 
       // Page header
       doc.setFillColor(...skyBlue);
-      doc.rect(0, 0, doc.internal.pageSize.width, 25, 'F');
+      doc.rect(0, 0, landscapeWidth, 25, 'F');
       doc.setTextColor(...white);
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
-      doc.text('Detailed Submissions Data', doc.internal.pageSize.width / 2, 16, { align: 'center' });
+      doc.text('Detailed Submissions Data', landscapeWidth / 2, 16, { align: 'center' });
 
       // Prepare table data
       const tableData = filteredSubmissions.map(sub => [
@@ -937,16 +942,15 @@ const Reports = () => {
       });
 
       // Footer on last page
-      const lastPageHeight = doc.internal.pageSize.height;
       doc.setDrawColor(...skyBlue);
       doc.setLineWidth(0.5);
-      doc.line(14, lastPageHeight - 15, doc.internal.pageSize.width - 14, lastPageHeight - 15);
+      doc.line(14, landscapeHeight - 15, landscapeWidth - 14, landscapeHeight - 15);
 
       doc.setTextColor(...mediumGray);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Generated: ${now.toLocaleString()}`, 14, lastPageHeight - 8);
-      doc.text('AI Office Assistant - Powered by OpenAI', doc.internal.pageSize.width - 14, lastPageHeight - 8, { align: 'right' });
+      doc.text(`Generated: ${now.toLocaleString()}`, 14, landscapeHeight - 8);
+      doc.text('AI Office Assistant - Powered by OpenAI', landscapeWidth - 14, landscapeHeight - 8, { align: 'right' });
 
       // Save the PDF
       const fileName = `submissions_report_${new Date().toISOString().split('T')[0]}.pdf`;

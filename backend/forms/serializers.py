@@ -78,7 +78,7 @@ class FormDetailSerializer(serializers.ModelSerializer):
     fields = FormFieldSerializer(many=True, read_only=True)
     submission_count = serializers.IntegerField(source='submissions.count', read_only=True)
     # Make code optional - will be auto-generated if not provided
-    code = serializers.CharField(required=False, allow_blank=True)
+    code = serializers.CharField(required=False, allow_blank=True, default='')
 
     class Meta:
         model = Form
@@ -90,6 +90,9 @@ class FormDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'code': {'required': False, 'allow_blank': True},
+        }
 
     def get_created_by_name(self, obj):
         """Get creator's name with fallback to username."""

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 
 const CreateFormModal = ({ departments, onClose, onSave }) => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const isFormManager = user?.role === 'MANAGER';
   const isAdmin = user?.role === 'ADMIN';
@@ -70,8 +72,12 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
     try {
       setLoading(true);
       // Backend will auto-generate the form code
-      await api.post('/forms/', formData);
-      onSave();
+      const response = await api.post('/forms/', formData);
+      const newFormId = response.data.id;
+
+      // Close modal and navigate directly to form builder
+      onClose();
+      navigate(`/forms/${newFormId}/builder`);
     } catch (error) {
       if (error.response?.data) {
         const backendErrors = {};

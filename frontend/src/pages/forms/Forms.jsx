@@ -154,40 +154,45 @@ const Forms = () => {
 
   return (
     <div className="p-6">
-      {/* Header */}
+      {/* Header - Different for User vs Manager/Admin */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-slate-800">Forms Management</h1>
+        <h1 className="text-3xl font-bold text-slate-800">
+          {isUser ? 'Available Forms' : 'Forms Management'}
+        </h1>
         <p className="text-slate-600 mt-2">
-          {isAdmin && 'View and delete forms from all departments'}
+          {isAdmin && 'View and manage forms from all departments'}
           {isFormManager && 'Create and manage forms in your department'}
-          {isUser && 'Browse and submit available forms'}
+          {isUser && 'Browse and submit forms to get started'}
         </p>
       </div>
 
-      {/* Filters */}
+      {/* Filters - Simplified for Users */}
       <div className="bg-white p-4 rounded-lg shadow mb-6">
         <div className="flex flex-wrap gap-4 items-center">
           <div className="flex-1 min-w-[200px]">
             <input
               type="text"
-              placeholder="Search forms..."
+              placeholder={isUser ? "Search forms..." : "Search by name, code, or description..."}
               value={filters.search}
               onChange={(e) => setFilters({ ...filters, search: e.target.value })}
               className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
             />
           </div>
 
-          <select
-            value={filters.status}
-            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-            className="px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
-          >
-            <option value="">All Status</option>
-            <option value="DRAFT">Draft</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-            <option value="ARCHIVED">Archived</option>
-          </select>
+          {/* Status filter - only for Manager/Admin */}
+          {!isUser && (
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-sky-500 focus:border-sky-500"
+            >
+              <option value="">All Status</option>
+              <option value="DRAFT">Draft</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+          )}
 
           <select
             value={filters.department}
@@ -227,137 +232,180 @@ const Forms = () => {
         </div>
       </div>
 
-      {/* Forms List */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Form
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Department
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Fields
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Submissions
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-200">
-              {loading ? (
+      {/* Forms List - Different layout for User vs Manager/Admin */}
+      {isUser ? (
+        /* User View - Clean Card Layout */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {loading ? (
+            <div className="col-span-full text-center py-8 text-slate-500">
+              Loading forms...
+            </div>
+          ) : filteredForms.length === 0 ? (
+            <div className="col-span-full text-center py-8 text-slate-500">
+              No forms available
+            </div>
+          ) : (
+            filteredForms.map(form => (
+              <div key={form.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-slate-800 mb-1">
+                      {form.name}
+                    </h3>
+                    <span className="inline-block px-2 py-0.5 text-xs font-medium rounded bg-slate-100 text-slate-600">
+                      {form.department_name}
+                    </span>
+                  </div>
+                </div>
+
+                {form.description && (
+                  <p className="text-sm text-slate-500 mb-4 line-clamp-2">
+                    {form.description}
+                  </p>
+                )}
+
+                <div className="flex gap-2 mt-auto pt-3 border-t border-slate-100">
+                  <button
+                    onClick={() => navigate(`/forms/${form.id}`)}
+                    className="flex-1 px-3 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
+                  >
+                    View Details
+                  </button>
+                  {form.status === 'ACTIVE' && (
+                    <button
+                      onClick={() => navigate(`/forms/${form.id}/submit`)}
+                      className="flex-1 px-3 py-2 text-sm font-medium text-white bg-sky-500 rounded-md hover:bg-sky-600 transition-colors"
+                    >
+                      Fill Form
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        /* Manager/Admin View - Full Table */
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead className="bg-slate-50">
                 <tr>
-                  <td colSpan="6" className="px-6 py-4 text-center text-slate-500">
-                    Loading...
-                  </td>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Form
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Department
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Fields
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Submissions
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
-              ) : filteredForms.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="px-6 py-4 text-center text-slate-500">
-                    No forms found
-                  </td>
-                </tr>
-              ) : (
-                filteredForms.map(form => (
-                  <tr key={form.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-slate-900">
-                          {form.name}
-                        </div>
-                        <div className="text-sm text-slate-500">
-                          Code: {form.code} | Version: {form.version}
-                        </div>
-                        {form.description && (
-                          <div className="text-xs text-slate-400 mt-1">
-                            {form.description.substring(0, 100)}
-                            {form.description.length > 100 && '...'}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-slate-900">{form.department_name}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadge(form.status)}`}>
-                        {form.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                      {form.field_count || 0}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                      {form.submission_count || 0}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex gap-2">
-                        {/* View button - available for all users */}
-                        <button
-                          onClick={() => navigate(`/forms/${form.id}`)}
-                          className="text-slate-600 hover:text-slate-900"
-                        >
-                          View
-                        </button>
-
-                        {/* Submit button - available for all users on ACTIVE forms */}
-                        {form.status === 'ACTIVE' && canSubmitForm && (
-                          <button
-                            onClick={() => navigate(`/forms/${form.id}/submit`)}
-                            className="text-sky-600 hover:text-sky-900"
-                          >
-                            Submit
-                          </button>
-                        )}
-
-                        {/* Edit/Build button - only for Form Manager on their department's forms */}
-                        {canEditForm(form) && (
-                          <button
-                            onClick={() => navigate(`/forms/${form.id}/builder`)}
-                            className="text-slate-600 hover:text-slate-900"
-                            title="Build/Edit form fields"
-                          >
-                            Build
-                          </button>
-                        )}
-
-                        {/* Duplicate button - only for Form Manager on their department's forms */}
-                        {canEditForm(form) && (
-                          <button
-                            onClick={() => handleDuplicateForm(form)}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            Duplicate
-                          </button>
-                        )}
-
-                        {/* Delete button - Admin can delete any, Manager can delete from own dept */}
-                        {canDeleteForm(form) && (
-                          <button
-                            onClick={() => handleDeleteForm(form)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
+              </thead>
+              <tbody className="bg-white divide-y divide-slate-200">
+                {loading ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-4 text-center text-slate-500">
+                      Loading...
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : filteredForms.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-4 text-center text-slate-500">
+                      No forms found
+                    </td>
+                  </tr>
+                ) : (
+                  filteredForms.map(form => (
+                    <tr key={form.id} className="hover:bg-slate-50">
+                      <td className="px-6 py-4">
+                        <div>
+                          <div className="text-sm font-medium text-slate-900">
+                            {form.name}
+                          </div>
+                          <div className="text-sm text-slate-500">
+                            Code: {form.code} | Version: {form.version}
+                          </div>
+                          {form.description && (
+                            <div className="text-xs text-slate-400 mt-1">
+                              {form.description.substring(0, 80)}
+                              {form.description.length > 80 && '...'}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-slate-900">{form.department_name}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadge(form.status)}`}>
+                          {form.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                        {form.field_count || 0}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                        {form.submission_count || 0}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => navigate(`/forms/${form.id}`)}
+                            className="text-slate-600 hover:text-slate-900"
+                          >
+                            View
+                          </button>
+
+                          {/* Edit/Build button - only for Form Manager on their department's forms */}
+                          {canEditForm(form) && (
+                            <button
+                              onClick={() => navigate(`/forms/${form.id}/builder`)}
+                              className="text-sky-600 hover:text-sky-900"
+                              title="Build/Edit form fields"
+                            >
+                              Build
+                            </button>
+                          )}
+
+                          {/* Duplicate button - only for Form Manager on their department's forms */}
+                          {canEditForm(form) && (
+                            <button
+                              onClick={() => handleDuplicateForm(form)}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              Duplicate
+                            </button>
+                          )}
+
+                          {/* Delete button - Admin can delete any, Manager can delete from own dept */}
+                          {canDeleteForm(form) && (
+                            <button
+                              onClick={() => handleDeleteForm(form)}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Create Form Modal */}
       {showCreateModal && (

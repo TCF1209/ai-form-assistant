@@ -156,7 +156,7 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.MultiPartParser',
         'rest_framework.parsers.FormParser',
     ],
-    'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',
+    'DATETIME_FORMAT': 'iso-8601',  # ISO 8601 format includes timezone for proper JS parsing
     'DATE_FORMAT': '%Y-%m-%d',
     # Rate Limiting / Throttling
     'DEFAULT_THROTTLE_CLASSES': [

@@ -230,11 +230,23 @@ const MyApprovals = () => {
 
   const fetchStats = async () => {
     try {
+      // Get pending count from my_pending endpoint (excludes self-approval cases)
+      let pendingCount = 0;
+      try {
+        const pendingResponse = await api.get('/workflow-approvals/my_pending/');
+        const pendingData = pendingResponse.data.results || pendingResponse.data;
+        pendingCount = pendingData.length;
+      } catch (err) {
+        // If user is admin/manager, they won't have pending approvals
+        pendingCount = 0;
+      }
+
+      // Get other stats from all approvals assigned to user
       const response = await api.get('/workflow-approvals/');
       const data = response.data.results || response.data;
 
       setStats({
-        pending: data.filter(a => a.status === 'PENDING').length,
+        pending: pendingCount,
         approved: data.filter(a => a.status === 'APPROVED').length,
         rejected: data.filter(a => a.status === 'REJECTED').length,
         total: data.length

@@ -53,6 +53,25 @@ class WorkflowEngine:
             }
         )
 
+        # First, check if ALL steps are self-approval (needs admin action)
+        all_self_approval = self._check_all_self_approval(workflow, instance, submitter)
+
+        if all_self_approval and workflow.steps.exists():
+            # All approvers are the submitter - create PENDING approvals for admin to handle
+            for step in workflow.steps.all().order_by('order'):
+                if self._check_step_conditions(step, instance):
+                    self._create_approval_for_step(instance, step)
+
+            instance.current_step = workflow.steps.first()
+            instance.status = 'NEEDS_ADMIN_ACTION'
+            instance.context_data['needs_admin_action'] = True
+            instance.context_data['self_approval_conflict'] = True
+            instance.save()
+
+            # Send notifications
+            self._send_notifications(instance, 'ASSIGNED')
+            return instance
+
         # Track if we have any non-self approvers
         has_other_approvers = False
 
@@ -65,11 +84,6 @@ class WorkflowEngine:
                 instance.save()
                 self._create_approval_for_step(instance, first_step)
                 has_other_approvers = True
-            else:
-                # Check if there were any steps at all
-                if workflow.steps.exists():
-                    # All steps have submitter as approver - needs admin action
-                    has_other_approvers = False
 
         elif workflow.workflow_type == 'PARALLEL':
             # Create approvals for all steps except where submitter is approver
@@ -112,14 +126,8 @@ class WorkflowEngine:
                 instance.current_step = first_steps.first()
                 instance.save()
 
-        # If no other approvers (all are self-approval), mark as needs admin action
-        if not has_other_approvers and workflow.steps.exists():
-            instance.status = 'NEEDS_ADMIN_ACTION'
-            instance.context_data['needs_admin_action'] = True
-            instance.context_data['self_approval_conflict'] = True
-            instance.save()
-        else:
-            # Check if workflow is already complete after auto-skipping
+        # Check if workflow is already complete after auto-skipping
+        if has_other_approvers or not workflow.steps.exists():
             if self._check_workflow_completion(instance):
                 instance.status = 'COMPLETED'
                 instance.completed_at = timezone.now()
@@ -131,6 +139,18 @@ class WorkflowEngine:
         self._send_notifications(instance, 'ASSIGNED')
 
         return instance
+
+    def _check_all_self_approval(self, workflow, instance, submitter):
+        """Check if ALL steps in the workflow have submitter as the approver."""
+        steps = workflow.steps.all()
+        if not steps.exists():
+            return False
+
+        for step in steps:
+            if self._check_step_conditions(step, instance):
+                if not self._is_self_approval(step, submitter):
+                    return False
+        return True
 
     def _is_self_approval(self, step, submitter):
         """Check if the step's approver is the same as the submitter."""

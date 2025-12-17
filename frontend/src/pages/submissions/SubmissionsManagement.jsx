@@ -127,6 +127,7 @@ const ProgressBar = ({ percent, status }) => {
   const getColor = () => {
     if (status === 'COMPLETED') return 'bg-emerald-500';
     if (status === 'FAILED') return 'bg-red-500';
+    if (status === 'NEEDS_ADMIN_ACTION') return 'bg-orange-500';
     return 'bg-sky-500';
   };
 
@@ -536,7 +537,7 @@ const SubmissionsManagement = () => {
                             </span>
                           )}
                         </div>
-                        {submission.workflow_instance && submission.workflow_instance.status === 'IN_PROGRESS' && (
+                        {submission.workflow_instance && ['IN_PROGRESS', 'NEEDS_ADMIN_ACTION'].includes(submission.workflow_instance.status) && (
                           <div className="w-24">
                             <ProgressBar
                               percent={getProgressPercent(submission.workflow_instance)}

@@ -15,6 +15,21 @@ const ChartBarIcon = () => (
   </svg>
 );
 
+// Sparkles icon for AI avatar (matches Smart Assistant)
+const SparklesIcon = () => (
+  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+    <path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+  </svg>
+);
+
+// Helper to get user initial (first letter of first name - matches profile icon)
+const getUserInitial = (user) => {
+  if (!user) return 'U';
+  if (user.first_name) return user.first_name[0].toUpperCase();
+  if (user.username) return user.username[0].toUpperCase();
+  return 'U';
+};
+
 const DocumentIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -40,12 +55,12 @@ const TrendUpIcon = () => (
 );
 
 // Message component
-const ChatMessage = ({ message, isUser }) => {
+const ChatMessage = ({ message, isUser, user }) => {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
       {!isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center mr-3">
-          <ChartBarIcon />
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mr-3 shadow-md text-white">
+          <SparklesIcon />
         </div>
       )}
       <div
@@ -61,8 +76,8 @@ const ChatMessage = ({ message, isUser }) => {
         </div>
       </div>
       {isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-300 flex items-center justify-center ml-3">
-          <span className="text-slate-600 text-sm font-bold">U</span>
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center ml-3 shadow-md">
+          <span className="text-white text-sm font-bold">{getUserInitial(user)}</span>
         </div>
       )}
     </div>
@@ -72,8 +87,8 @@ const ChatMessage = ({ message, isUser }) => {
 // Typing indicator component
 const TypingIndicator = () => (
   <div className="flex justify-start mb-4">
-    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center mr-3">
-      <ChartBarIcon />
+    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mr-3 shadow-md text-white">
+      <SparklesIcon />
     </div>
     <div className="bg-white px-4 py-3 rounded-2xl rounded-bl-md shadow-md">
       <div className="flex gap-1">
@@ -296,8 +311,8 @@ const AnalyticsResultCard = ({ result }) => {
     <div className="mb-4">
       {/* AI Avatar Row - Now shows summary instead of interpretation */}
       <div className="flex justify-start mb-3">
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center mr-3">
-          <ChartBarIcon />
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mr-3 shadow-md text-white">
+          <SparklesIcon />
         </div>
         <div className="bg-white px-4 py-3 rounded-2xl rounded-bl-md shadow-md max-w-[70%]">
           <div className="text-sm text-slate-800 whitespace-pre-wrap">
@@ -499,15 +514,15 @@ const NaturalLanguageAnalytics = () => {
       <div className="flex-shrink-0 bg-white border-b border-slate-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center">
-              <ChartBarIcon />
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md text-white">
+              <SparklesIcon />
             </div>
             <div>
               <h1 className="text-lg font-bold text-slate-800">Analytics Query</h1>
               <p className="text-sm text-slate-500">
                 Ask questions about your forms data in natural language
                 {user?.role === 'ADMIN' && ' (All Departments)'}
-                {user?.role === 'MANAGER' && user?.department && ` (${user.department.name} Department)`}
+                {user?.role === 'FORM_MANAGER' && user?.department && ` (${user.department.name} Department)`}
               </p>
             </div>
           </div>
@@ -538,7 +553,7 @@ const NaturalLanguageAnalytics = () => {
             message.isAnalyticsResult ? (
               <AnalyticsResultCard key={index} result={message} />
             ) : (
-              <ChatMessage key={index} message={message} isUser={message.isUser} />
+              <ChatMessage key={index} message={message} isUser={message.isUser} user={user} />
             )
           ))
         )}

@@ -541,9 +541,13 @@ class WorkflowApprovalViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # Get pending approvals assigned to user, excluding self-approval cases
         approvals = self.get_queryset().filter(
             assigned_to=request.user,
             status='PENDING'
+        ).exclude(
+            # Exclude approvals where the user is also the submitter (self-approval)
+            workflow_instance__submission__submitted_by=request.user
         )
 
         serializer = self.get_serializer(approvals, many=True)
@@ -565,6 +569,14 @@ class WorkflowApprovalViewSet(viewsets.ModelViewSet):
             return Response(
                 {'error': 'This approval has already been processed'},
                 status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Prevent self-approval: submitter cannot approve their own submission
+        submission = approval.workflow_instance.submission
+        if submission.submitted_by == request.user:
+            return Response(
+                {'error': 'You cannot approve or reject your own submission. Please contact an administrator.'},
+                status=status.HTTP_403_FORBIDDEN
             )
 
         serializer = ApprovalActionSerializer(data=request.data)

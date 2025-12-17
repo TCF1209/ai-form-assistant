@@ -126,18 +126,31 @@ const MetricCard = ({ label, value, unit, trend, icon }) => {
 
 // Bar Chart component (simple implementation)
 const BarChart = ({ data }) => {
-  const maxValue = Math.max(...data.map(d => d.submissions || d.pending || d.value || 0));
+  const maxValue = Math.max(...data.map(d => d.submissions || d.pending || d.value || d.count || 0));
+
+  // Helper to get the label from item - check various possible field names
+  const getLabel = (item) => {
+    return item.form_name || item.name || item.form || item.department ||
+           item.label || item.month || item.status || item.user ||
+           item.category || item.type || 'Unknown';
+  };
+
+  // Helper to get the value from item
+  const getValue = (item) => {
+    return item.submissions || item.pending || item.value || item.count || 0;
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 border border-slate-200">
       <div className="space-y-3">
         {data.map((item, index) => {
-          const value = item.submissions || item.pending || item.value || 0;
-          const percentage = (value / maxValue) * 100;
+          const value = getValue(item);
+          const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
+          const label = getLabel(item);
           return (
             <div key={index} className="flex items-center gap-3">
-              <div className="w-24 text-sm text-slate-600 truncate">
-                {item.department || item.label || item.month}
+              <div className="w-32 text-sm text-slate-600 truncate" title={label}>
+                {label}
               </div>
               <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">
                 <div

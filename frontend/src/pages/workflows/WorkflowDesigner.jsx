@@ -239,7 +239,7 @@ const SortableStep = ({ step, index, onEdit, onDelete, isReadOnly, users }) => {
 };
 
 // Step Editor Component (Simplified)
-const StepEditor = ({ step, onSave, onCancel, users }) => {
+const StepEditor = ({ step, onSave, onCancel, users, assignedApproverIds = [] }) => {
   const [formData, setFormData] = useState({
     name: step?.name || '',
     step_type: 'APPROVAL',  // Always APPROVAL
@@ -288,6 +288,14 @@ const StepEditor = ({ step, onSave, onCancel, users }) => {
   // Filter out admins and form managers from user list
   const eligibleUsers = users.filter(u => u.role === 'USER');
 
+  // Check if a user is already assigned to another step (not current step)
+  const isUserAlreadyAssigned = (userId) => {
+    const currentStepUserId = step?.assigned_user;
+    // Don't mark as assigned if it's the current step's approver
+    if (String(userId) === String(currentStepUserId)) return false;
+    return assignedApproverIds.some(id => String(id) === String(userId));
+  };
+
   return (
     <div className="bg-white border border-slate-200 rounded-lg">
       <div className="px-4 py-3 border-b border-slate-200">
@@ -323,14 +331,22 @@ const StepEditor = ({ step, onSave, onCancel, users }) => {
             }`}
           >
             <option value="">Select an approver</option>
-            {eligibleUsers.map(user => (
-              <option key={user.id} value={user.id}>
-                {user.first_name} {user.last_name} ({user.username})
-              </option>
-            ))}
+            {eligibleUsers.map(user => {
+              const alreadyAssigned = isUserAlreadyAssigned(user.id);
+              return (
+                <option
+                  key={user.id}
+                  value={user.id}
+                  disabled={alreadyAssigned}
+                  className={alreadyAssigned ? 'text-slate-400' : ''}
+                >
+                  {user.first_name} {user.last_name} ({user.username}){alreadyAssigned ? ' - Already assigned' : ''}
+                </option>
+              );
+            })}
           </select>
           {errors.assigned_user && <p className="mt-1 text-sm text-red-500">{errors.assigned_user}</p>}
-          <p className="mt-1 text-xs text-slate-500">Only regular users can be approvers</p>
+          <p className="mt-1 text-xs text-slate-500">Only regular users can be approvers. Each user can only be assigned to one step.</p>
         </div>
 
         <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
@@ -690,6 +706,20 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
         setMessage({ type: 'error', text: 'Please assign an approver to all steps' });
         return false;
       }
+      // Check for duplicate approvers
+      const approverIds = steps.map(s => s.assigned_user).filter(Boolean);
+      const uniqueApproverIds = [...new Set(approverIds)];
+      if (approverIds.length !== uniqueApproverIds.length) {
+        // Find duplicate user name for better error message
+        const duplicateId = approverIds.find((id, index) => approverIds.indexOf(id) !== index);
+        const duplicateUser = users.find(u => String(u.id) === String(duplicateId));
+        const userName = duplicateUser ? `${duplicateUser.first_name} ${duplicateUser.last_name}`.trim() || duplicateUser.username : 'Unknown';
+        setMessage({
+          type: 'error',
+          text: `Duplicate approver detected: "${userName}" is assigned to multiple steps. Each approver can only be assigned to one step.`
+        });
+        return false;
+      }
       setMessage({ type: '', text: '' });
       return true;
     }
@@ -971,6 +1001,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
               onSave={handleSaveStep}
               onCancel={() => setEditingStepIndex(null)}
               users={users}
+              assignedApproverIds={steps.map(s => s.assigned_user).filter(Boolean)}
             />
           ) : (
             <div className="bg-slate-50 border border-slate-200 border-dashed rounded-lg p-8 text-center h-full flex flex-col items-center justify-center">

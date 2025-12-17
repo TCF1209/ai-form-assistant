@@ -142,6 +142,35 @@ class WorkflowSerializer(serializers.ModelSerializer):
 
         return code
 
+    def validate_steps(self, steps_data):
+        """Validate that no duplicate approvers exist in workflow steps."""
+        if not steps_data:
+            return steps_data
+
+        # Collect all assigned users
+        assigned_users = []
+        for step in steps_data:
+            user = step.get('assigned_user')
+            if user:
+                # Handle both User object and UUID
+                user_id = user.id if hasattr(user, 'id') else user
+                if user_id in assigned_users:
+                    # Get user details for error message
+                    if hasattr(user, 'username'):
+                        username = user.username
+                    else:
+                        try:
+                            username = User.objects.get(id=user_id).username
+                        except User.DoesNotExist:
+                            username = str(user_id)
+                    raise serializers.ValidationError(
+                        f"Duplicate approver detected: '{username}' is assigned to multiple steps. "
+                        f"Each approver can only be assigned to one step in a workflow."
+                    )
+                assigned_users.append(user_id)
+
+        return steps_data
+
     @transaction.atomic
     def create(self, validated_data):
         steps_data = validated_data.pop('steps', [])

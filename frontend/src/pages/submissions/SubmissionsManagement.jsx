@@ -90,6 +90,13 @@ const StatCard = ({ title, value, icon, color }) => {
   );
 };
 
+// Warning Icon for admin action
+const ExclamationIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+  </svg>
+);
+
 // Status Badge Component
 const StatusBadge = ({ status }) => {
   const statusConfig = {
@@ -102,7 +109,8 @@ const StatusBadge = ({ status }) => {
     'APPROVED': { style: 'bg-emerald-100 text-emerald-700', label: 'Approved' },
     'FAILED': { style: 'bg-red-100 text-red-700', label: 'Rejected' },
     'REJECTED': { style: 'bg-red-100 text-red-700', label: 'Rejected' },
-    'CANCELLED': { style: 'bg-slate-100 text-slate-700', label: 'Cancelled' }
+    'CANCELLED': { style: 'bg-slate-100 text-slate-700', label: 'Cancelled' },
+    'NEEDS_ADMIN_ACTION': { style: 'bg-orange-100 text-orange-700', label: 'Needs Admin Action' }
   };
 
   const config = statusConfig[status] || { style: 'bg-slate-100 text-slate-700', label: status };
@@ -172,6 +180,7 @@ const getCombinedStatus = (submission) => {
     if (workflowStatus === 'COMPLETED') return 'APPROVED';
     if (workflowStatus === 'FAILED') return 'REJECTED';
     if (workflowStatus === 'IN_PROGRESS') return 'IN_PROGRESS';
+    if (workflowStatus === 'NEEDS_ADMIN_ACTION') return 'NEEDS_ADMIN_ACTION';
     return workflowStatus;
   }
   // Otherwise use submission status
@@ -236,8 +245,14 @@ const SubmissionsManagement = () => {
     draft: 0,
     withWorkflow: 0,
     inProgress: 0,
-    completed: 0
+    completed: 0,
+    needsAdminAction: 0
   });
+  // Admin action state
+  const [adminActionModal, setAdminActionModal] = useState(false);
+  const [adminActionType, setAdminActionType] = useState(null); // 'approve' or 'reject'
+  const [adminComments, setAdminComments] = useState('');
+  const [processingAction, setProcessingAction] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -316,7 +331,8 @@ const SubmissionsManagement = () => {
         draft: data.filter(s => s.status === 'DRAFT').length,
         withWorkflow: instances.length,
         inProgress: instances.filter(i => i.status === 'IN_PROGRESS').length,
-        completed: instances.filter(i => i.status === 'COMPLETED').length
+        completed: instances.filter(i => i.status === 'COMPLETED').length,
+        needsAdminAction: instances.filter(i => i.status === 'NEEDS_ADMIN_ACTION').length
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -346,6 +362,43 @@ const SubmissionsManagement = () => {
     setSelectedSubmission(submission);
     await fetchWorkflowDetails(submission);
     setWorkflowModal(true);
+  };
+
+  // Admin action handlers
+  const handleOpenAdminAction = (actionType) => {
+    setAdminActionType(actionType);
+    setAdminComments('');
+    setAdminActionModal(true);
+  };
+
+  const handleAdminAction = async () => {
+    if (!workflowInstance || !adminActionType) return;
+
+    setProcessingAction(true);
+    try {
+      const endpoint = adminActionType === 'approve'
+        ? `/workflow-instances/${workflowInstance.id}/admin_approve/`
+        : `/workflow-instances/${workflowInstance.id}/admin_reject/`;
+
+      await api.post(endpoint, { comments: adminComments });
+
+      // Close modals and refresh data
+      setAdminActionModal(false);
+      setDetailModal(false);
+      setSelectedSubmission(null);
+      setWorkflowInstance(null);
+      setAdminComments('');
+      setAdminActionType(null);
+
+      // Refresh submissions and stats
+      fetchSubmissions();
+      fetchStats();
+    } catch (error) {
+      console.error('Error processing admin action:', error);
+      alert(error.response?.data?.error || 'Failed to process action');
+    } finally {
+      setProcessingAction(false);
+    }
   };
 
   const getProgressPercent = (instance) => {
@@ -380,13 +433,16 @@ const SubmissionsManagement = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className={`grid grid-cols-2 md:grid-cols-3 ${user.role === 'ADMIN' ? 'lg:grid-cols-7' : 'lg:grid-cols-6'} gap-4`}>
         <StatCard title="Total" value={stats.total} icon={<FileIcon />} color="default" />
         <StatCard title="Submitted" value={stats.submitted} icon={<CheckCircleIcon />} color="green" />
         <StatCard title="Draft" value={stats.draft} icon={<ClockIcon />} color="yellow" />
         <StatCard title="With Workflow" value={stats.withWorkflow} icon={<WorkflowIcon />} color="blue" />
         <StatCard title="In Progress" value={stats.inProgress} icon={<RefreshIcon />} color="blue" />
         <StatCard title="Completed" value={stats.completed} icon={<CheckCircleIcon />} color="green" />
+        {user.role === 'ADMIN' && (
+          <StatCard title="Needs Action" value={stats.needsAdminAction} icon={<ExclamationIcon />} color="red" />
+        )}
       </div>
 
       {/* Filters */}
@@ -471,7 +527,15 @@ const SubmissionsManagement = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="space-y-1.5">
-                        <StatusBadge status={getCombinedStatus(submission)} />
+                        <div className="flex items-center gap-2">
+                          <StatusBadge status={getCombinedStatus(submission)} />
+                          {submission.workflow_instance?.status === 'NEEDS_ADMIN_ACTION' && user.role === 'ADMIN' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full bg-red-50 text-red-600 border border-red-200">
+                              <ExclamationIcon />
+                              Action Required
+                            </span>
+                          )}
+                        </div>
                         {submission.workflow_instance && submission.workflow_instance.status === 'IN_PROGRESS' && (
                           <div className="w-24">
                             <ProgressBar
@@ -612,7 +676,31 @@ const SubmissionsManagement = () => {
               </div>
 
               {/* Modal Footer */}
-              <div className="px-6 py-4 border-t border-slate-200 flex justify-end">
+              <div className="px-6 py-4 border-t border-slate-200 flex justify-between items-center">
+                {/* Admin Action Buttons */}
+                {user.role === 'ADMIN' && workflowInstance?.status === 'NEEDS_ADMIN_ACTION' && (
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 text-orange-600 text-sm">
+                      <ExclamationIcon />
+                      <span className="font-medium">Self-approval conflict - Admin action required</span>
+                    </div>
+                    <button
+                      onClick={() => handleOpenAdminAction('approve')}
+                      className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors flex items-center gap-2"
+                    >
+                      <CheckCircleIcon />
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleOpenAdminAction('reject')}
+                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"
+                    >
+                      <XCircleIcon />
+                      Reject
+                    </button>
+                  </div>
+                )}
+                {!(user.role === 'ADMIN' && workflowInstance?.status === 'NEEDS_ADMIN_ACTION') && <div />}
                 <button
                   onClick={() => {
                     setDetailModal(false);
@@ -729,6 +817,96 @@ const SubmissionsManagement = () => {
                   className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Action Confirmation Modal */}
+      {adminActionModal && (
+        <div className="fixed inset-0 z-[60] overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div className="fixed inset-0 bg-slate-500 bg-opacity-75 transition-opacity" onClick={() => setAdminActionModal(false)} />
+
+            <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-auto z-10">
+              {/* Modal Header */}
+              <div className={`flex items-center justify-between px-6 py-4 border-b border-slate-200 ${adminActionType === 'approve' ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                <h3 className={`text-lg font-semibold ${adminActionType === 'approve' ? 'text-emerald-800' : 'text-red-800'}`}>
+                  {adminActionType === 'approve' ? 'Approve Submission' : 'Reject Submission'}
+                </h3>
+                <button
+                  onClick={() => setAdminActionModal(false)}
+                  className="p-2 hover:bg-white rounded-lg"
+                >
+                  <XIcon />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="px-6 py-4">
+                <div className="mb-4">
+                  <p className="text-slate-600">
+                    {adminActionType === 'approve'
+                      ? 'You are about to approve this submission as an administrator. This action will bypass the self-approval conflict.'
+                      : 'You are about to reject this submission as an administrator. This action cannot be undone.'}
+                  </p>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Comments (optional)
+                  </label>
+                  <textarea
+                    value={adminComments}
+                    onChange={(e) => setAdminComments(e.target.value)}
+                    placeholder={`Add a comment for this ${adminActionType === 'approve' ? 'approval' : 'rejection'}...`}
+                    rows={3}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-sm"
+                  />
+                </div>
+
+                {selectedSubmission && (
+                  <div className="bg-slate-50 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-slate-500">Submission</p>
+                    <p className="font-medium text-slate-800">{selectedSubmission.form_detail?.name}</p>
+                    <p className="text-sm text-slate-500 mt-1">
+                      Submitted by: {getFullName(selectedSubmission.submitted_by_detail)}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                <button
+                  onClick={() => setAdminActionModal(false)}
+                  disabled={processingAction}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAdminAction}
+                  disabled={processingAction}
+                  className={`px-4 py-2 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 ${
+                    adminActionType === 'approve'
+                      ? 'bg-emerald-500 hover:bg-emerald-600'
+                      : 'bg-red-500 hover:bg-red-600'
+                  }`}
+                >
+                  {processingAction ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      {adminActionType === 'approve' ? <CheckCircleIcon /> : <XCircleIcon />}
+                      {adminActionType === 'approve' ? 'Confirm Approval' : 'Confirm Rejection'}
+                    </>
+                  )}
                 </button>
               </div>
             </div>

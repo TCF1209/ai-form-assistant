@@ -391,6 +391,116 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
 
         return Response({'status': 'Workflow cancelled'})
 
+    @action(detail=True, methods=['post'])
+    def admin_approve(self, request, pk=None):
+        """
+        Admin action to approve a workflow instance that needs admin action.
+        This is used when all approvers are the submitter (self-approval conflict).
+        """
+        instance = self.get_object()
+        user = request.user
+
+        # Only admin can use this action
+        if user.role != 'ADMIN':
+            return Response(
+                {'error': 'Only administrators can perform this action'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Check if instance is in NEEDS_ADMIN_ACTION status
+        if instance.status != 'NEEDS_ADMIN_ACTION':
+            return Response(
+                {'error': 'This workflow does not require admin action'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        comments = request.data.get('comments', '')
+
+        with transaction.atomic():
+            # Mark all pending approvals as approved by admin
+            pending_approvals = instance.approvals.filter(status='PENDING')
+            for approval in pending_approvals:
+                approval.status = 'APPROVED'
+                approval.approved_by = user
+                approval.completed_at = timezone.now()
+                approval.comments = comments or 'Approved by administrator (self-approval conflict resolution)'
+                approval.save()
+
+            # Complete the workflow instance
+            instance.status = 'COMPLETED'
+            instance.completed_at = timezone.now()
+            instance.context_data['admin_resolved'] = True
+            instance.context_data['resolved_by'] = user.username
+            instance.save()
+
+            # Update submission status
+            submission = instance.submission
+            submission.status = 'APPROVED'
+            submission.save()
+
+            # Log the action
+            log_approve(user, 'WorkflowInstance', instance, comments=comments, request=request)
+
+        return Response({
+            'status': 'success',
+            'message': 'Workflow approved by administrator'
+        })
+
+    @action(detail=True, methods=['post'])
+    def admin_reject(self, request, pk=None):
+        """
+        Admin action to reject a workflow instance that needs admin action.
+        This is used when all approvers are the submitter (self-approval conflict).
+        """
+        instance = self.get_object()
+        user = request.user
+
+        # Only admin can use this action
+        if user.role != 'ADMIN':
+            return Response(
+                {'error': 'Only administrators can perform this action'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Check if instance is in NEEDS_ADMIN_ACTION status
+        if instance.status != 'NEEDS_ADMIN_ACTION':
+            return Response(
+                {'error': 'This workflow does not require admin action'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        comments = request.data.get('comments', '')
+
+        with transaction.atomic():
+            # Mark all pending approvals as rejected by admin
+            pending_approvals = instance.approvals.filter(status='PENDING')
+            for approval in pending_approvals:
+                approval.status = 'REJECTED'
+                approval.approved_by = user
+                approval.completed_at = timezone.now()
+                approval.comments = comments or 'Rejected by administrator (self-approval conflict resolution)'
+                approval.save()
+
+            # Fail the workflow instance
+            instance.status = 'FAILED'
+            instance.completed_at = timezone.now()
+            instance.context_data['admin_resolved'] = True
+            instance.context_data['resolved_by'] = user.username
+            instance.save()
+
+            # Update submission status
+            submission = instance.submission
+            submission.status = 'REJECTED'
+            submission.save()
+
+            # Log the action
+            log_reject(user, 'WorkflowInstance', instance, comments=comments, request=request)
+
+        return Response({
+            'status': 'success',
+            'message': 'Workflow rejected by administrator'
+        })
+
 
 class WorkflowApprovalViewSet(viewsets.ModelViewSet):
     """ViewSet for managing workflow approvals."""

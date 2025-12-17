@@ -37,6 +37,8 @@ class WorkflowEngine:
     def start_workflow(self, submission, workflow):
         """Start a new workflow instance for a submission."""
 
+        submitter = submission.submitted_by
+
         # Create workflow instance
         instance = WorkflowInstance.objects.create(
             workflow=workflow,
@@ -46,33 +48,54 @@ class WorkflowEngine:
                 'submission_id': str(submission.id),
                 'form_id': str(submission.form.id),
                 'submitted_by': submission.submitted_by.username,
+                'submitted_by_id': str(submission.submitted_by.id),
                 'submission_data': submission.data
             }
         )
 
+        # Track if we have any non-self approvers
+        has_other_approvers = False
+
         # Get the first active step(s) based on workflow type
         if workflow.workflow_type == 'SEQUENTIAL':
-            # Start with the first step
-            first_step = workflow.steps.filter(order=0).first()
+            # Start with the first step, skip self-approval steps
+            first_step = self._get_next_non_self_step(workflow, instance, None, submitter)
             if first_step:
                 instance.current_step = first_step
                 instance.save()
                 self._create_approval_for_step(instance, first_step)
+                has_other_approvers = True
+            else:
+                # Check if there were any steps at all
+                if workflow.steps.exists():
+                    # All steps have submitter as approver - needs admin action
+                    has_other_approvers = False
 
         elif workflow.workflow_type == 'PARALLEL':
-            # Create approvals for all steps at once
+            # Create approvals for all steps except where submitter is approver
             steps = workflow.steps.all()
             for step in steps:
                 if self._check_step_conditions(step, instance):
-                    self._create_approval_for_step(instance, step)
+                    # Check if submitter is the approver for this step
+                    if self._is_self_approval(step, submitter):
+                        # Auto-skip this step - create approval as auto-approved
+                        self._create_auto_approved_step(instance, step, submitter)
+                    else:
+                        self._create_approval_for_step(instance, step)
+                        has_other_approvers = True
 
         elif workflow.workflow_type == 'CONDITIONAL':
             # Evaluate conditions to determine first step
             first_step = self._get_next_conditional_step(workflow, instance, None)
             if first_step:
-                instance.current_step = first_step
-                instance.save()
-                self._create_approval_for_step(instance, first_step)
+                if self._is_self_approval(first_step, submitter):
+                    # Skip and find next
+                    first_step = self._get_next_non_self_step(workflow, instance, first_step, submitter)
+                if first_step:
+                    instance.current_step = first_step
+                    instance.save()
+                    self._create_approval_for_step(instance, first_step)
+                    has_other_approvers = True
 
         elif workflow.workflow_type == 'HYBRID':
             # Hybrid combines sequential and parallel
@@ -80,15 +103,69 @@ class WorkflowEngine:
             first_steps = workflow.steps.filter(order=0)
             for step in first_steps:
                 if self._check_step_conditions(step, instance):
-                    self._create_approval_for_step(instance, step)
+                    if self._is_self_approval(step, submitter):
+                        self._create_auto_approved_step(instance, step, submitter)
+                    else:
+                        self._create_approval_for_step(instance, step)
+                        has_other_approvers = True
             if first_steps.exists():
                 instance.current_step = first_steps.first()
                 instance.save()
+
+        # If no other approvers (all are self-approval), mark as needs admin action
+        if not has_other_approvers and workflow.steps.exists():
+            instance.status = 'NEEDS_ADMIN_ACTION'
+            instance.context_data['needs_admin_action'] = True
+            instance.context_data['self_approval_conflict'] = True
+            instance.save()
+        else:
+            # Check if workflow is already complete after auto-skipping
+            if self._check_workflow_completion(instance):
+                instance.status = 'COMPLETED'
+                instance.completed_at = timezone.now()
+                instance.save()
+                submission.status = 'APPROVED'
+                submission.save()
 
         # Send initial notifications
         self._send_notifications(instance, 'ASSIGNED')
 
         return instance
+
+    def _is_self_approval(self, step, submitter):
+        """Check if the step's approver is the same as the submitter."""
+        if step.assigned_user and step.assigned_user.id == submitter.id:
+            return True
+        return False
+
+    def _get_next_non_self_step(self, workflow, instance, current_step, submitter):
+        """Get the next step where the approver is not the submitter."""
+        if current_step:
+            next_steps = workflow.steps.filter(order__gt=current_step.order).order_by('order')
+        else:
+            next_steps = workflow.steps.all().order_by('order')
+
+        for step in next_steps:
+            if not self._is_self_approval(step, submitter):
+                return step
+            else:
+                # Auto-approve this step since submitter is the approver
+                self._create_auto_approved_step(instance, step, submitter)
+
+        return None
+
+    def _create_auto_approved_step(self, instance, step, submitter):
+        """Create an approval record that is auto-approved (self-approval skip)."""
+        approval = WorkflowApproval.objects.create(
+            workflow_instance=instance,
+            workflow_step=step,
+            status='APPROVED',
+            assigned_to=submitter,
+            approved_by=submitter,
+            completed_at=timezone.now(),
+            comments='Auto-approved: Submitter is the assigned approver'
+        )
+        return approval
 
     def _create_approval_for_step(self, instance, step):
         """Create an approval record for a workflow step."""

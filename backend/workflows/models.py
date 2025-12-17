@@ -198,6 +198,7 @@ class WorkflowInstance(models.Model):
         CANCELLED = 'CANCELLED', _('Cancelled')
         FAILED = 'FAILED', _('Failed')
         EXPIRED = 'EXPIRED', _('Expired')
+        NEEDS_ADMIN_ACTION = 'NEEDS_ADMIN_ACTION', _('Needs Admin Action')
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     workflow = models.ForeignKey(

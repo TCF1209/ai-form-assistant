@@ -234,7 +234,7 @@ class WorkflowEngine:
         Handle self-approval by reassigning to another user.
 
         Returns:
-            tuple: (approval, reassigned_to_user) or (None, None) if couldn't reassign
+            tuple: (approval, reassigned_to_user) - always returns a valid approval
         """
         # Try to find eligible user in same department
         eligible_user = self._find_eligible_reassignment_user(step, submitter)
@@ -250,12 +250,19 @@ class WorkflowEngine:
             approval = self._create_reassigned_approval(instance, step, admin, submitter, is_admin_fallback=True)
             return approval, admin
 
-        return None, None
+        # Last resort: If no department users and no admin available,
+        # create a regular approval (workflow will need manual intervention)
+        # This should rarely happen in a properly configured system
+        approval = self._create_approval_for_step(instance, step)
+        # Mark instance as needing attention
+        instance.status = 'NEEDS_ADMIN_ACTION'
+        instance.context_data['reassignment_failed'] = True
+        instance.context_data['reassignment_failed_step'] = step.name
+        instance.save()
+        return approval, step.assigned_user
 
     def _create_reassigned_approval(self, instance, step, new_assignee, original_submitter, is_admin_fallback=False):
         """Create an approval that was reassigned due to self-approval conflict."""
-        from datetime import timedelta
-
         # Calculate due date if time limit is set
         due_date = None
         if step.time_limit_hours:
@@ -328,7 +335,7 @@ class WorkflowEngine:
         # Priority: specific user > role > department
         if step.assigned_user:
             # Check if user is not admin or form manager
-            if step.assigned_user.role not in ['ADMIN', 'FORM_MANAGER']:
+            if step.assigned_user.role not in ['ADMIN', 'MANAGER']:
                 return step.assigned_user
 
         if step.assigned_role:
@@ -337,7 +344,7 @@ class WorkflowEngine:
             users = User.objects.filter(
                 role=step.assigned_role,
                 is_active=True
-            ).exclude(role__in=['ADMIN', 'FORM_MANAGER'])
+            ).exclude(role__in=['ADMIN', 'MANAGER'])
 
             if step.assigned_department:
                 users = users.filter(department=step.assigned_department)
@@ -705,7 +712,7 @@ class WorkflowEngine:
             from users.models import User
             manager = User.objects.filter(
                 department=approval.assigned_to.department,
-                role='FORM_MANAGER'
+                role='MANAGER'
             ).first()
 
             if manager:

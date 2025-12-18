@@ -53,63 +53,67 @@ class WorkflowEngine:
             }
         )
 
-        # First, check if ALL steps are self-approval (needs admin action)
-        all_self_approval = self._check_all_self_approval(workflow, instance, submitter)
-
-        if all_self_approval and workflow.steps.exists():
-            # All approvers are the submitter - create PENDING approvals for admin to handle
-            for step in workflow.steps.all().order_by('order'):
-                if self._check_step_conditions(step, instance):
-                    self._create_approval_for_step(instance, step)
-
-            instance.current_step = workflow.steps.first()
-            instance.status = 'NEEDS_ADMIN_ACTION'
-            instance.context_data['needs_admin_action'] = True
-            instance.context_data['self_approval_conflict'] = True
-            instance.save()
-
-            # Send notifications
-            self._send_notifications(instance, 'ASSIGNED')
-            return instance
-
-        # Track if we have any non-self approvers
-        has_other_approvers = False
+        # Track reassignments for context data
+        reassignments = []
 
         # Get the first active step(s) based on workflow type
         if workflow.workflow_type == 'SEQUENTIAL':
-            # Start with the first step, skip self-approval steps
-            first_step = self._get_next_non_self_step(workflow, instance, None, submitter)
+            # For sequential, process step by step
+            first_step = workflow.steps.order_by('order').first()
             if first_step:
+                if self._is_self_approval(first_step, submitter):
+                    # Try to reassign
+                    approval, new_assignee = self._handle_self_approval_reassignment(instance, first_step, submitter)
+                    if approval:
+                        reassignments.append({
+                            'step': first_step.name,
+                            'original': submitter.username,
+                            'reassigned_to': new_assignee.username,
+                            'is_admin': new_assignee.role == 'ADMIN'
+                        })
+                else:
+                    self._create_approval_for_step(instance, first_step)
+
                 instance.current_step = first_step
                 instance.save()
-                self._create_approval_for_step(instance, first_step)
-                has_other_approvers = True
 
         elif workflow.workflow_type == 'PARALLEL':
-            # Create approvals for all steps except where submitter is approver
+            # Create approvals for all steps, reassigning where needed
             steps = workflow.steps.all()
             for step in steps:
                 if self._check_step_conditions(step, instance):
-                    # Check if submitter is the approver for this step
                     if self._is_self_approval(step, submitter):
-                        # Auto-skip this step - create approval as auto-approved
-                        self._create_auto_approved_step(instance, step, submitter)
+                        # Reassign instead of auto-skip
+                        approval, new_assignee = self._handle_self_approval_reassignment(instance, step, submitter)
+                        if approval:
+                            reassignments.append({
+                                'step': step.name,
+                                'original': submitter.username,
+                                'reassigned_to': new_assignee.username,
+                                'is_admin': new_assignee.role == 'ADMIN'
+                            })
                     else:
                         self._create_approval_for_step(instance, step)
-                        has_other_approvers = True
 
         elif workflow.workflow_type == 'CONDITIONAL':
             # Evaluate conditions to determine first step
             first_step = self._get_next_conditional_step(workflow, instance, None)
             if first_step:
                 if self._is_self_approval(first_step, submitter):
-                    # Skip and find next
-                    first_step = self._get_next_non_self_step(workflow, instance, first_step, submitter)
-                if first_step:
-                    instance.current_step = first_step
-                    instance.save()
+                    # Reassign instead of skip
+                    approval, new_assignee = self._handle_self_approval_reassignment(instance, first_step, submitter)
+                    if approval:
+                        reassignments.append({
+                            'step': first_step.name,
+                            'original': submitter.username,
+                            'reassigned_to': new_assignee.username,
+                            'is_admin': new_assignee.role == 'ADMIN'
+                        })
+                else:
                     self._create_approval_for_step(instance, first_step)
-                    has_other_approvers = True
+
+                instance.current_step = first_step
+                instance.save()
 
         elif workflow.workflow_type == 'HYBRID':
             # Hybrid combines sequential and parallel
@@ -118,39 +122,38 @@ class WorkflowEngine:
             for step in first_steps:
                 if self._check_step_conditions(step, instance):
                     if self._is_self_approval(step, submitter):
-                        self._create_auto_approved_step(instance, step, submitter)
+                        # Reassign instead of auto-skip
+                        approval, new_assignee = self._handle_self_approval_reassignment(instance, step, submitter)
+                        if approval:
+                            reassignments.append({
+                                'step': step.name,
+                                'original': submitter.username,
+                                'reassigned_to': new_assignee.username,
+                                'is_admin': new_assignee.role == 'ADMIN'
+                            })
                     else:
                         self._create_approval_for_step(instance, step)
-                        has_other_approvers = True
             if first_steps.exists():
                 instance.current_step = first_steps.first()
                 instance.save()
 
-        # Check if workflow is already complete after auto-skipping
-        if has_other_approvers or not workflow.steps.exists():
-            if self._check_workflow_completion(instance):
-                instance.status = 'COMPLETED'
-                instance.completed_at = timezone.now()
-                instance.save()
-                submission.status = 'APPROVED'
-                submission.save()
+        # Store reassignment info in context
+        if reassignments:
+            instance.context_data['reassignments'] = reassignments
+            instance.save()
+
+        # Check if workflow is complete (no pending approvals)
+        if self._check_workflow_completion(instance):
+            instance.status = 'COMPLETED'
+            instance.completed_at = timezone.now()
+            instance.save()
+            submission.status = 'APPROVED'
+            submission.save()
 
         # Send initial notifications
         self._send_notifications(instance, 'ASSIGNED')
 
         return instance
-
-    def _check_all_self_approval(self, workflow, instance, submitter):
-        """Check if ALL steps in the workflow have submitter as the approver."""
-        steps = workflow.steps.all()
-        if not steps.exists():
-            return False
-
-        for step in steps:
-            if self._check_step_conditions(step, instance):
-                if not self._is_self_approval(step, submitter):
-                    return False
-        return True
 
     def _is_self_approval(self, step, submitter):
         """Check if the step's approver is the same as the submitter."""
@@ -158,8 +161,63 @@ class WorkflowEngine:
             return True
         return False
 
+    def _find_eligible_reassignment_user(self, step, submitter):
+        """
+        Find an eligible user to reassign approval when self-approval is detected.
+
+        Logic:
+        1. Find users in SAME DEPARTMENT as the original approver
+        2. Exclude the submitter
+        3. Exclude admins and form managers (only regular users can be approvers)
+        4. Select the one with LEAST pending approvals (workload)
+        5. If no one found, return None (will fall back to admin)
+        """
+        from users.models import User
+        from django.db.models import Count, Q
+
+        # Get the department from the original assigned user
+        original_user = step.assigned_user
+        if not original_user or not original_user.department:
+            return None
+
+        department = original_user.department
+
+        # Find eligible users in same department
+        eligible_users = User.objects.filter(
+            department=department,
+            role='USER',  # Only regular users can be approvers
+            is_active=True
+        ).exclude(
+            id=submitter.id  # Exclude the submitter
+        )
+
+        if not eligible_users.exists():
+            return None
+
+        # Annotate with pending approval count (workload)
+        eligible_users = eligible_users.annotate(
+            pending_count=Count(
+                'assigned_approvals',
+                filter=Q(assigned_approvals__status='PENDING')
+            )
+        ).order_by('pending_count')  # Least workload first
+
+        return eligible_users.first()
+
+    def _get_admin_fallback(self):
+        """Get an admin user as fallback when no eligible users found."""
+        from users.models import User
+
+        # Get any active admin
+        admin = User.objects.filter(
+            role='ADMIN',
+            is_active=True
+        ).first()
+
+        return admin
+
     def _get_next_non_self_step(self, workflow, instance, current_step, submitter):
-        """Get the next step where the approver is not the submitter."""
+        """Get the next step where the approver is not the submitter (deprecated - kept for compatibility)."""
         if current_step:
             next_steps = workflow.steps.filter(order__gt=current_step.order).order_by('order')
         else:
@@ -168,23 +226,64 @@ class WorkflowEngine:
         for step in next_steps:
             if not self._is_self_approval(step, submitter):
                 return step
-            else:
-                # Auto-approve this step since submitter is the approver
-                self._create_auto_approved_step(instance, step, submitter)
 
         return None
 
-    def _create_auto_approved_step(self, instance, step, submitter):
-        """Create an approval record that is auto-approved (self-approval skip)."""
+    def _handle_self_approval_reassignment(self, instance, step, submitter):
+        """
+        Handle self-approval by reassigning to another user.
+
+        Returns:
+            tuple: (approval, reassigned_to_user) or (None, None) if couldn't reassign
+        """
+        # Try to find eligible user in same department
+        eligible_user = self._find_eligible_reassignment_user(step, submitter)
+
+        if eligible_user:
+            # Reassign to eligible user
+            approval = self._create_reassigned_approval(instance, step, eligible_user, submitter)
+            return approval, eligible_user
+
+        # Fallback to admin
+        admin = self._get_admin_fallback()
+        if admin:
+            approval = self._create_reassigned_approval(instance, step, admin, submitter, is_admin_fallback=True)
+            return approval, admin
+
+        return None, None
+
+    def _create_reassigned_approval(self, instance, step, new_assignee, original_submitter, is_admin_fallback=False):
+        """Create an approval that was reassigned due to self-approval conflict."""
+        from datetime import timedelta
+
+        # Calculate due date if time limit is set
+        due_date = None
+        if step.time_limit_hours:
+            due_date = timezone.now() + timedelta(hours=step.time_limit_hours)
+
+        if is_admin_fallback:
+            comments = f'Auto-reassigned to admin: Original approver ({original_submitter.username}) is the submitter, no other users available in department'
+        else:
+            comments = f'Auto-reassigned: Original approver ({original_submitter.username}) is the submitter'
+
         approval = WorkflowApproval.objects.create(
             workflow_instance=instance,
             workflow_step=step,
-            status='APPROVED',
-            assigned_to=submitter,
-            approved_by=submitter,
-            completed_at=timezone.now(),
-            comments='Auto-approved: Submitter is the assigned approver'
+            status='PENDING',
+            assigned_to=new_assignee,
+            due_date=due_date,
+            comments=comments
         )
+
+        # Create notification for new assignee
+        self._create_notification(
+            approval,
+            'ASSIGNED',
+            new_assignee,
+            f"Reassigned approval task: {step.name}",
+            f"You have been assigned to {step.name} for {instance.submission.form.name} (auto-reassigned due to conflict)"
+        )
+
         return approval
 
     def _create_approval_for_step(self, instance, step):
@@ -408,7 +507,26 @@ class WorkflowEngine:
         if next_step:
             instance.current_step = next_step
             instance.save()
-            self._create_approval_for_step(instance, next_step)
+
+            # Get submitter to check for self-approval
+            submitter = instance.submission.submitted_by
+
+            if self._is_self_approval(next_step, submitter):
+                # Reassign to another user
+                approval, new_assignee = self._handle_self_approval_reassignment(instance, next_step, submitter)
+                if approval:
+                    # Track reassignment in context
+                    reassignments = instance.context_data.get('reassignments', [])
+                    reassignments.append({
+                        'step': next_step.name,
+                        'original': submitter.username,
+                        'reassigned_to': new_assignee.username,
+                        'is_admin': new_assignee.role == 'ADMIN'
+                    })
+                    instance.context_data['reassignments'] = reassignments
+                    instance.save()
+            else:
+                self._create_approval_for_step(instance, next_step)
 
     def _handle_parallel_progression(self, instance):
         """Handle progression for parallel workflows."""
@@ -436,7 +554,26 @@ class WorkflowEngine:
         if next_step:
             instance.current_step = next_step
             instance.save()
-            self._create_approval_for_step(instance, next_step)
+
+            # Get submitter to check for self-approval
+            submitter = instance.submission.submitted_by
+
+            if self._is_self_approval(next_step, submitter):
+                # Reassign to another user
+                approval, new_assignee = self._handle_self_approval_reassignment(instance, next_step, submitter)
+                if approval:
+                    # Track reassignment in context
+                    reassignments = instance.context_data.get('reassignments', [])
+                    reassignments.append({
+                        'step': next_step.name,
+                        'original': submitter.username,
+                        'reassigned_to': new_assignee.username,
+                        'is_admin': new_assignee.role == 'ADMIN'
+                    })
+                    instance.context_data['reassignments'] = reassignments
+                    instance.save()
+            else:
+                self._create_approval_for_step(instance, next_step)
 
     def _handle_hybrid_progression(self, instance, completed_approval):
         """Handle progression for hybrid workflows."""
@@ -462,9 +599,26 @@ class WorkflowEngine:
             next_order = next_steps.first().order
             steps_at_next_level = next_steps.filter(order=next_order)
 
+            # Get submitter to check for self-approval
+            submitter = instance.submission.submitted_by
+
             for step in steps_at_next_level:
                 if self._check_step_conditions(step, instance):
-                    self._create_approval_for_step(instance, step)
+                    if self._is_self_approval(step, submitter):
+                        # Reassign to another user
+                        approval, new_assignee = self._handle_self_approval_reassignment(instance, step, submitter)
+                        if approval:
+                            # Track reassignment in context
+                            reassignments = instance.context_data.get('reassignments', [])
+                            reassignments.append({
+                                'step': step.name,
+                                'original': submitter.username,
+                                'reassigned_to': new_assignee.username,
+                                'is_admin': new_assignee.role == 'ADMIN'
+                            })
+                            instance.context_data['reassignments'] = reassignments
+                    else:
+                        self._create_approval_for_step(instance, step)
 
             instance.current_step = steps_at_next_level.first()
             instance.save()

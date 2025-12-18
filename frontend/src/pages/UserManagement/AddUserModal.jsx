@@ -243,48 +243,8 @@ const AddUserModal = ({ departments, onClose, onSave }) => {
     return roles[role] || role;
   };
 
-  // Step indicator component
-  const StepIndicator = () => (
-    <div className="mb-8">
-      <div className="flex items-center justify-center">
-        {/* Step 1 */}
-        <div className="flex items-center">
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-            currentStep >= 1 ? 'bg-sky-500 border-sky-500 text-white' : 'border-slate-300 text-slate-400'
-          }`}>
-            {currentStep > 1 ? <CheckCircleIcon /> : '1'}
-          </div>
-          <div className="ml-3">
-            <p className={`text-sm font-medium ${currentStep >= 1 ? 'text-sky-600' : 'text-slate-400'}`}>
-              Basic Info
-            </p>
-            <p className="text-xs text-slate-500">Personal & Role</p>
-          </div>
-        </div>
-
-        {/* Connector */}
-        <div className={`w-24 h-1 mx-4 ${currentStep > 1 ? 'bg-sky-500' : 'bg-slate-200'}`} />
-
-        {/* Step 2 */}
-        <div className="flex items-center">
-          <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-            currentStep >= 2 ? 'bg-sky-500 border-sky-500 text-white' : 'border-slate-300 text-slate-400'
-          }`}>
-            {currentStep > 2 ? <CheckCircleIcon /> : '2'}
-          </div>
-          <div className="ml-3">
-            <p className={`text-sm font-medium ${currentStep >= 2 ? 'text-sky-600' : 'text-slate-400'}`}>
-              Review & Create
-            </p>
-            <p className="text-xs text-slate-500">Password & Confirm</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   // Step 1: Basic Information
-  const Step1 = () => (
+  const renderStep1 = () => (
     <div className="space-y-6">
       {/* Section Header */}
       <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
@@ -454,7 +414,7 @@ const AddUserModal = ({ departments, onClose, onSave }) => {
   );
 
   // Step 2: Review & Create
-  const Step2 = () => (
+  const renderStep2 = () => (
     <div className="space-y-6">
       {/* Summary Card */}
       <div className="bg-gradient-to-br from-sky-50 to-indigo-50 rounded-xl p-6 border border-sky-200">
@@ -613,11 +573,47 @@ const AddUserModal = ({ departments, onClose, onSave }) => {
             </div>
           )}
 
-          <StepIndicator />
+          {/* Step Indicator */}
+          <div className="mb-8">
+            <div className="flex items-center justify-center">
+              {/* Step 1 */}
+              <div className="flex items-center">
+                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
+                  currentStep >= 1 ? 'bg-sky-500 border-sky-500 text-white' : 'border-slate-300 text-slate-400'
+                }`}>
+                  {currentStep > 1 ? <CheckCircleIcon /> : '1'}
+                </div>
+                <div className="ml-3">
+                  <p className={`text-sm font-medium ${currentStep >= 1 ? 'text-sky-600' : 'text-slate-400'}`}>
+                    Basic Info
+                  </p>
+                  <p className="text-xs text-slate-500">Personal & Role</p>
+                </div>
+              </div>
+
+              {/* Connector */}
+              <div className={`w-24 h-1 mx-4 ${currentStep > 1 ? 'bg-sky-500' : 'bg-slate-200'}`} />
+
+              {/* Step 2 */}
+              <div className="flex items-center">
+                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
+                  currentStep >= 2 ? 'bg-sky-500 border-sky-500 text-white' : 'border-slate-300 text-slate-400'
+                }`}>
+                  {currentStep > 2 ? <CheckCircleIcon /> : '2'}
+                </div>
+                <div className="ml-3">
+                  <p className={`text-sm font-medium ${currentStep >= 2 ? 'text-sky-600' : 'text-slate-400'}`}>
+                    Review & Create
+                  </p>
+                  <p className="text-xs text-slate-500">Password & Confirm</p>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit}>
-            {currentStep === 1 && <Step1 />}
-            {currentStep === 2 && <Step2 />}
+            {currentStep === 1 && renderStep1()}
+            {currentStep === 2 && renderStep2()}
           </form>
         </div>
 

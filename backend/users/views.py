@@ -288,6 +288,68 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return Response(stats)
 
+    @action(detail=False, methods=['get'])
+    def generate_employee_id(self, request):
+        """
+        Generate a unique Employee ID.
+        GET /api/v1/users/generate_employee_id/?department_id=<id>
+
+        Format: {DEPT_CODE}{YEAR}{SEQUENCE}
+        Example: HR202500001, IT202500002
+        """
+        if not request.user.is_admin:
+            return Response(
+                {'error': 'Permission denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        department_id = request.query_params.get('department_id')
+
+        # Get department code
+        dept_code = 'EMP'  # Default if no department
+        if department_id:
+            try:
+                department = Department.objects.get(id=department_id)
+                dept_code = department.code[:3].upper() if department.code else 'EMP'
+            except Department.DoesNotExist:
+                pass
+
+        # Get current year
+        current_year = timezone.now().year
+
+        # Find the highest sequence number for this department and year
+        # Pattern: {DEPT_CODE}{YEAR}{5-digit sequence}
+        prefix = f"{dept_code}{current_year}"
+
+        # Get all employee IDs that start with this prefix
+        existing_ids = User.objects.filter(
+            employee_id__startswith=prefix
+        ).values_list('employee_id', flat=True)
+
+        # Find the highest sequence number
+        max_seq = 0
+        for emp_id in existing_ids:
+            try:
+                # Extract the sequence number (last 5 digits)
+                seq_str = emp_id[len(prefix):]
+                if seq_str.isdigit():
+                    seq = int(seq_str)
+                    if seq > max_seq:
+                        max_seq = seq
+            except (ValueError, IndexError):
+                continue
+
+        # Generate new ID with next sequence
+        new_seq = max_seq + 1
+        new_employee_id = f"{prefix}{new_seq:05d}"  # 5-digit sequence with leading zeros
+
+        return Response({
+            'employee_id': new_employee_id,
+            'department_code': dept_code,
+            'year': current_year,
+            'sequence': new_seq
+        })
+
     @staticmethod
     def get_client_ip(request):
         """Get client IP address from request."""

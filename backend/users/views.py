@@ -462,6 +462,65 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
         return Response(stats)
 
+    @action(detail=False, methods=['get'])
+    def generate_code(self, request):
+        """
+        Generate a unique Department Code based on department name.
+        GET /api/v1/departments/generate_code/?name=<department_name>
+
+        Format: {ABBREVIATION}{3-digit sequence}
+        Example: HR001, IT002, FIN003
+        """
+        if not request.user.is_admin:
+            return Response(
+                {'error': 'Permission denied'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        name = request.query_params.get('name', '').strip()
+
+        if not name:
+            return Response(
+                {'error': 'Department name is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Generate abbreviation from name
+        words = name.split()
+        if len(words) == 1:
+            # Single word: take first 2-3 letters
+            abbrev = words[0][:3].upper()
+        else:
+            # Multiple words: take first letter of each word (max 4)
+            abbrev = ''.join(word[0] for word in words[:4]).upper()
+
+        # Find the highest sequence number for this abbreviation
+        existing_codes = Department.objects.filter(
+            code__regex=rf'^{abbrev}\d+$'
+        ).values_list('code', flat=True)
+
+        max_seq = 0
+        for code in existing_codes:
+            try:
+                # Extract the sequence number (digits after abbreviation)
+                seq_str = code[len(abbrev):]
+                if seq_str.isdigit():
+                    seq = int(seq_str)
+                    if seq > max_seq:
+                        max_seq = seq
+            except (ValueError, IndexError):
+                continue
+
+        # Generate new code with next sequence
+        new_seq = max_seq + 1
+        new_code = f"{abbrev}{new_seq:03d}"  # 3-digit sequence with leading zeros
+
+        return Response({
+            'code': new_code,
+            'abbreviation': abbrev,
+            'sequence': new_seq
+        })
+
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     """

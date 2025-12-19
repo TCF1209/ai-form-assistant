@@ -583,7 +583,7 @@ const AIFormGeneration = () => {
               {generationHistory.slice(0, 5).map(item => (
                 <div
                   key={item.id}
-                  className="flex justify-between items-center p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="flex justify-between items-center gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
                   onClick={() => {
                     // Load the previous generation
                     setPrompt(item.prompt);
@@ -594,7 +594,7 @@ const AIFormGeneration = () => {
                     message.info('Previous generation loaded. Click "Generate Form with AI" to regenerate.');
                   }}
                 >
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0 overflow-hidden">
                     <p className="text-sm font-medium text-slate-700 truncate">{item.prompt}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="inline-block px-2 py-1 text-xs font-medium bg-sky-100 text-sky-700 rounded">

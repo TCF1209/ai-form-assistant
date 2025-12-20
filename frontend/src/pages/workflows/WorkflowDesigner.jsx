@@ -364,9 +364,9 @@ const StepEditor = ({ step, onSave, onCancel, users }) => {
           </label>
           <div className="grid grid-cols-3 gap-2">
             {[
-              { value: 'ALL', label: 'All Must Approve', desc: 'Every approver must approve', color: 'purple' },
-              { value: 'MAJORITY', label: 'Majority', desc: 'More than 50% must approve', color: 'indigo' },
-              { value: 'ANY', label: 'Any One', desc: 'One approval is enough', color: 'teal' }
+              { value: 'ALL', label: 'All Must Approve', desc: 'Every approver must approve', selectedClass: 'border-purple-500 bg-purple-50', textClass: 'text-purple-700' },
+              { value: 'MAJORITY', label: 'Majority', desc: 'More than 50% must approve', selectedClass: 'border-indigo-500 bg-indigo-50', textClass: 'text-indigo-700' },
+              { value: 'ANY', label: 'Any One', desc: 'One approval is enough', selectedClass: 'border-teal-500 bg-teal-50', textClass: 'text-teal-700' }
             ].map(mode => (
               <button
                 key={mode.value}
@@ -374,11 +374,11 @@ const StepEditor = ({ step, onSave, onCancel, users }) => {
                 onClick={() => handleChange('approval_mode', mode.value)}
                 className={`p-3 border-2 rounded-lg text-left transition-colors ${
                   formData.approval_mode === mode.value
-                    ? `border-${mode.color}-500 bg-${mode.color}-50`
+                    ? mode.selectedClass
                     : 'border-slate-200 hover:border-slate-300'
                 }`}
               >
-                <div className={`font-medium text-sm ${formData.approval_mode === mode.value ? `text-${mode.color}-700` : 'text-slate-800'}`}>
+                <div className={`font-medium text-sm ${formData.approval_mode === mode.value ? mode.textClass : 'text-slate-800'}`}>
                   {mode.label}
                 </div>
                 <div className="text-xs text-slate-500 mt-0.5">{mode.desc}</div>
@@ -1090,7 +1090,6 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
               onSave={handleSaveStep}
               onCancel={() => setEditingStepIndex(null)}
               users={users}
-              assignedApproverIds={steps.map(s => s.assigned_user).filter(Boolean)}
             />
           ) : (
             <div className="bg-slate-50 border border-slate-200 border-dashed rounded-lg p-8 text-center h-full flex flex-col items-center justify-center">

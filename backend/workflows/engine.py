@@ -820,28 +820,36 @@ class WorkflowEngine:
 
         if workflow.workflow_type == 'SEQUENTIAL':
             # For sequential workflows, check if ALL required steps have been approved
-            # (not just if there are no pending approvals, because next step's approval
-            # hasn't been created yet at this point)
-            total_required_steps = workflow.steps.filter(is_required=True).count()
-            approved_steps = instance.approvals.filter(
-                workflow_step__is_required=True,
-                status='APPROVED'
-            ).count()
+            # With multi-approver support, we need to count UNIQUE STEPS that are complete
+            # (not individual approval records)
+            required_steps = workflow.steps.filter(is_required=True)
+            total_required_steps = required_steps.count()
 
-            return approved_steps >= total_required_steps
+            # Count how many unique steps are complete (approved, not rejected)
+            completed_step_count = 0
+            for step in required_steps:
+                is_complete, is_rejected = self._check_step_completion(instance, step)
+                if is_complete and not is_rejected:
+                    completed_step_count += 1
+
+            return completed_step_count >= total_required_steps
 
         elif workflow.workflow_type == 'PARALLEL':
-            # Complete based on threshold
-            total_steps = workflow.steps.filter(is_required=True).count()
-            approved_count = instance.approvals.filter(
-                status='APPROVED',
-                workflow_step__is_required=True
-            ).count()
+            # Complete based on threshold - count unique steps, not individual approvals
+            required_steps = workflow.steps.filter(is_required=True)
+            total_steps = required_steps.count()
 
             if total_steps == 0:
                 return True
 
-            approval_percentage = (approved_count / total_steps) * 100
+            # Count how many unique steps are complete (approved, not rejected)
+            completed_step_count = 0
+            for step in required_steps:
+                is_complete, is_rejected = self._check_step_completion(instance, step)
+                if is_complete and not is_rejected:
+                    completed_step_count += 1
+
+            approval_percentage = (completed_step_count / total_steps) * 100
             return approval_percentage >= workflow.approval_threshold
 
         elif workflow.workflow_type in ['CONDITIONAL', 'HYBRID']:

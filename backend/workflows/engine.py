@@ -867,13 +867,30 @@ class WorkflowEngine:
             return approval_percentage >= workflow.approval_threshold
 
         elif workflow.workflow_type in ['CONDITIONAL', 'HYBRID']:
-            # Complete if no pending required approvals and no next steps
-            has_pending = instance.approvals.filter(
-                status__in=['PENDING', 'DELEGATED'],
-                workflow_step__is_required=True
-            ).exists()
+            # Complete if all required steps are complete (using step-level completion check)
+            # With multi-approver support, we check each step's completion status
+            required_steps = workflow.steps.filter(is_required=True)
 
-            return not has_pending
+            if required_steps.count() == 0:
+                return True
+
+            # Check each required step - all must be complete and not rejected
+            for step in required_steps:
+                # Check if this step has any approvals for this instance
+                step_approvals = instance.approvals.filter(workflow_step=step)
+                if not step_approvals.exists():
+                    # Step hasn't been reached yet
+                    return False
+
+                is_complete, is_rejected = self._check_step_completion(instance, step)
+                if is_rejected:
+                    # Step was rejected - workflow is failed, not complete
+                    return False
+                if not is_complete:
+                    # Step still pending
+                    return False
+
+            return True
 
         return False
 

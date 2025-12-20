@@ -120,9 +120,12 @@ const ParallelApprovalNode = ({ data }) => {
     'ANY': 'Any One Approval'
   };
 
+  // Handle position: align with Start/End circle centers (74px from top when node is at centerY-50)
+  const handleStyle = { top: '74px' };
+
   return (
     <div className="min-w-[200px] max-w-[280px] bg-white rounded-lg shadow-lg border-2 border-sky-200">
-      <Handle type="target" position={Position.Left} className="!bg-sky-500 !w-3 !h-3" />
+      <Handle type="target" position={Position.Left} style={handleStyle} className="!bg-sky-500 !w-3 !h-3" />
 
       {/* Header */}
       <div className="px-3 py-2 border-b border-slate-100 bg-gradient-to-r from-sky-50 to-indigo-50 rounded-t-lg">
@@ -163,7 +166,7 @@ const ParallelApprovalNode = ({ data }) => {
         </div>
       </div>
 
-      <Handle type="source" position={Position.Right} className="!bg-sky-500 !w-3 !h-3" />
+      <Handle type="source" position={Position.Right} style={handleStyle} className="!bg-sky-500 !w-3 !h-3" />
     </div>
   );
 };

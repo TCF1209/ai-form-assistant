@@ -721,17 +721,31 @@ class WorkflowEngine:
     def _handle_parallel_progression(self, instance):
         """Handle progression for parallel workflows."""
 
-        # Check if enough approvals are complete
-        total_steps = instance.workflow.steps.count()
-        approved_count = instance.approvals.filter(status='APPROVED').count()
-        threshold = instance.workflow.approval_threshold
+        # Check if enough STEPS are complete (not individual approvals)
+        # With multi-approver support, we count unique steps, not approval records
+        required_steps = instance.workflow.steps.filter(is_required=True)
+        total_steps = required_steps.count()
 
-        approval_percentage = (approved_count / total_steps) * 100
+        if total_steps == 0:
+            return
+
+        # Count how many unique steps are complete (approved, not rejected)
+        completed_step_count = 0
+        for step in required_steps:
+            is_complete, is_rejected = self._check_step_completion(instance, step)
+            if is_complete and not is_rejected:
+                completed_step_count += 1
+
+        threshold = instance.workflow.approval_threshold
+        approval_percentage = (completed_step_count / total_steps) * 100
 
         if approval_percentage >= threshold:
             instance.status = 'COMPLETED'
             instance.completed_at = timezone.now()
             instance.save()
+            # Also update submission status
+            instance.submission.status = 'APPROVED'
+            instance.submission.save()
 
     def _handle_conditional_progression(self, instance, completed_approval):
         """Handle progression for conditional workflows."""

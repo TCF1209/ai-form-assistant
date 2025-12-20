@@ -280,37 +280,31 @@ const WorkflowDiagram = ({
       }
     } else if (workflowType === 'PARALLEL') {
       // Parallel: Start → [Single Parallel Approval Node] → End
-      // For PARALLEL, we show a single node with all approvers from the first step
-      const parallelStep = steps[0];
-
-      // Calculate vertical center based on the parallel approval node height
-      const approverCount = parallelStep ? Math.min(getApproverNames(parallelStep).length, 4) : 0;
-      const parallelNodeHeight = 80 + approverCount * 24;
-      const verticalCenter = centerY;
-
+      // Use same positioning pattern as SEQUENTIAL (which works well)
       nodes.push({
         id: 'start',
         type: 'start',
-        position: { x: startX, y: verticalCenter - 24 }, // Center the 48px circle
+        position: { x: startX, y: centerY },
         data: { label: 'Start' },
       });
 
+      const parallelStep = steps[0];
       if (parallelStep) {
         nodes.push({
           id: 'parallel-approval',
           type: 'parallelApproval',
-          position: { x: startX + nodeSpacingX, y: verticalCenter - parallelNodeHeight / 2 },
+          position: { x: startX + nodeSpacingX, y: centerY - 50 }, // Similar to step at centerY - 30
           data: {
             approverNames: getApproverNames(parallelStep),
             approvalMode: parallelStep.approval_mode || 'ALL',
           },
         });
 
+        // Use default smoothstep edges (same as SEQUENTIAL)
         edges.push({
           id: 'edge-start-parallel',
           source: 'start',
           target: 'parallel-approval',
-          type: 'straight',
         });
 
         // Add end node
@@ -318,7 +312,7 @@ const WorkflowDiagram = ({
         nodes.push({
           id: 'end',
           type: 'end',
-          position: { x: endX, y: verticalCenter - 24 }, // Center the 48px circle
+          position: { x: endX, y: centerY },
           data: { label: 'End' },
         });
 
@@ -326,7 +320,6 @@ const WorkflowDiagram = ({
           id: 'edge-parallel-end',
           source: 'parallel-approval',
           target: 'end',
-          type: 'straight',
         });
       } else {
         // No steps yet, just show start → end
@@ -334,7 +327,7 @@ const WorkflowDiagram = ({
         nodes.push({
           id: 'end',
           type: 'end',
-          position: { x: endX, y: verticalCenter - 24 },
+          position: { x: endX, y: centerY },
           data: { label: 'End' },
         });
 
@@ -342,7 +335,6 @@ const WorkflowDiagram = ({
           id: 'edge-start-end',
           source: 'start',
           target: 'end',
-          type: 'straight',
         });
       }
     } else {
@@ -425,11 +417,7 @@ const WorkflowDiagram = ({
 
   // Calculate diagram height based on workflow type
   const diagramHeight = useMemo(() => {
-    if (workflowType === 'PARALLEL') {
-      // Single parallel approval node - need more height for approver list
-      const approverCount = steps[0]?.approvers?.length || 0;
-      return Math.max(220, 180 + Math.min(approverCount, 4) * 24);
-    }
+    // Use consistent height like SEQUENTIAL
     return 200;
   }, [steps, workflowType]);
 

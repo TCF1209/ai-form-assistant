@@ -6,6 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import api from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import ConditionBuilder from './ConditionBuilder';
+import WorkflowDiagram from './WorkflowDiagram';
 
 // Icons
 const ForkIcon = () => (
@@ -1015,35 +1016,41 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
     </div>
   );
 
-  // Step 1: Add Approval Steps
-  const renderStepsStep = () => (
-    <div className="max-w-4xl mx-auto">
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 bg-sky-50 rounded-full mb-4">
-          <UsersIcon className="w-8 h-8 text-sky-500" />
+  // Step 1: Add Approval Steps - SEQUENTIAL UI
+  const renderSequentialStepsUI = () => (
+    <>
+      {/* Workflow Diagram Preview */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-slate-700 flex items-center gap-2">
+            <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+            </svg>
+            Workflow Preview
+          </h3>
+          <span className="text-xs text-slate-500">Click on a step to edit it</span>
         </div>
-        <h2 className="text-xl font-semibold text-slate-800">Add Approval Steps</h2>
-        <p className="text-slate-600 mt-1">
-          {formData.workflow_type === 'SEQUENTIAL'
-            ? 'Add approvers in the order they should review'
-            : 'Add all approvers who will review simultaneously'}
-        </p>
+        <WorkflowDiagram
+          steps={steps}
+          workflowType={formData.workflow_type}
+          users={users}
+          onStepSelect={handleEditStep}
+          selectedStepIndex={editingStepIndex}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-6">
         {/* Steps List */}
         <div className="bg-white border border-slate-200 rounded-lg">
           <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-800">
-              {formData.workflow_type === 'SEQUENTIAL' ? 'Approval Order' : 'Approvers'}
-            </h3>
+            <h3 className="text-lg font-semibold text-slate-800">Approval Steps</h3>
             {!isReadOnly && (
               <button
                 onClick={handleAddStep}
                 className="flex items-center gap-2 px-3 py-1.5 bg-sky-500 text-white text-sm rounded-lg hover:bg-sky-600 transition-colors"
               >
                 <PlusIcon />
-                Add {formData.workflow_type === 'SEQUENTIAL' ? 'Step' : 'Approver'}
+                Add Step
               </button>
             )}
           </div>
@@ -1052,13 +1059,13 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
             {steps.length === 0 ? (
               <div className="text-center py-8">
                 <EmptyIcon className="mx-auto mb-3" />
-                <p className="text-slate-500 mb-4">No {formData.workflow_type === 'SEQUENTIAL' ? 'steps' : 'approvers'} added yet</p>
+                <p className="text-slate-500 mb-4">No steps added yet</p>
                 {!isReadOnly && (
                   <button
                     onClick={handleAddStep}
                     className="px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
                   >
-                    Add First {formData.workflow_type === 'SEQUENTIAL' ? 'Step' : 'Approver'}
+                    Add First Step
                   </button>
                 )}
               </div>
@@ -1100,6 +1107,246 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
           )}
         </div>
       </div>
+    </>
+  );
+
+  // Step 1: Add Approval Steps - PARALLEL UI
+  const renderParallelStepsUI = () => {
+    // For parallel workflow, we use a single step with multiple approvers
+    const parallelStep = steps[0] || { name: 'Parallel Approval', approvers: [], approval_mode: 'ALL' };
+    const eligibleUsers = users.filter(u => u.role === 'USER');
+
+    const handleParallelApproverAdd = (userId) => {
+      if (!userId) return;
+      const currentApprovers = parallelStep.approvers || [];
+      if (!currentApprovers.includes(userId) && !currentApprovers.includes(String(userId))) {
+        const updatedStep = {
+          ...parallelStep,
+          name: 'Parallel Approval',
+          step_type: 'APPROVAL',
+          order: 0,
+          approvers: [...currentApprovers, userId],
+        };
+        setSteps([updatedStep]);
+      }
+    };
+
+    const handleParallelApproverRemove = (userId) => {
+      const currentApprovers = parallelStep.approvers || [];
+      const updatedStep = {
+        ...parallelStep,
+        approvers: currentApprovers.filter(id => String(id) !== String(userId)),
+      };
+      setSteps([updatedStep]);
+    };
+
+    const handleParallelModeChange = (mode) => {
+      const updatedStep = {
+        ...parallelStep,
+        name: 'Parallel Approval',
+        step_type: 'APPROVAL',
+        order: 0,
+        approval_mode: mode,
+        approvers: parallelStep.approvers || [],
+      };
+      setSteps([updatedStep]);
+    };
+
+    const getApproverName = (userId) => {
+      const user = eligibleUsers.find(u => String(u.id) === String(userId));
+      if (user) {
+        return user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : user.username;
+      }
+      return 'Unknown';
+    };
+
+    return (
+      <>
+        {/* Workflow Diagram Preview */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-slate-700 flex items-center gap-2">
+              <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+              </svg>
+              Workflow Preview
+            </h3>
+          </div>
+          <WorkflowDiagram
+            steps={steps}
+            workflowType={formData.workflow_type}
+            users={users}
+            onStepSelect={() => {}}
+            selectedStepIndex={null}
+          />
+        </div>
+
+        {/* Parallel Approval Configuration */}
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white border border-slate-200 rounded-lg">
+            <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-sky-50 to-indigo-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-sky-100 rounded-lg">
+                  <svg className="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Parallel Approval</h3>
+                  <p className="text-sm text-slate-500">All selected approvers will review simultaneously</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-6">
+              {/* Approval Mode Selection */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Approval Requirement <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { value: 'ALL', label: 'All Must Approve', desc: 'Every approver must approve', icon: '✓✓', color: 'purple' },
+                    { value: 'MAJORITY', label: 'Majority', desc: 'More than 50% must approve', icon: '>½', color: 'indigo' },
+                    { value: 'ANY', label: 'Any One', desc: 'One approval is enough', icon: '✓', color: 'teal' }
+                  ].map(mode => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      onClick={() => !isReadOnly && handleParallelModeChange(mode.value)}
+                      disabled={isReadOnly}
+                      className={`p-4 border-2 rounded-lg text-left transition-all ${
+                        parallelStep.approval_mode === mode.value
+                          ? `border-${mode.color}-500 bg-${mode.color}-50 ring-2 ring-${mode.color}-200`
+                          : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                      } ${isReadOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-lg font-bold ${
+                          parallelStep.approval_mode === mode.value ? `text-${mode.color}-600` : 'text-slate-400'
+                        }`}>{mode.icon}</span>
+                        <span className={`font-medium text-sm ${
+                          parallelStep.approval_mode === mode.value ? `text-${mode.color}-700` : 'text-slate-700'
+                        }`}>{mode.label}</span>
+                      </div>
+                      <p className="text-xs text-slate-500">{mode.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Approvers Selection */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Approvers <span className="text-red-500">*</span>
+                </label>
+
+                {/* Selected Approvers */}
+                <div className="min-h-[60px] p-3 bg-slate-50 rounded-lg border border-slate-200 mb-3">
+                  {(parallelStep.approvers || []).length === 0 ? (
+                    <p className="text-sm text-slate-400 italic text-center py-2">No approvers selected yet</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {(parallelStep.approvers || []).map(userId => (
+                        <span
+                          key={userId}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm shadow-sm"
+                        >
+                          <span className="w-6 h-6 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center text-xs font-medium">
+                            {getApproverName(userId).charAt(0).toUpperCase()}
+                          </span>
+                          <span className="text-slate-700">{getApproverName(userId)}</span>
+                          {!isReadOnly && (
+                            <button
+                              type="button"
+                              onClick={() => handleParallelApproverRemove(userId)}
+                              className="text-slate-400 hover:text-red-500 transition-colors"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Add Approver Dropdown */}
+                {!isReadOnly && (
+                  <select
+                    value=""
+                    onChange={(e) => handleParallelApproverAdd(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                  >
+                    <option value="">+ Add approver...</option>
+                    {eligibleUsers
+                      .filter(u => {
+                        const approvers = parallelStep.approvers || [];
+                        return !approvers.includes(String(u.id)) && !approvers.includes(u.id);
+                      })
+                      .map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.first_name} {user.last_name} ({user.username})
+                        </option>
+                      ))}
+                  </select>
+                )}
+                <p className="mt-2 text-xs text-slate-500">
+                  Select all approvers who should review submissions simultaneously.
+                </p>
+              </div>
+
+              {/* Summary Info */}
+              {(parallelStep.approvers || []).length > 0 && (
+                <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <svg className="w-5 h-5 text-sky-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="text-sm text-sky-700">
+                      <span className="font-medium">{(parallelStep.approvers || []).length} approver{(parallelStep.approvers || []).length > 1 ? 's' : ''}</span> will review at the same time.
+                      {parallelStep.approval_mode === 'ALL' && ' All must approve for the workflow to complete.'}
+                      {parallelStep.approval_mode === 'MAJORITY' && ' More than half must approve for the workflow to complete.'}
+                      {parallelStep.approval_mode === 'ANY' && ' Only one approval is needed for the workflow to complete.'}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  // Step 1: Add Approval Steps - Main Render
+  const renderStepsStep = () => (
+    <div className="max-w-4xl mx-auto">
+      <div className="text-center mb-6">
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-sky-50 rounded-full mb-4">
+          {formData.workflow_type === 'SEQUENTIAL' ? (
+            <svg className="w-8 h-8 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+          ) : (
+            <svg className="w-8 h-8 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          )}
+        </div>
+        <h2 className="text-xl font-semibold text-slate-800">
+          {formData.workflow_type === 'SEQUENTIAL' ? 'Configure Approval Steps' : 'Configure Parallel Approvers'}
+        </h2>
+        <p className="text-slate-600 mt-1">
+          {formData.workflow_type === 'SEQUENTIAL'
+            ? 'Add approval steps in the order they should be executed'
+            : 'Add all approvers who will review submissions at the same time'}
+        </p>
+      </div>
+
+      {formData.workflow_type === 'SEQUENTIAL' ? renderSequentialStepsUI() : renderParallelStepsUI()}
     </div>
   );
 

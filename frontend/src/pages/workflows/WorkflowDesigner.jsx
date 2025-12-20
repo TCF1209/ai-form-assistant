@@ -123,6 +123,25 @@ const getStepTypeLabel = (type) => {
   return labels[type] || type;
 };
 
+// Approval mode labels
+const getApprovalModeLabel = (mode) => {
+  const labels = {
+    'ALL': 'All',
+    'MAJORITY': 'Majority',
+    'ANY': 'Any One'
+  };
+  return labels[mode] || mode;
+};
+
+const getApprovalModeColor = (mode) => {
+  const colors = {
+    'ALL': 'bg-purple-100 text-purple-700',
+    'MAJORITY': 'bg-indigo-100 text-indigo-700',
+    'ANY': 'bg-teal-100 text-teal-700'
+  };
+  return colors[mode] || 'bg-slate-100 text-slate-700';
+};
+
 // Sortable Step Component
 const SortableStep = ({ step, index, onEdit, onDelete, isReadOnly, users }) => {
   const {
@@ -142,35 +161,31 @@ const SortableStep = ({ step, index, onEdit, onDelete, isReadOnly, users }) => {
 
   const typeStyles = getStepTypeStyles(step.step_type);
 
-  // Get the assigned user name
-  const getAssignedUserName = () => {
-    // First check if assigned_user_name is already provided (from API)
-    if (step.assigned_user_name) return step.assigned_user_name;
-    // Otherwise look up from users array
+  // Get approver names for multi-approver display
+  const getApproverNames = () => {
+    // Check for multi-approver data first (from API response)
+    if (step.assigned_users_detail && step.assigned_users_detail.length > 0) {
+      return step.assigned_users_detail.map(u => u.full_name || u.username);
+    }
+    // Check for approvers array (local state)
+    if (step.approvers && step.approvers.length > 0 && users) {
+      return step.approvers.map(userId => {
+        const user = users.find(u => String(u.id) === String(userId));
+        return user ? (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : user.username) : '';
+      }).filter(Boolean);
+    }
+    // Fallback to single assigned_user (backward compatibility)
     if (step.assigned_user && users) {
-      const user = users.find(u => u.id === step.assigned_user || u.id === parseInt(step.assigned_user));
+      const user = users.find(u => String(u.id) === String(step.assigned_user));
       if (user) {
-        return user.first_name && user.last_name
-          ? `${user.first_name} ${user.last_name}`
-          : user.username;
+        return [user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : user.username];
       }
     }
-    return null;
+    return [];
   };
 
-  const assignedUserName = getAssignedUserName();
-
-  // User-friendly role labels
-  const getRoleLabel = (role) => {
-    const labels = {
-      'MANAGER': 'Manager',
-      'ADMIN': 'Admin',
-      'USER': 'User',
-      'DEPARTMENT_HEAD': 'Department Head',
-      'SUPERVISOR': 'Supervisor'
-    };
-    return labels[role] || role;
-  };
+  const approverNames = getApproverNames();
+  const approvalMode = step.approval_mode || 'ALL';
 
   return (
     <div ref={setNodeRef} style={style} className="mb-2">
@@ -196,14 +211,15 @@ const SortableStep = ({ step, index, onEdit, onDelete, isReadOnly, users }) => {
               <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${typeStyles.bg} ${typeStyles.text}`}>
                 {getStepTypeLabel(step.step_type)}
               </span>
-              {assignedUserName && (
+              {/* Approval Mode Badge */}
+              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getApprovalModeColor(approvalMode)}`}>
+                {getApprovalModeLabel(approvalMode)}
+              </span>
+              {/* Approvers Badge */}
+              {approverNames.length > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-sky-100 text-sky-700">
-                  <UserIcon /> {assignedUserName}
-                </span>
-              )}
-              {step.assigned_role && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
-                  <UsersIcon /> {getRoleLabel(step.assigned_role)}
+                  <UsersIcon />
+                  {approverNames.length === 1 ? approverNames[0] : `${approverNames.length} approvers`}
                 </span>
               )}
               {step.time_limit_hours && (
@@ -238,23 +254,42 @@ const SortableStep = ({ step, index, onEdit, onDelete, isReadOnly, users }) => {
   );
 };
 
-// Step Editor Component (Simplified)
-const StepEditor = ({ step, onSave, onCancel, users, assignedApproverIds = [] }) => {
+// Small X icon for removing approvers
+const SmallXIcon = () => (
+  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
+// Step Editor Component with Multi-Approver Support
+const StepEditor = ({ step, onSave, onCancel, users }) => {
   const [formData, setFormData] = useState({
     name: step?.name || '',
-    step_type: 'APPROVAL',  // Always APPROVAL
-    assigned_user: step?.assigned_user || '',
-    is_required: true,  // Always required
-    can_skip: false  // Cannot skip
+    step_type: 'APPROVAL',
+    approval_mode: step?.approval_mode || 'ALL',
+    approvers: step?.approvers || [],
+    is_required: true,
+    can_skip: false
   });
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (step) {
+      // Get approvers from either approvers array or assigned_users_detail (API response)
+      let approvers = step.approvers || [];
+      if (approvers.length === 0 && step.assigned_users_detail && step.assigned_users_detail.length > 0) {
+        approvers = step.assigned_users_detail.map(u => u.id);
+      }
+      // Fallback to single assigned_user for backward compatibility
+      if (approvers.length === 0 && step.assigned_user) {
+        approvers = [step.assigned_user];
+      }
+
       setFormData({
         name: step.name || '',
         step_type: 'APPROVAL',
-        assigned_user: step.assigned_user || '',
+        approval_mode: step.approval_mode || 'ALL',
+        approvers: approvers,
         is_required: true,
         can_skip: false
       });
@@ -268,13 +303,23 @@ const StepEditor = ({ step, onSave, onCancel, users, assignedApproverIds = [] })
     }
   };
 
+  const addApprover = (userId) => {
+    if (userId && !formData.approvers.includes(userId)) {
+      handleChange('approvers', [...formData.approvers, userId]);
+    }
+  };
+
+  const removeApprover = (userId) => {
+    handleChange('approvers', formData.approvers.filter(id => id !== userId));
+  };
+
   const handleSave = () => {
     const newErrors = {};
     if (!formData.name.trim()) {
       newErrors.name = 'Step name is required';
     }
-    if (!formData.assigned_user) {
-      newErrors.assigned_user = 'Please select an approver';
+    if (formData.approvers.length === 0) {
+      newErrors.approvers = 'Please add at least one approver';
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -288,14 +333,6 @@ const StepEditor = ({ step, onSave, onCancel, users, assignedApproverIds = [] })
   // Filter out admins and form managers from user list
   const eligibleUsers = users.filter(u => u.role === 'USER');
 
-  // Check if a user is already assigned to another step (not current step)
-  const isUserAlreadyAssigned = (userId) => {
-    const currentStepUserId = step?.assigned_user;
-    // Don't mark as assigned if it's the current step's approver
-    if (String(userId) === String(currentStepUserId)) return false;
-    return assignedApproverIds.some(id => String(id) === String(userId));
-  };
-
   return (
     <div className="bg-white border border-slate-200 rounded-lg">
       <div className="px-4 py-3 border-b border-slate-200">
@@ -303,6 +340,7 @@ const StepEditor = ({ step, onSave, onCancel, users, assignedApproverIds = [] })
       </div>
 
       <div className="p-4 space-y-4">
+        {/* Step Name */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">
             Step Name <span className="text-red-500">*</span>
@@ -319,36 +357,99 @@ const StepEditor = ({ step, onSave, onCancel, users, assignedApproverIds = [] })
           {errors.name && <p className="mt-1 text-sm text-red-500">{errors.name}</p>}
         </div>
 
+        {/* Approval Mode Selection */}
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Approver <span className="text-red-500">*</span>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Approval Mode <span className="text-red-500">*</span>
           </label>
-          <select
-            value={formData.assigned_user}
-            onChange={(e) => handleChange('assigned_user', e.target.value)}
-            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 ${
-              errors.assigned_user ? 'border-red-300' : 'border-slate-300'
-            }`}
-          >
-            <option value="">Select an approver</option>
-            {eligibleUsers.map(user => {
-              const alreadyAssigned = isUserAlreadyAssigned(user.id);
-              return (
-                <option
-                  key={user.id}
-                  value={user.id}
-                  disabled={alreadyAssigned}
-                  className={alreadyAssigned ? 'text-slate-400' : ''}
-                >
-                  {user.first_name} {user.last_name} ({user.username}){alreadyAssigned ? ' - Already assigned' : ''}
-                </option>
-              );
-            })}
-          </select>
-          {errors.assigned_user && <p className="mt-1 text-sm text-red-500">{errors.assigned_user}</p>}
-          <p className="mt-1 text-xs text-slate-500">Only regular users can be approvers. Each user can only be assigned to one step.</p>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { value: 'ALL', label: 'All Must Approve', desc: 'Every approver must approve', color: 'purple' },
+              { value: 'MAJORITY', label: 'Majority', desc: 'More than 50% must approve', color: 'indigo' },
+              { value: 'ANY', label: 'Any One', desc: 'One approval is enough', color: 'teal' }
+            ].map(mode => (
+              <button
+                key={mode.value}
+                type="button"
+                onClick={() => handleChange('approval_mode', mode.value)}
+                className={`p-3 border-2 rounded-lg text-left transition-colors ${
+                  formData.approval_mode === mode.value
+                    ? `border-${mode.color}-500 bg-${mode.color}-50`
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <div className={`font-medium text-sm ${formData.approval_mode === mode.value ? `text-${mode.color}-700` : 'text-slate-800'}`}>
+                  {mode.label}
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">{mode.desc}</div>
+              </button>
+            ))}
+          </div>
         </div>
 
+        {/* Multi-Select Approvers */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">
+            Approvers <span className="text-red-500">*</span>
+          </label>
+
+          {/* Selected Approvers Tags */}
+          <div className="flex flex-wrap gap-2 mb-2 min-h-[32px]">
+            {formData.approvers.map(userId => {
+              const user = eligibleUsers.find(u => String(u.id) === String(userId));
+              if (!user) return null;
+              const displayName = user.first_name && user.last_name
+                ? `${user.first_name} ${user.last_name}`
+                : user.username;
+              return (
+                <span
+                  key={userId}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-sky-100 text-sky-700 rounded-full text-sm"
+                >
+                  {displayName}
+                  <button
+                    type="button"
+                    onClick={() => removeApprover(userId)}
+                    className="text-sky-500 hover:text-sky-700 ml-1"
+                  >
+                    <SmallXIcon />
+                  </button>
+                </span>
+              );
+            })}
+            {formData.approvers.length === 0 && (
+              <span className="text-sm text-slate-400 italic">No approvers selected</span>
+            )}
+          </div>
+
+          {/* Add Approver Dropdown */}
+          <select
+            value=""
+            onChange={(e) => {
+              if (e.target.value) {
+                addApprover(e.target.value);
+              }
+            }}
+            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 ${
+              errors.approvers ? 'border-red-300' : 'border-slate-300'
+            }`}
+          >
+            <option value="">+ Add approver...</option>
+            {eligibleUsers
+              .filter(u => !formData.approvers.includes(String(u.id)) && !formData.approvers.includes(u.id))
+              .map(user => (
+                <option key={user.id} value={user.id}>
+                  {user.first_name} {user.last_name} ({user.username})
+                </option>
+              ))}
+          </select>
+          {errors.approvers && <p className="mt-1 text-sm text-red-500">{errors.approvers}</p>}
+          <p className="mt-1 text-xs text-slate-500">
+            Select one or more approvers. Only regular users can be approvers.
+          </p>
+        </div>
+
+        {/* Save/Cancel Buttons */}
         <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
           <button
             onClick={onCancel}
@@ -557,6 +658,8 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
       name: stepName,
       step_type: 'APPROVAL',
       order: steps.length,
+      approval_mode: 'ALL',
+      approvers: [],
       is_required: true,
       can_skip: false
     };
@@ -700,24 +803,10 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
         setMessage({ type: 'error', text: 'Please add at least one approval step' });
         return false;
       }
-      // Check all steps have approvers assigned
-      const unassignedStep = steps.find(s => !s.assigned_user);
+      // Check all steps have at least one approver assigned
+      const unassignedStep = steps.find(s => (!s.approvers || s.approvers.length === 0) && !s.assigned_user);
       if (unassignedStep) {
-        setMessage({ type: 'error', text: 'Please assign an approver to all steps' });
-        return false;
-      }
-      // Check for duplicate approvers
-      const approverIds = steps.map(s => s.assigned_user).filter(Boolean);
-      const uniqueApproverIds = [...new Set(approverIds)];
-      if (approverIds.length !== uniqueApproverIds.length) {
-        // Find duplicate user name for better error message
-        const duplicateId = approverIds.find((id, index) => approverIds.indexOf(id) !== index);
-        const duplicateUser = users.find(u => String(u.id) === String(duplicateId));
-        const userName = duplicateUser ? `${duplicateUser.first_name} ${duplicateUser.last_name}`.trim() || duplicateUser.username : 'Unknown';
-        setMessage({
-          type: 'error',
-          text: `Duplicate approver detected: "${userName}" is assigned to multiple steps. Each approver can only be assigned to one step.`
-        });
+        setMessage({ type: 'error', text: `Step "${unassignedStep.name}" has no approvers. Please add at least one approver to each step.` });
         return false;
       }
       setMessage({ type: '', text: '' });
@@ -1066,15 +1155,30 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
             </p>
             <div className="space-y-2">
               {steps.map((step, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+                <div key={index} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
                     formData.workflow_type === 'SEQUENTIAL' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'
                   }`}>
                     {index + 1}
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-800">{step.name}</p>
-                    <p className="text-xs text-slate-500">Approver: {getUserName(step.assigned_user)}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-slate-800">{step.name}</p>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getApprovalModeColor(step.approval_mode || 'ALL')}`}>
+                        {getApprovalModeLabel(step.approval_mode || 'ALL')}
+                      </span>
+                    </div>
+                    <div className="mt-1">
+                      <p className="text-xs text-slate-500">
+                        {step.approvers && step.approvers.length > 0 ? (
+                          <>Approvers ({step.approvers.length}): {step.approvers.map(userId => getUserName(userId)).join(', ')}</>
+                        ) : step.assigned_user ? (
+                          <>Approver: {getUserName(step.assigned_user)}</>
+                        ) : (
+                          <span className="text-amber-600">No approvers assigned</span>
+                        )}
+                      </p>
+                    </div>
                   </div>
                 </div>
               ))}

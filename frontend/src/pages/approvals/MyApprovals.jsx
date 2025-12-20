@@ -71,6 +71,25 @@ const ExclamationIcon = () => (
   </svg>
 );
 
+// Approval mode helpers
+const getApprovalModeLabel = (mode) => {
+  switch (mode) {
+    case 'ALL': return 'All Must Approve';
+    case 'MAJORITY': return 'Majority Approval';
+    case 'ANY': return 'Any One Approves';
+    default: return 'All Must Approve';
+  }
+};
+
+const getApprovalModeColor = (mode) => {
+  switch (mode) {
+    case 'ALL': return 'bg-violet-100 text-violet-700';
+    case 'MAJORITY': return 'bg-amber-100 text-amber-700';
+    case 'ANY': return 'bg-emerald-100 text-emerald-700';
+    default: return 'bg-slate-100 text-slate-700';
+  }
+};
+
 // Format time ago helper
 const formatTimeAgo = (dateString) => {
   const date = new Date(dateString);
@@ -534,9 +553,17 @@ const MyApprovals = () => {
                         <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-600 text-xs font-bold flex items-center justify-center">
                           {(approval.step_detail?.order || 0) + 1}
                         </span>
-                        <span className="text-sm text-slate-600">
-                          {approval.step_detail?.name || 'Review'}
-                        </span>
+                        <div>
+                          <span className="text-sm text-slate-600">
+                            {approval.step_detail?.name || 'Review'}
+                          </span>
+                          {approval.step_detail?.approval_mode && (
+                            <span className={`ml-2 px-1.5 py-0.5 text-xs font-medium rounded ${getApprovalModeColor(approval.step_detail.approval_mode)}`}>
+                              {approval.step_detail.approval_mode === 'ALL' ? 'All' :
+                               approval.step_detail.approval_mode === 'MAJORITY' ? 'Majority' : 'Any'}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -766,42 +793,110 @@ const MyApprovals = () => {
                 <div className="bg-slate-50 rounded-lg p-4">
                   <h4 className="font-medium text-slate-800 mb-3">Workflow Progress</h4>
                   <div className="space-y-4">
-                    {viewModal.data.instance.approvals.map((approval, index) => (
-                      <div key={approval.id} className="flex items-start gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                          approval.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-600' :
-                          approval.status === 'REJECTED' ? 'bg-red-100 text-red-600' :
-                          approval.status === 'PENDING' ? 'bg-sky-100 text-sky-600' :
-                          'bg-slate-100 text-slate-600'
-                        }`}>
-                          {approval.status === 'APPROVED' ? <CheckCircleIcon /> :
-                           approval.status === 'REJECTED' ? <XCircleIcon /> :
-                           approval.status === 'PENDING' ? <ClockIcon /> :
-                           <span className="text-xs">{index + 1}</span>}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-slate-800">{approval.step_detail?.name}</p>
-                            <StatusBadge status={approval.status} />
+                    {/* Group approvals by step */}
+                    {(() => {
+                      // Group approvals by step
+                      const groupedByStep = viewModal.data.instance.approvals.reduce((acc, approval) => {
+                        const stepId = approval.step_detail?.id || approval.workflow_step;
+                        if (!acc[stepId]) {
+                          acc[stepId] = {
+                            stepDetail: approval.step_detail,
+                            approvals: []
+                          };
+                        }
+                        acc[stepId].approvals.push(approval);
+                        return acc;
+                      }, {});
+
+                      // Sort steps by order
+                      const sortedSteps = Object.values(groupedByStep).sort(
+                        (a, b) => (a.stepDetail?.order || 0) - (b.stepDetail?.order || 0)
+                      );
+
+                      return sortedSteps.map((stepGroup, stepIndex) => {
+                        const { stepDetail, approvals: stepApprovals } = stepGroup;
+                        const approvalMode = stepDetail?.approval_mode || 'ALL';
+                        const allApproved = stepApprovals.every(a => a.status === 'APPROVED');
+                        const anyRejected = stepApprovals.some(a => a.status === 'REJECTED');
+                        const allPending = stepApprovals.every(a => a.status === 'PENDING');
+
+                        return (
+                          <div key={stepDetail?.id || stepIndex} className="bg-white rounded-lg border border-slate-200 p-4">
+                            {/* Step Header */}
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-semibold ${
+                                allApproved ? 'bg-emerald-100 text-emerald-600' :
+                                anyRejected ? 'bg-red-100 text-red-600' :
+                                'bg-sky-100 text-sky-600'
+                              }`}>
+                                {allApproved ? <CheckCircleIcon /> :
+                                 anyRejected ? <XCircleIcon /> :
+                                 (stepDetail?.order || 0) + 1}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="font-medium text-slate-800">{stepDetail?.name || 'Review Step'}</p>
+                                  <span className={`px-2 py-0.5 text-xs font-medium rounded ${getApprovalModeColor(approvalMode)}`}>
+                                    {getApprovalModeLabel(approvalMode)}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                  {stepApprovals.length} approver{stepApprovals.length !== 1 ? 's' : ''} •
+                                  {stepApprovals.filter(a => a.status === 'APPROVED').length} approved,
+                                  {stepApprovals.filter(a => a.status === 'REJECTED').length} rejected,
+                                  {stepApprovals.filter(a => a.status === 'PENDING').length} pending
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Individual Approvers */}
+                            <div className="ml-11 space-y-2">
+                              {stepApprovals.map((approval) => (
+                                <div key={approval.id} className="flex items-start gap-2 py-2 border-t border-slate-100 first:border-0 first:pt-0">
+                                  <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                                    approval.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-600' :
+                                    approval.status === 'REJECTED' ? 'bg-red-100 text-red-600' :
+                                    'bg-amber-100 text-amber-600'
+                                  }`}>
+                                    {approval.status === 'APPROVED' ? (
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    ) : approval.status === 'REJECTED' ? (
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    ) : (
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3" />
+                                      </svg>
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-sm font-medium text-slate-700">
+                                        {approval.assigned_to_detail?.username || 'Unknown'}
+                                      </span>
+                                      <StatusBadge status={approval.status} />
+                                    </div>
+                                    {approval.completed_at && (
+                                      <p className="text-xs text-slate-500 mt-0.5">
+                                        {new Date(approval.completed_at).toLocaleString()}
+                                      </p>
+                                    )}
+                                    {approval.comments && (
+                                      <p className="text-sm text-slate-600 flex items-center gap-1 mt-1">
+                                        <CommentIcon /> {approval.comments}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                          {approval.assigned_to_detail && (
-                            <p className="text-sm text-slate-600 flex items-center gap-1 mt-1">
-                              <UserIcon /> {approval.assigned_to_detail.username}
-                            </p>
-                          )}
-                          {approval.completed_at && (
-                            <p className="text-xs text-slate-500 mt-1">
-                              {new Date(approval.completed_at).toLocaleString()}
-                            </p>
-                          )}
-                          {approval.comments && (
-                            <p className="text-sm text-slate-600 flex items-center gap-1 mt-1">
-                              <CommentIcon /> {approval.comments}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               )}

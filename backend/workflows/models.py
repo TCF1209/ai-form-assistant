@@ -114,6 +114,11 @@ class WorkflowStep(models.Model):
         CONDITIONAL = 'CONDITIONAL', _('Conditional')
         SYSTEM = 'SYSTEM', _('System Action')
 
+    class ApprovalMode(models.TextChoices):
+        ALL = 'ALL', _('All Must Approve')
+        MAJORITY = 'MAJORITY', _('Majority Must Approve')
+        ANY = 'ANY', _('Any One Can Approve')
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     workflow = models.ForeignKey(
         Workflow,
@@ -147,6 +152,20 @@ class WorkflowStep(models.Model):
         null=True,
         blank=True,
         related_name='workflow_steps'
+    )
+
+    # Multi-approver support
+    approval_mode = models.CharField(
+        max_length=20,
+        choices=ApprovalMode.choices,
+        default=ApprovalMode.ALL,
+        help_text=_('How approvals are determined for this step')
+    )
+    assigned_users = models.ManyToManyField(
+        User,
+        through='WorkflowStepApprover',
+        related_name='multi_assigned_workflow_steps',
+        blank=True
     )
 
     # Step configuration
@@ -184,6 +203,39 @@ class WorkflowStep(models.Model):
 
     def __str__(self):
         return f"{self.workflow.name} - Step {self.order}: {self.name}"
+
+
+class WorkflowStepApprover(models.Model):
+    """
+    Through model for many-to-many relationship between WorkflowStep and User.
+    Allows multiple approvers per workflow step.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workflow_step = models.ForeignKey(
+        'WorkflowStep',
+        on_delete=models.CASCADE,
+        related_name='step_approvers'
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='workflow_step_assignments'
+    )
+    order = models.IntegerField(
+        default=0,
+        help_text=_('Order of approver within the step (for display purposes)')
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'workflow_step_approvers'
+        verbose_name = _('Workflow Step Approver')
+        verbose_name_plural = _('Workflow Step Approvers')
+        ordering = ['workflow_step', 'order']
+        unique_together = [['workflow_step', 'user']]
+
+    def __str__(self):
+        return f"{self.workflow_step.name} - {self.user.username}"
 
 
 class WorkflowInstance(models.Model):

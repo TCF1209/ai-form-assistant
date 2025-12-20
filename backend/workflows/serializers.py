@@ -6,7 +6,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from .models import (
-    Workflow, WorkflowStep, WorkflowInstance,
+    Workflow, WorkflowStep, WorkflowStepApprover, WorkflowInstance,
     WorkflowApproval, WorkflowNotification
 )
 from forms.models import Form, FormSubmission
@@ -20,6 +20,13 @@ class WorkflowStepSerializer(serializers.ModelSerializer):
 
     assigned_user_detail = serializers.SerializerMethodField()
     assigned_department_detail = serializers.SerializerMethodField()
+    assigned_users_detail = serializers.SerializerMethodField()
+    approvers = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        write_only=True,
+        help_text="List of user IDs to assign as approvers"
+    )
 
     class Meta:
         model = WorkflowStep
@@ -27,11 +34,13 @@ class WorkflowStepSerializer(serializers.ModelSerializer):
             'id', 'name', 'step_type', 'order',
             'assigned_role', 'assigned_user', 'assigned_user_detail',
             'assigned_department', 'assigned_department_detail',
+            'approval_mode', 'approvers', 'assigned_users_detail',
             'is_required', 'can_skip', 'time_limit_hours',
             'conditions', 'actions'
         ]
 
     def get_assigned_user_detail(self, obj):
+        """Backward compatibility: Return single assigned user detail."""
         if obj.assigned_user:
             return {
                 'id': str(obj.assigned_user.id),
@@ -40,6 +49,17 @@ class WorkflowStepSerializer(serializers.ModelSerializer):
                 'full_name': f"{obj.assigned_user.first_name} {obj.assigned_user.last_name}".strip()
             }
         return None
+
+    def get_assigned_users_detail(self, obj):
+        """Return list of all assigned approvers for multi-approver support."""
+        step_approvers = obj.step_approvers.select_related('user').order_by('order')
+        return [{
+            'id': str(sa.user.id),
+            'username': sa.user.username,
+            'email': sa.user.email,
+            'full_name': f"{sa.user.first_name} {sa.user.last_name}".strip(),
+            'order': sa.order
+        } for sa in step_approvers]
 
     def get_assigned_department_detail(self, obj):
         if obj.assigned_department:
@@ -57,6 +77,23 @@ class WorkflowStepSerializer(serializers.ModelSerializer):
                 "Admins and Form Managers cannot be approvers. Only regular users can approve."
             )
         return value
+
+    def validate_approvers(self, approvers):
+        """Validate that all approvers are regular users."""
+        if not approvers:
+            return approvers
+
+        for user_id in approvers:
+            try:
+                user = User.objects.get(id=user_id)
+                if user.role in ['ADMIN', 'FORM_MANAGER']:
+                    raise serializers.ValidationError(
+                        f"User {user.username} cannot be an approver (role: {user.role}). "
+                        "Only regular users can be approvers."
+                    )
+            except User.DoesNotExist:
+                raise serializers.ValidationError(f"User with ID {user_id} not found")
+        return approvers
 
 
 class WorkflowSerializer(serializers.ModelSerializer):
@@ -143,31 +180,25 @@ class WorkflowSerializer(serializers.ModelSerializer):
         return code
 
     def validate_steps(self, steps_data):
-        """Validate that no duplicate approvers exist in workflow steps."""
+        """Validate workflow steps - check for at least one approver per step."""
         if not steps_data:
             return steps_data
 
-        # Collect all assigned users
-        assigned_users = []
-        for step in steps_data:
-            user = step.get('assigned_user')
-            if user:
-                # Handle both User object and UUID
-                user_id = user.id if hasattr(user, 'id') else user
-                if user_id in assigned_users:
-                    # Get user details for error message
-                    if hasattr(user, 'username'):
-                        username = user.username
-                    else:
-                        try:
-                            username = User.objects.get(id=user_id).username
-                        except User.DoesNotExist:
-                            username = str(user_id)
-                    raise serializers.ValidationError(
-                        f"Duplicate approver detected: '{username}' is assigned to multiple steps. "
-                        f"Each approver can only be assigned to one step in a workflow."
-                    )
-                assigned_users.append(user_id)
+        for i, step in enumerate(steps_data):
+            # Check if step has either approvers list or assigned_user
+            approvers = step.get('approvers', [])
+            assigned_user = step.get('assigned_user')
+
+            if not approvers and not assigned_user:
+                raise serializers.ValidationError(
+                    f"Step {i + 1} ({step.get('name', 'Unnamed')}) must have at least one approver."
+                )
+
+            # Validate no duplicate approvers within the same step
+            if approvers and len(approvers) != len(set(approvers)):
+                raise serializers.ValidationError(
+                    f"Step {i + 1} ({step.get('name', 'Unnamed')}) has duplicate approvers."
+                )
 
         return steps_data
 
@@ -180,9 +211,26 @@ class WorkflowSerializer(serializers.ModelSerializer):
 
         workflow = Workflow.objects.create(**validated_data)
 
-        # Create workflow steps
+        # Create workflow steps with approvers
         for step_data in steps_data:
-            WorkflowStep.objects.create(workflow=workflow, **step_data)
+            approvers = step_data.pop('approvers', [])
+            step = WorkflowStep.objects.create(workflow=workflow, **step_data)
+
+            # Create WorkflowStepApprover records for multi-approver support
+            for order, user_id in enumerate(approvers):
+                WorkflowStepApprover.objects.create(
+                    workflow_step=step,
+                    user_id=user_id,
+                    order=order
+                )
+
+            # Backward compatibility: If no approvers but has assigned_user, create approver record
+            if not approvers and step.assigned_user:
+                WorkflowStepApprover.objects.create(
+                    workflow_step=step,
+                    user=step.assigned_user,
+                    order=0
+                )
 
         return workflow
 
@@ -197,12 +245,29 @@ class WorkflowSerializer(serializers.ModelSerializer):
 
         # Update steps if provided
         if steps_data is not None:
-            # Delete existing steps
+            # Delete existing steps (cascade deletes WorkflowStepApprover records)
             instance.steps.all().delete()
 
-            # Create new steps
+            # Create new steps with approvers
             for step_data in steps_data:
-                WorkflowStep.objects.create(workflow=instance, **step_data)
+                approvers = step_data.pop('approvers', [])
+                step = WorkflowStep.objects.create(workflow=instance, **step_data)
+
+                # Create WorkflowStepApprover records
+                for order, user_id in enumerate(approvers):
+                    WorkflowStepApprover.objects.create(
+                        workflow_step=step,
+                        user_id=user_id,
+                        order=order
+                    )
+
+                # Backward compatibility: If no approvers but has assigned_user
+                if not approvers and step.assigned_user:
+                    WorkflowStepApprover.objects.create(
+                        workflow_step=step,
+                        user=step.assigned_user,
+                        order=0
+                    )
 
         return instance
 
@@ -296,7 +361,8 @@ class WorkflowApprovalSerializer(serializers.ModelSerializer):
             'id': str(obj.workflow_step.id),
             'name': obj.workflow_step.name,
             'order': obj.workflow_step.order,
-            'type': obj.workflow_step.step_type
+            'type': obj.workflow_step.step_type,
+            'approval_mode': obj.workflow_step.approval_mode
         }
 
     def get_assigned_to_detail(self, obj):

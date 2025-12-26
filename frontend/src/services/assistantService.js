@@ -156,7 +156,8 @@ const assistantService = {
         forms: response.data.forms || [],
         aiResponse: response.data.ai_response || '',
         confidence: response.data.confidence || 0,
-        reasoning: response.data.reasoning || ''
+        reasoning: response.data.reasoning || '',
+        extractedFields: response.data.extracted_fields || {}
       };
     } catch (error) {
       console.error('AI form search failed:', error);
@@ -164,7 +165,8 @@ const assistantService = {
         success: false,
         forms: [],
         aiResponse: 'Sorry, I had trouble searching for forms. Please try again.',
-        confidence: 0
+        confidence: 0,
+        extractedFields: {}
       };
     }
   },
@@ -373,6 +375,7 @@ const assistantService = {
         recommendedForm: bestMatch,
         alternatives: alternatives,
         confidence: searchResult.confidence,
+        extractedFields: searchResult.extractedFields || {},  // Pass extracted values from user's query
         timestamp: new Date().toISOString(),
       };
     }
@@ -405,8 +408,10 @@ const assistantService = {
 
   /**
    * Start form filling process with auto-fill
+   * @param {Object} form - The form to fill
+   * @param {Object} extractedFields - Optional fields extracted from user's initial query
    */
-  async startFormFilling(form) {
+  async startFormFilling(form, extractedFields = {}) {
     // Ensure we have fields
     let formWithFields = form;
     if (!form.fields || form.fields.length === 0) {
@@ -430,20 +435,50 @@ const assistantService = {
     }
 
     // Get auto-filled data from user profile
-    const autoFilledData = await this.getAutoFilledFields(formWithFields.fields);
-    const autoFilledCount = Object.keys(autoFilledData).length;
+    const profileData = await this.getAutoFilledFields(formWithFields.fields);
+
+    // Merge profile data with extracted fields from user's query
+    // Extracted fields take precedence as they're more specific to this request
+    const autoFilledData = { ...profileData, ...extractedFields };
+
+    // Separate counts for the message
+    const profileFieldCount = Object.keys(profileData).length;
+    const extractedFieldCount = Object.keys(extractedFields).length;
+    const totalAutoFilledCount = Object.keys(autoFilledData).length;
+
+    // Get fields that still need user input
     const fieldsNeedingInput = this.getFieldsNeedingInput(formWithFields.fields, autoFilledData);
 
     // Build response message
     let message = `Great! I'll help you fill out the "${formWithFields.title || formWithFields.name}" form.\n\n`;
 
-    if (autoFilledCount > 0) {
-      message += `✅ I've auto-filled ${autoFilledCount} field(s) from your profile:\n`;
-      for (const [fieldName, value] of Object.entries(autoFilledData)) {
-        const field = formWithFields.fields.find(f => f.name === fieldName);
-        message += `• ${field?.label || fieldName}: ${value}\n`;
+    if (totalAutoFilledCount > 0) {
+      // Show profile-filled fields
+      if (profileFieldCount > 0) {
+        const profileOnlyFields = Object.entries(profileData).filter(
+          ([key]) => !extractedFields[key]
+        );
+        if (profileOnlyFields.length > 0) {
+          message += `✅ I've auto-filled ${profileOnlyFields.length} field(s) from your profile:\n`;
+          for (const [fieldName, value] of profileOnlyFields) {
+            const field = formWithFields.fields.find(f => f.name === fieldName);
+            message += `• ${field?.label || fieldName}: ${value}\n`;
+          }
+          message += '\n';
+        }
       }
-      message += '\nYou can edit these if needed.\n\n';
+
+      // Show fields extracted from user's query
+      if (extractedFieldCount > 0) {
+        message += `🧠 I've also extracted ${extractedFieldCount} field(s) from what you told me:\n`;
+        for (const [fieldName, value] of Object.entries(extractedFields)) {
+          const field = formWithFields.fields.find(f => f.name === fieldName);
+          message += `• ${field?.label || fieldName}: ${value}\n`;
+        }
+        message += '\n';
+      }
+
+      message += 'You can edit these if needed.\n\n';
     }
 
     if (fieldsNeedingInput.length > 0) {

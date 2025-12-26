@@ -552,6 +552,7 @@ const SmartAssistant = () => {
   // Form recommendation state
   const [currentRecommendation, setCurrentRecommendation] = useState(null);
   const [alternatives, setAlternatives] = useState([]);
+  const [extractedFields, setExtractedFields] = useState({});  // Fields extracted from user's query
   const [showFillOptions, setShowFillOptions] = useState(false);
   const [showFormList, setShowFormList] = useState(false);
   const [formListData, setFormListData] = useState([]);
@@ -640,6 +641,7 @@ const SmartAssistant = () => {
       }, 500);
     } else {
       setCurrentRecommendation(null);
+      setExtractedFields({});  // Clear extracted fields when showing all forms
       setShowFormList(true);
       setFormsLoading(true);
 
@@ -706,7 +708,8 @@ const SmartAssistant = () => {
       });
 
       setIsTyping(true);
-      const response = await assistantService.startFormFilling(currentRecommendation);
+      // Pass extracted fields from user's initial query
+      const response = await assistantService.startFormFilling(currentRecommendation, extractedFields);
       setIsTyping(false);
 
       if (response.type === 'error') {
@@ -889,6 +892,7 @@ const SmartAssistant = () => {
   const resetRecommendationState = () => {
     setCurrentRecommendation(null);
     setAlternatives([]);
+    setExtractedFields({});  // Clear extracted fields
     setShowFillOptions(false);
     setShowFormList(false);
   };
@@ -984,6 +988,8 @@ const SmartAssistant = () => {
       if (response.type === 'form_recommendation') {
         setCurrentRecommendation(response.recommendedForm);
         setAlternatives(response.alternatives || []);
+        setExtractedFields(response.extractedFields || {});  // Store extracted fields from query
+        console.log('Extracted fields from query:', response.extractedFields);
       } else if (response.type === 'form_list') {
         setShowFormList(true);
         setFormListData(response.forms);

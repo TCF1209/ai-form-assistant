@@ -148,23 +148,40 @@ class ConversationalAssistantViewSet(viewsets.ViewSet):
                 "ai_response": "There are no forms available at the moment."
             })
 
-        # Prepare forms data for AI analysis
+        # Prepare forms data for AI analysis (include fields for extraction)
         forms_data = []
         for form in forms:
+            # Get form fields for intelligent extraction
+            form_fields = []
+            for field in form.fields.all().order_by('order'):
+                field_info = {
+                    "name": field.name,
+                    "label": field.label,
+                    "type": field.field_type,
+                    "required": field.required,
+                }
+                # Include options for select/radio fields
+                if field.field_type in ['SELECT', 'RADIO', 'MULTISELECT'] and field.options:
+                    field_info["options"] = field.options
+                form_fields.append(field_info)
+
             forms_data.append({
                 "id": str(form.id),
                 "name": form.name,
                 "description": form.description or "",
                 "department": form.department.name if form.department else "General",
-                "code": form.code
+                "code": form.code,
+                "fields": form_fields
             })
 
         # Use OpenAI to find the best matching form
         ai_service = get_openai_service()
 
         if ai_service.client:
-            # AI-powered search
-            system_prompt = """You are a form search assistant. Based on the user's query, find the most relevant form(s) from the available forms.
+            # AI-powered search with field value extraction
+            system_prompt = """You are a smart form search assistant. Based on the user's query:
+1. Find the most relevant form(s) from the available forms
+2. Extract any field values mentioned in the user's query that can be used to pre-fill the form
 
 Return a JSON object with:
 {
@@ -172,8 +189,24 @@ Return a JSON object with:
     "confidence": 0.0-1.0,
     "reasoning": "Brief explanation of why this form matches",
     "alternative_ids": ["other", "relevant", "form_ids"],
-    "response_message": "A friendly message to the user about what you found"
+    "response_message": "A friendly message to the user about what you found",
+    "extracted_fields": {
+        "field_name": "extracted_value"
+    }
 }
+
+IMPORTANT for extracted_fields:
+- Only extract values that are clearly stated in the user's query
+- Use the exact field "name" (not label) as the key
+- For SELECT/RADIO fields, match the value to one of the available options
+- For DATE fields, convert to YYYY-MM-DD format if possible
+- Leave out fields that have no clear value in the query
+- Be generous in extraction - if user mentions something related to a field, extract it
+
+Examples:
+- "I need annual leave for vacation" → {"leave_type": "Annual Leave", "reason_for_leave": "vacation"}
+- "expense claim for $500 taxi" → {"amount": "500", "expense_type": "Transportation", "description": "taxi"}
+- "sick leave tomorrow" → {"leave_type": "Sick Leave"}
 
 If the query is a greeting or not related to forms, return:
 {
@@ -181,7 +214,8 @@ If the query is a greeting or not related to forms, return:
     "confidence": 0,
     "reasoning": "Query is not a form search request",
     "alternative_ids": [],
-    "response_message": "Appropriate response to the user"
+    "response_message": "Appropriate response to the user",
+    "extracted_fields": {}
 }"""
 
             user_prompt = f"""User query: "{query}"
@@ -235,7 +269,8 @@ User's department: {user_department.name if user_department else 'Not specified'
                         "forms": result_forms,
                         "ai_response": ai_result.get('response_message', ''),
                         "confidence": ai_result.get('confidence', 0),
-                        "reasoning": ai_result.get('reasoning', '')
+                        "reasoning": ai_result.get('reasoning', ''),
+                        "extracted_fields": ai_result.get('extracted_fields', {})
                     })
             except Exception as e:
                 logger.error(f"AI search error: {e}")
@@ -268,7 +303,8 @@ User's department: {user_department.name if user_department else 'Not specified'
         return Response({
             "forms": scored_forms[:5],
             "ai_response": f"I found {len(scored_forms)} form(s) matching your search." if scored_forms else "I couldn't find a specific form. Here are all available forms.",
-            "confidence": 0.7 if scored_forms else 0
+            "confidence": 0.7 if scored_forms else 0,
+            "extracted_fields": {}  # No extraction in fallback mode
         })
 
     @action(detail=False, methods=['get'])

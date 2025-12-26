@@ -40,12 +40,19 @@ const AUTO_FILL_MAPPINGS = {
   'dept': 'department',
   'department_name': 'department',
 
-  // Phone variations
+  // Phone variations - only the user's own phone number
   'phone': 'phone',
   'phone_number': 'phone',
-  'contact_number': 'phone',
   'mobile': 'phone',
+  'mobile_number': 'phone',
   'telephone': 'phone',
+  'your_phone': 'phone',
+  'your_phone_number': 'phone',
+  'my_phone': 'phone',
+  'my_phone_number': 'phone',
+  'contact_number': 'phone',
+  'your_contact_number': 'phone',
+  'my_contact_number': 'phone',
 
   // Position variations
   'position': 'position',
@@ -55,12 +62,17 @@ const AUTO_FILL_MAPPINGS = {
 };
 
 // Fields that should NOT be auto-filled with user profile data
-// These are fields where "name" or other keywords don't refer to the person
+// These are fields where "name", "phone", "email" etc. don't refer to the person filling the form
 const NON_PERSON_PREFIXES = [
+  // Other entities
   'project', 'company', 'business', 'organization', 'vendor', 'supplier',
   'client', 'customer', 'product', 'item', 'event', 'meeting', 'file',
   'document', 'report', 'account', 'team', 'group', 'branch', 'office',
-  'bank', 'expense', 'budget', 'cost', 'task', 'activity'
+  'bank', 'expense', 'budget', 'cost', 'task', 'activity',
+  // Emergency/alternative contacts (not the user themselves)
+  'emergency', 'alternate', 'alternative', 'secondary', 'backup',
+  'spouse', 'parent', 'guardian', 'next_of_kin', 'nextofkin',
+  'supervisor', 'manager', 'approver', 'recipient', 'beneficiary'
 ];
 
 // Person-related prefixes that indicate the field IS about the user
@@ -253,10 +265,15 @@ const assistantService = {
           fieldNameLower.startsWith(prefix + '_') || fieldNameLower.startsWith(prefix)
         );
 
+        // Keys that are too generic and could match non-person fields
+        // These require a person-related prefix for loose matching
+        const sensitiveKeys = ['name', 'phone', 'mobile', 'telephone', 'contact', 'email'];
+
         for (const [key, profileKey] of Object.entries(AUTO_FILL_MAPPINGS)) {
-          // For "name" key, require person-related prefix
-          if (key === 'name' && !hasPersonPrefix) {
-            continue; // Skip "name" matching for non-person fields
+          // For sensitive keys, require person-related prefix to avoid matching
+          // fields like "emergency_phone", "company_email", "project_name"
+          if (sensitiveKeys.includes(key) && !hasPersonPrefix) {
+            continue; // Skip matching for non-person fields
           }
 
           // For other keys, check if field contains the key

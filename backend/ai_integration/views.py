@@ -284,7 +284,7 @@ User's department: {user_department.name if user_department else 'Not specified'
             "employee_id": getattr(user, 'employee_id', '') or "",
             "department": user.department.name if user.department else "",
             "department_id": str(user.department.id) if user.department else "",
-            "phone": getattr(user, 'phone', '') or "",
+            "phone": getattr(user, 'phone_number', '') or "",  # User model uses phone_number
             "position": getattr(user, 'position', '') or "",
         }
 

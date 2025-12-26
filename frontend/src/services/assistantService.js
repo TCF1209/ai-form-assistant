@@ -642,6 +642,145 @@ const assistantService = {
   },
 
   /**
+   * Validate a single field value
+   */
+  validateFieldValue(field, value) {
+    let isValid = true;
+    let errorMessage = '';
+    let processedValue = (value || '').toString().trim();
+
+    // Check required
+    if (field.required && !processedValue) {
+      return {
+        valid: false,
+        message: `${field.label} is required. Please provide a value.`,
+      };
+    }
+
+    if (processedValue) {
+      const fieldType = field.field_type || field.type;
+
+      switch (fieldType) {
+        case 'EMAIL':
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(processedValue)) {
+            isValid = false;
+            errorMessage = 'Please enter a valid email address.';
+          }
+          break;
+        case 'NUMBER':
+          if (isNaN(parseFloat(processedValue))) {
+            isValid = false;
+            errorMessage = 'Please enter a valid number.';
+          } else {
+            processedValue = parseFloat(processedValue);
+          }
+          break;
+        case 'PHONE':
+          const phoneRegex = /^[\d\s\-\+\(\)]+$/;
+          if (!phoneRegex.test(processedValue)) {
+            isValid = false;
+            errorMessage = 'Please enter a valid phone number.';
+          }
+          break;
+        case 'CHECKBOX':
+          processedValue = /^(yes|y|true|1|check|checked)$/i.test(processedValue);
+          break;
+        case 'SELECT':
+        case 'DROPDOWN':
+        case 'RADIO':
+          if (field.options && field.options.length > 0) {
+            const validOption = field.options.find(opt => {
+              const optValue = typeof opt === 'string' ? opt : opt.value || opt.label;
+              return optValue.toLowerCase() === processedValue.toLowerCase();
+            });
+            if (!validOption) {
+              const optionLabels = field.options.map(opt =>
+                typeof opt === 'string' ? opt : opt.label || opt.value
+              ).join(', ');
+              isValid = false;
+              errorMessage = `Please select a valid option: ${optionLabels}`;
+            } else {
+              processedValue = typeof validOption === 'string' ? validOption : validOption.value || validOption.label;
+            }
+          }
+          break;
+      }
+    }
+
+    if (!isValid) {
+      return {
+        valid: false,
+        message: errorMessage,
+      };
+    }
+
+    return {
+      valid: true,
+      value: processedValue,
+    };
+  },
+
+  /**
+   * Find a field by name or label (for natural language editing)
+   */
+  findFieldByNameOrLabel(fields, searchTerm) {
+    const searchLower = searchTerm.toLowerCase().trim();
+
+    // Try exact match first
+    let found = fields.find(f =>
+      f.name.toLowerCase() === searchLower ||
+      f.label.toLowerCase() === searchLower
+    );
+
+    if (found) return found;
+
+    // Try partial match
+    found = fields.find(f =>
+      f.name.toLowerCase().includes(searchLower) ||
+      f.label.toLowerCase().includes(searchLower) ||
+      searchLower.includes(f.name.toLowerCase()) ||
+      searchLower.includes(f.label.toLowerCase())
+    );
+
+    return found || null;
+  },
+
+  /**
+   * Parse edit command from user message
+   * Returns { isEditCommand: boolean, fieldName: string | null }
+   */
+  parseEditCommand(message, fields) {
+    const messageLower = message.toLowerCase().trim();
+
+    // Common edit patterns
+    const editPatterns = [
+      /^(?:edit|change|update|modify)\s+(?:the\s+)?(.+?)(?:\s+field)?$/i,
+      /^(?:i want to\s+)?(?:edit|change|update|modify)\s+(?:the\s+)?(.+?)$/i,
+      /^(.+?)\s+(?:is wrong|needs to be changed|should be|change it)$/i,
+    ];
+
+    for (const pattern of editPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        const fieldSearch = match[1].trim();
+        const field = this.findFieldByNameOrLabel(fields, fieldSearch);
+        if (field) {
+          return { isEditCommand: true, field, fieldName: fieldSearch };
+        }
+      }
+    }
+
+    // Check if message just contains a field name (user might just type the field name)
+    const field = this.findFieldByNameOrLabel(fields, messageLower);
+    if (field && messageLower.length < 50) { // Avoid matching long messages
+      return { isEditCommand: true, field, fieldName: messageLower };
+    }
+
+    return { isEditCommand: false, field: null, fieldName: null };
+  },
+
+  /**
    * Submit form to backend
    */
   async submitForm(formId, formData) {

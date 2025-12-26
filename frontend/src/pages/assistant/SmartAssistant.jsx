@@ -459,8 +459,8 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
   );
 };
 
-// Form completion summary component
-const FormCompletionCard = ({ form, formData, onSubmit, onEdit, isSubmitting }) => {
+// Form completion summary component with individual field editing
+const FormCompletionCard = ({ form, formData, onSubmit, onEditField, isSubmitting }) => {
   // Helper to display field value
   const displayValue = (field, value) => {
     if (value === undefined || value === null || value === '') return '-';
@@ -481,42 +481,55 @@ const FormCompletionCard = ({ form, formData, onSubmit, onEdit, isSubmitting }) 
 
       <h3 className="font-bold text-slate-800 mb-3">{form.name}</h3>
 
-      <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
-        {form.fields.map(field => (
-          <div key={field.name || field.id} className="text-sm">
-            <span className="text-slate-500">{field.label}:</span>
-            <span className="ml-2 text-slate-800">{displayValue(field, formData[field.name])}</span>
+      <p className="text-xs text-slate-500 mb-2">Click any field to edit:</p>
+
+      <div className="space-y-1 mb-4 max-h-60 overflow-y-auto">
+        {form.fields.map((field, index) => (
+          <div
+            key={field.name || field.id}
+            onClick={() => !isSubmitting && onEditField(field, index)}
+            className="group flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
+          >
+            <div className="text-sm flex-1 min-w-0">
+              <span className="text-slate-500">{field.label}:</span>
+              <span className="ml-2 text-slate-800 truncate">{displayValue(field, formData[field.name])}</span>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!isSubmitting) onEditField(field, index);
+              }}
+              disabled={isSubmitting}
+              className="ml-2 p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+              title={`Edit ${field.label}`}
+            >
+              <EditIcon />
+            </button>
           </div>
         ))}
       </div>
 
-      <div className="flex gap-2">
-        <button
-          onClick={onEdit}
-          disabled={isSubmitting}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
-        >
-          <EditIcon />
-          Edit
-        </button>
-        <button
-          onClick={onSubmit}
-          disabled={isSubmitting}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50"
-        >
-          {isSubmitting ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              Submitting...
-            </>
-          ) : (
-            <>
-              <CheckIcon />
-              Submit Form
-            </>
-          )}
-        </button>
+      <div className="text-xs text-slate-400 mb-3 italic">
+        💡 Tip: You can also type "edit [field name]" to change a specific field
       </div>
+
+      <button
+        onClick={onSubmit}
+        disabled={isSubmitting}
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 font-medium"
+      >
+        {isSubmitting ? (
+          <>
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            Submitting...
+          </>
+        ) : (
+          <>
+            <CheckIcon />
+            Submit Form
+          </>
+        )}
+      </button>
     </div>
   );
 };
@@ -566,6 +579,8 @@ const SmartAssistant = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formsLoading, setFormsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isEditingSingleField, setIsEditingSingleField] = useState(false);  // Editing one specific field
+  const [editingField, setEditingField] = useState(null);  // The field being edited
 
   // Load chat history on mount
   useEffect(() => {
@@ -753,6 +768,47 @@ const SmartAssistant = () => {
 
   // Handle form field submission during AI filling
   const handleFieldSubmit = async (value) => {
+    // Handle single field editing mode
+    if (isEditingSingleField && editingField) {
+      addMessage({
+        content: value || '(empty)',
+        isUser: true,
+        timestamp: new Date().toISOString()
+      });
+
+      // Validate the value using assistantService
+      setIsTyping(true);
+      const validationResult = await assistantService.validateFieldValue(editingField, value);
+      setIsTyping(false);
+
+      if (!validationResult.valid) {
+        addMessage({
+          content: validationResult.message || `Invalid value for ${editingField.label}. Please try again.`,
+          isUser: false,
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+
+      // Update form data with the new value
+      const updatedFormData = { ...formData, [editingField.name]: validationResult.value || value };
+      setFormData(updatedFormData);
+
+      // Return to completion summary
+      setIsEditingSingleField(false);
+      setEditingField(null);
+      setIsFillingForm(false);
+      setShowCompletionSummary(true);
+
+      addMessage({
+        content: `✅ Updated "${editingField.label}" to: ${validationResult.value || value}\n\nYour form is ready. Click any field to edit, or submit when ready.`,
+        isUser: false,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    // Normal form filling flow
     // Use fieldsNeedingInput if available, otherwise fall back to all fields
     const fieldsToUse = fieldsNeedingInput.length > 0 ? fieldsNeedingInput : currentForm.fields;
     const currentField = fieldsToUse[currentFieldIndex];
@@ -802,6 +858,8 @@ const SmartAssistant = () => {
   // Handle cancel form filling
   const handleCancelFilling = () => {
     setIsFillingForm(false);
+    setIsEditingSingleField(false);
+    setEditingField(null);
     setCurrentForm(null);
     setCurrentFieldIndex(0);
     setFormData({});
@@ -856,13 +914,35 @@ const SmartAssistant = () => {
     }
   };
 
-  // Handle edit form
-  const handleEditForm = () => {
+  // Handle edit specific field
+  const handleEditField = (field, fieldIndex) => {
     setShowCompletionSummary(false);
     setIsFillingForm(true);
-    setCurrentFieldIndex(0);
+    setIsEditingSingleField(true);
+    setEditingField(field);
+    setCurrentFieldIndex(fieldIndex);
+
+    // Get the prompt for this field
+    const fieldType = field.field_type || field.type;
+    let prompt = `What would you like to change "${field.label}" to?`;
+
+    // Add current value info
+    const currentValue = formData[field.name];
+    if (currentValue) {
+      prompt += `\n\nCurrent value: ${currentValue}`;
+    }
+
+    // Add options for select/radio fields
+    if (['SELECT', 'RADIO', 'DROPDOWN'].includes(fieldType) && field.options?.length > 0) {
+      prompt += '\n\nAvailable options:';
+      field.options.forEach(opt => {
+        const optLabel = typeof opt === 'string' ? opt : opt.label;
+        prompt += `\n• ${optLabel}`;
+      });
+    }
+
     addMessage({
-      content: "Let's go through the form again. Starting from the beginning.",
+      content: prompt,
       isUser: false,
       timestamp: new Date().toISOString()
     });
@@ -934,6 +1014,27 @@ const SmartAssistant = () => {
     if (!inputValue.trim()) return;
 
     const messageText = inputValue.trim();
+
+    // Check for edit commands when showing completion summary
+    if (showCompletionSummary && currentForm) {
+      const editResult = assistantService.parseEditCommand(messageText, currentForm.fields);
+      if (editResult.isEditCommand && editResult.field) {
+        // Find field index
+        const fieldIndex = currentForm.fields.findIndex(f => f.name === editResult.field.name);
+
+        // Show user's message
+        addMessage({
+          content: messageText,
+          isUser: true,
+          timestamp: new Date().toISOString()
+        });
+        setInputValue('');
+
+        // Trigger edit for the found field
+        handleEditField(editResult.field, fieldIndex);
+        return;
+      }
+    }
 
     // Validate input before processing
     const validation = validateAssistantMessage(messageText);
@@ -1115,9 +1216,20 @@ const SmartAssistant = () => {
             </div>
             <FormFillingCard
               form={currentForm}
-              currentField={(fieldsNeedingInput.length > 0 ? fieldsNeedingInput : currentForm.fields)[currentFieldIndex]}
+              currentField={isEditingSingleField && editingField ? editingField : (fieldsNeedingInput.length > 0 ? fieldsNeedingInput : currentForm.fields)[currentFieldIndex]}
               onSubmitField={handleFieldSubmit}
-              onCancel={handleCancelFilling}
+              onCancel={isEditingSingleField ? () => {
+                // When editing single field, cancel returns to summary
+                setIsEditingSingleField(false);
+                setEditingField(null);
+                setIsFillingForm(false);
+                setShowCompletionSummary(true);
+                addMessage({
+                  content: "Edit cancelled. Your form is ready to submit.",
+                  isUser: false,
+                  timestamp: new Date().toISOString()
+                });
+              } : handleCancelFilling}
             />
           </div>
         )}
@@ -1132,7 +1244,8 @@ const SmartAssistant = () => {
               form={currentForm}
               formData={formData}
               onSubmit={handleFormSubmit}
-              onEdit={handleEditForm}
+              onEditField={handleEditField}
+              isSubmitting={isSubmitting}
             />
           </div>
         )}

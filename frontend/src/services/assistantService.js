@@ -7,13 +7,16 @@ import api from './api';
 
 // Auto-fill field mappings - maps form field names to user profile fields
 const AUTO_FILL_MAPPINGS = {
-  // Name variations
+  // Name variations - only fields that refer to the person filling the form
   'name': 'name',
   'full_name': 'name',
   'fullname': 'name',
   'employee_name': 'name',
   'applicant_name': 'name',
   'your_name': 'name',
+  'requester_name': 'name',
+  'submitter_name': 'name',
+  'staff_name': 'name',
   'first_name': 'first_name',
   'firstname': 'first_name',
   'last_name': 'last_name',
@@ -50,6 +53,21 @@ const AUTO_FILL_MAPPINGS = {
   'title': 'position',
   'role': 'position',
 };
+
+// Fields that should NOT be auto-filled with user profile data
+// These are fields where "name" or other keywords don't refer to the person
+const NON_PERSON_PREFIXES = [
+  'project', 'company', 'business', 'organization', 'vendor', 'supplier',
+  'client', 'customer', 'product', 'item', 'event', 'meeting', 'file',
+  'document', 'report', 'account', 'team', 'group', 'branch', 'office',
+  'bank', 'expense', 'budget', 'cost', 'task', 'activity'
+];
+
+// Person-related prefixes that indicate the field IS about the user
+const PERSON_PREFIXES = [
+  'employee', 'applicant', 'requester', 'submitter', 'staff', 'your',
+  'my', 'user', 'requestor', 'sender', 'reporter'
+];
 
 // Welcome messages
 const welcomeMessages = [
@@ -214,15 +232,34 @@ const assistantService = {
     formFields.forEach(field => {
       const fieldNameLower = field.name.toLowerCase();
 
-      // Check direct mapping
+      // Skip fields that are clearly NOT about the person filling the form
+      const hasNonPersonPrefix = NON_PERSON_PREFIXES.some(prefix =>
+        fieldNameLower.startsWith(prefix + '_') || fieldNameLower.startsWith(prefix)
+      );
+      if (hasNonPersonPrefix) {
+        return; // Skip this field
+      }
+
+      // Check direct mapping first (exact match)
       if (AUTO_FILL_MAPPINGS[fieldNameLower]) {
         const profileKey = AUTO_FILL_MAPPINGS[fieldNameLower];
         if (userProfile[profileKey]) {
           autoFilledData[field.name] = userProfile[profileKey];
         }
       } else {
-        // Check if field name contains any of the mapping keys
+        // For loose matching, be more careful with "name" fields
+        // Only auto-fill if field has a person-related prefix
+        const hasPersonPrefix = PERSON_PREFIXES.some(prefix =>
+          fieldNameLower.startsWith(prefix + '_') || fieldNameLower.startsWith(prefix)
+        );
+
         for (const [key, profileKey] of Object.entries(AUTO_FILL_MAPPINGS)) {
+          // For "name" key, require person-related prefix
+          if (key === 'name' && !hasPersonPrefix) {
+            continue; // Skip "name" matching for non-person fields
+          }
+
+          // For other keys, check if field contains the key
           if (fieldNameLower.includes(key) || key.includes(fieldNameLower)) {
             if (userProfile[profileKey]) {
               autoFilledData[field.name] = userProfile[profileKey];

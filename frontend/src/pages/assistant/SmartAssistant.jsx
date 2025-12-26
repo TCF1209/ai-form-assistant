@@ -460,7 +460,7 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
 };
 
 // Form completion summary component with individual field editing
-const FormCompletionCard = ({ form, formData, onSubmit, onEditField, isSubmitting }) => {
+const FormCompletionCard = ({ form, formData, onSubmit, onEditField, onCancel, isSubmitting }) => {
   // Helper to display field value
   const displayValue = (field, value) => {
     if (value === undefined || value === null || value === '') return '-';
@@ -513,23 +513,32 @@ const FormCompletionCard = ({ form, formData, onSubmit, onEditField, isSubmittin
         💡 Tip: You can also type "edit [field name]" to change a specific field
       </div>
 
-      <button
-        onClick={onSubmit}
-        disabled={isSubmitting}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 font-medium"
-      >
-        {isSubmitting ? (
-          <>
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-            Submitting...
-          </>
-        ) : (
-          <>
-            <CheckIcon />
-            Submit Form
-          </>
-        )}
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={onCancel}
+          disabled={isSubmitting}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onSubmit}
+          disabled={isSubmitting}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50 font-medium"
+        >
+          {isSubmitting ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              Submitting...
+            </>
+          ) : (
+            <>
+              <CheckIcon />
+              Submit Form
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 };
@@ -948,6 +957,23 @@ const SmartAssistant = () => {
     });
   };
 
+  // Handle cancel from completion summary
+  const handleCancelSubmission = () => {
+    setShowCompletionSummary(false);
+    setCurrentForm(null);
+    setFormData({});
+    setCurrentFieldIndex(0);
+    setIsEditingSingleField(false);
+    setEditingField(null);
+    resetRecommendationState();
+
+    addMessage({
+      content: "Form cancelled. No worries! Is there anything else I can help you with?",
+      isUser: false,
+      timestamp: new Date().toISOString()
+    });
+  };
+
   // Handle form selection from list
   const handleSelectForm = (form) => {
     setShowFormList(false);
@@ -1245,6 +1271,7 @@ const SmartAssistant = () => {
               formData={formData}
               onSubmit={handleFormSubmit}
               onEditField={handleEditField}
+              onCancel={handleCancelSubmission}
               isSubmitting={isSubmitting}
             />
           </div>

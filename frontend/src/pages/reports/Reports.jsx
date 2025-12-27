@@ -411,21 +411,25 @@ const Reports = () => {
       filteredSubmissions.forEach(s => {
         const date = new Date(s.submitted_at || s.created_at);
         let sortKey; // Use ISO date string for proper sorting
-        let displayKey;
 
         if (trendFormat === 'day') {
-          sortKey = date.toISOString().split('T')[0]; // YYYY-MM-DD for sorting
-          displayKey = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          // Use local date to avoid timezone issues
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          sortKey = `${year}-${month}-${day}`; // YYYY-MM-DD for sorting
         } else {
-          // Get week start
+          // Get week start (Sunday)
           const weekStart = new Date(date);
           weekStart.setDate(date.getDate() - date.getDay());
-          sortKey = weekStart.toISOString().split('T')[0]; // YYYY-MM-DD for sorting
-          displayKey = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          const year = weekStart.getFullYear();
+          const month = String(weekStart.getMonth() + 1).padStart(2, '0');
+          const day = String(weekStart.getDate()).padStart(2, '0');
+          sortKey = `${year}-${month}-${day}`; // YYYY-MM-DD for sorting
         }
 
         if (!trendData[sortKey]) {
-          trendData[sortKey] = { count: 0, displayKey };
+          trendData[sortKey] = { count: 0 };
         }
         trendData[sortKey].count += 1;
       });
@@ -434,7 +438,13 @@ const Reports = () => {
       const submissionsTrend = Object.entries(trendData)
         .sort((a, b) => a[0].localeCompare(b[0])) // Sort by ISO date string (ascending)
         .slice(-10) // Last 10 periods
-        .map(([, { count, displayKey }]) => ({ date: displayKey, count }));
+        .map(([sortKey, { count }]) => {
+          // Convert sortKey back to display format
+          const [year, month, day] = sortKey.split('-');
+          const displayDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+          const displayKey = displayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          return { date: displayKey, count };
+        });
 
       // Forms by type/department
       const formTypeCounts = {};

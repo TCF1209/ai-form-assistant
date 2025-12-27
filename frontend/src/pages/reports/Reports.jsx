@@ -381,42 +381,74 @@ const Reports = () => {
         .sort((a, b) => b.count - a.count)
         .slice(0, 10);
 
-      // Submissions trend (by day/week) - sorted from oldest to newest
+      // Submissions trend - generate FULL date range for the selected period
+      const days = parseInt(dateRange);
       const trendData = {};
-      const trendFormat = parseInt(dateRange) <= 14 ? 'day' : 'week';
 
+      // Determine grouping: daily for <= 14 days, weekly for > 14 days
+      const useWeekly = days > 14;
+
+      // Generate all dates/weeks in the range (from startDate to now)
+      const generateDateRange = () => {
+        const dates = [];
+        const current = new Date(startDate);
+
+        if (useWeekly) {
+          // For weekly: start from the Sunday of the start week
+          current.setDate(current.getDate() - current.getDay());
+        }
+
+        while (current <= now) {
+          const year = current.getFullYear();
+          const month = String(current.getMonth() + 1).padStart(2, '0');
+          const day = String(current.getDate()).padStart(2, '0');
+          const sortKey = `${year}-${month}-${day}`;
+
+          dates.push(sortKey);
+          trendData[sortKey] = { count: 0 };
+
+          if (useWeekly) {
+            current.setDate(current.getDate() + 7); // Next week
+          } else {
+            current.setDate(current.getDate() + 1); // Next day
+          }
+        }
+        return dates;
+      };
+
+      generateDateRange();
+
+      // Count submissions for each period
       filteredSubmissions.forEach(s => {
         const date = new Date(s.submitted_at || s.created_at);
-        let sortKey; // Use ISO date string for proper sorting
+        let sortKey;
 
-        if (trendFormat === 'day') {
-          // Use local date to avoid timezone issues
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          sortKey = `${year}-${month}-${day}`; // YYYY-MM-DD for sorting
-        } else {
+        if (useWeekly) {
           // Get week start (Sunday)
           const weekStart = new Date(date);
           weekStart.setDate(date.getDate() - date.getDay());
           const year = weekStart.getFullYear();
           const month = String(weekStart.getMonth() + 1).padStart(2, '0');
           const day = String(weekStart.getDate()).padStart(2, '0');
-          sortKey = `${year}-${month}-${day}`; // YYYY-MM-DD for sorting
+          sortKey = `${year}-${month}-${day}`;
+        } else {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          sortKey = `${year}-${month}-${day}`;
         }
 
-        if (!trendData[sortKey]) {
-          trendData[sortKey] = { count: 0 };
+        if (trendData[sortKey]) {
+          trendData[sortKey].count += 1;
         }
-        trendData[sortKey].count += 1;
       });
 
-      // Sort by date (oldest to newest) and take last 10
+      // Sort by date and limit to reasonable number of points
+      const maxPoints = useWeekly ? 13 : 14; // ~3 months of weeks or 2 weeks of days
       const submissionsTrend = Object.entries(trendData)
-        .sort((a, b) => a[0].localeCompare(b[0])) // Sort by ISO date string (ascending)
-        .slice(-10) // Last 10 periods
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .slice(-maxPoints)
         .map(([sortKey, { count }]) => {
-          // Convert sortKey back to display format
           const [year, month, day] = sortKey.split('-');
           const displayDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
           const displayKey = displayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });

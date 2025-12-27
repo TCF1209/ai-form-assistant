@@ -383,6 +383,30 @@ CONVERSATION CONTEXT:
 - Example: If user first asks "How many leave requests last month?" and then asks "how about yesterday?", they still mean leave request submissions, just for yesterday.
 - Carry forward the entity, form_type, and other relevant filters from previous messages when the current query is ambiguous.
 
+QUERY TYPE CLASSIFICATION (VERY IMPORTANT - read carefully):
+
+1. "trend" - Use when user asks about changes OVER TIME:
+   - Keywords: "trend", "over time", "monthly", "weekly", "history", "growth", "decline"
+   - Examples: "show trends", "submissions over time", "monthly submissions", "how has it changed"
+   - DO NOT set group_by for trend queries, time grouping is automatic
+
+2. "comparison" - Use when user explicitly wants to COMPARE categories:
+   - Keywords: "compare", "vs", "versus", "comparison", "difference between"
+   - Examples: "compare departments", "IT vs Finance", "compare submissions by department"
+   - This shows a BAR CHART for side-by-side comparison
+
+3. "breakdown" - Use when user wants to see distribution/breakdown:
+   - Keywords: "breakdown", "by department", "by status", "distribution", "split"
+   - Examples: "breakdown by status", "show by department", "status distribution"
+   - This shows RANKING (for department/form) or DONUT (for status)
+
+4. "count" - Use for simple counting questions:
+   - Keywords: "how many", "count", "total", "number of"
+   - Examples: "how many submissions", "total approved", "count leave requests"
+
+5. "average" - Use for average/metric questions:
+   - Keywords: "average", "mean", "typical", "approval time"
+
 Analyze the user's query and return a JSON object with this structure:
 {
     "query_type": "count|list|trend|comparison|breakdown|average|overview",
@@ -399,7 +423,7 @@ Analyze the user's query and return a JSON object with this structure:
     },
     "group_by": "status|department|form|month|week" or null,
     "aggregation": "count|sum|average" or null,
-    "visualization": "number|bar|pie|line|table|cards",
+    "visualization": "number|bar|pie|line|table|cards|ranking|donut",
     "sort": "asc|desc" or null,
     "limit": number or null,
     "interpretation": "A user-friendly description of what they're asking. This will be shown to the user, so make it natural and helpful."
@@ -417,12 +441,18 @@ IMPORTANT for interpretation field:
 - For casual messages: Leave interpretation empty or null, the system will handle the response
 
 Examples:
-- "How many active forms?" → entity: "forms", query_type: "count", filters: {status: null}, interpretation: "Counting active form templates"
-- "How many forms right now?" → entity: "forms", query_type: "count", interpretation: "Counting available forms"
-- "How many leave requests last month?" → entity: "submissions", query_type: "count", filters: {form_type: "leave", time_range: "last_month"}, interpretation: "Counting leave request submissions from last month"
-- "Show pending submissions by department" → entity: "submissions", query_type: "breakdown", group_by: "department", filters: {status: ["SUBMITTED", "IN_REVIEW"]}, interpretation: "Breaking down pending submissions by department"
-- "thank you" → is_casual_message: true, interpretation: null
-- Follow-up: Previous was about "leave requests last month", new query "how about yesterday?" → entity: "submissions", filters: {form_type: "leave", time_range: "yesterday"}, interpretation: "Showing leave requests from yesterday"
+- "How many active forms?" → query_type: "count", entity: "forms"
+- "How many leave requests last month?" → query_type: "count", entity: "submissions", filters: {form_type: "leave", time_range: "last_month"}
+- "Show submission trends" → query_type: "trend" (NOT breakdown!)
+- "Submissions over time" → query_type: "trend"
+- "Monthly submissions" → query_type: "trend"
+- "Compare submissions by department" → query_type: "comparison" (NOT breakdown!)
+- "Compare IT vs Finance" → query_type: "comparison"
+- "Breakdown by status" → query_type: "breakdown", group_by: "status"
+- "Show by department" → query_type: "breakdown", group_by: "department"
+- "How many approved vs rejected?" → query_type: "breakdown", group_by: "status"
+- "Most submitted form" → query_type: "breakdown", group_by: "form"
+- "thank you" → is_casual_message: true
 """
 
         # Build conversation context string

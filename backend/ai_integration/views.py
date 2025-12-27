@@ -637,7 +637,7 @@ class NaturalLanguageQueryView(APIView):
         if dept_filter and isinstance(dept_filter, str):
             base_qs = base_qs.filter(form__department__name__icontains=dept_filter)
 
-        # Execute based on query type
+        # Execute based on query type (order matters - specific types before breakdown)
         if query_type == 'count':
             # Handle counting forms vs submissions
             if entity == 'forms':
@@ -645,17 +645,20 @@ class NaturalLanguageQueryView(APIView):
             else:
                 return self._execute_count_query(base_qs, intent, dept_note)
 
-        elif query_type == 'breakdown' or group_by:
-            return self._execute_breakdown_query(base_qs, intent, group_by, user_role, user_department, dept_note)
-
         elif query_type == 'trend':
+            # Trend queries should always show line chart
             return self._execute_trend_query(base_qs, intent, now, dept_note)
+
+        elif query_type == 'comparison':
+            # Comparison queries should show bar chart
+            return self._execute_comparison_query(base_qs, intent, user_role, user_department, dept_note)
 
         elif query_type == 'average':
             return self._execute_average_query(base_qs, intent, dept_note)
 
-        elif query_type == 'comparison':
-            return self._execute_comparison_query(base_qs, intent, user_role, user_department, dept_note)
+        elif query_type == 'breakdown' or group_by:
+            # Breakdown queries - ranking or donut based on group_by
+            return self._execute_breakdown_query(base_qs, intent, group_by, user_role, user_department, dept_note)
 
         elif query_type == 'list' and entity == 'forms':
             # Handle listing forms

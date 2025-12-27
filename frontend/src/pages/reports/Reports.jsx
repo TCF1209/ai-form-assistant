@@ -313,12 +313,12 @@ const Reports = () => {
   const fetchReportData = async () => {
     setLoading(true);
     try {
-      // Fetch submissions
-      const submissionsRes = await api.get('/submissions/');
+      // Fetch ALL submissions (bypass pagination for reports)
+      const submissionsRes = await api.get('/submissions/?page_size=10000');
       const submissions = submissionsRes.data.results || submissionsRes.data || [];
 
-      // Fetch forms
-      const formsRes = await api.get('/forms/');
+      // Fetch ALL forms (bypass pagination for reports)
+      const formsRes = await api.get('/forms/?page_size=10000');
       const forms = formsRes.data.results || formsRes.data || [];
 
       // Filter by date range
@@ -450,8 +450,8 @@ const Reports = () => {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      // Fetch submissions data
-      const submissionsRes = await api.get('/submissions/');
+      // Fetch ALL submissions data (bypass pagination)
+      const submissionsRes = await api.get('/submissions/?page_size=10000');
       const submissions = submissionsRes.data.results || submissionsRes.data || [];
 
       // Filter by date range
@@ -747,8 +747,8 @@ const Reports = () => {
   const handleExportPDF = async () => {
     setExporting(true);
     try {
-      // Fetch submissions data
-      const submissionsRes = await api.get('/submissions/');
+      // Fetch ALL submissions data (bypass pagination)
+      const submissionsRes = await api.get('/submissions/?page_size=10000');
       const submissions = submissionsRes.data.results || submissionsRes.data || [];
 
       // Filter by date range

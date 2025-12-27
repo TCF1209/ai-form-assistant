@@ -345,7 +345,7 @@ For valid form requests, return a JSON object with this structure:
                 "error": "Failed to parse optimization results"
             }
 
-    def parse_analytics_intent(self, query: str, available_context: Dict) -> Dict:
+    def parse_analytics_intent(self, query: str, available_context: Dict, conversation_history: List[Dict] = None) -> Dict:
         """
         Parse natural language analytics query to understand user intent
 
@@ -354,6 +354,7 @@ For valid form requests, return a JSON object with this structure:
         Args:
             query: Natural language query from user
             available_context: Context about available data (forms, departments, etc.)
+            conversation_history: Recent conversation messages for context understanding
 
         Returns:
             Dict with structured intent that backend can use to query database
@@ -377,6 +378,11 @@ CRITICAL DISTINCTION:
 - "How many submissions?" → entity: "submissions" (asking about user submissions)
 - "How many leave requests?" → entity: "submissions" (asking about submissions of leave forms)
 
+CONVERSATION CONTEXT:
+- If the user asks a follow-up question like "how about yesterday?" or "what about last week?", use the previous conversation to understand what entity/form type they're referring to.
+- Example: If user first asks "How many leave requests last month?" and then asks "how about yesterday?", they still mean leave request submissions, just for yesterday.
+- Carry forward the entity, form_type, and other relevant filters from previous messages when the current query is ambiguous.
+
 Analyze the user's query and return a JSON object with this structure:
 {
     "query_type": "count|list|trend|comparison|breakdown|average|overview",
@@ -389,7 +395,7 @@ Analyze the user's query and return a JSON object with this structure:
         "status": ["APPROVED", "REJECTED"] or null,
         "form_type": "leave|expense|it_support|travel|etc" or null,
         "department": "department_name" or null,
-        "time_range": "today|this_week|last_week|this_month|last_month|this_year|last_6_months" or null
+        "time_range": "today|this_week|last_week|this_month|last_month|this_year|last_6_months|yesterday" or null
     },
     "group_by": "status|department|form|month|week" or null,
     "aggregation": "count|sum|average" or null,
@@ -416,7 +422,17 @@ Examples:
 - "How many leave requests last month?" → entity: "submissions", query_type: "count", filters: {form_type: "leave", time_range: "last_month"}, interpretation: "Counting leave request submissions from last month"
 - "Show pending submissions by department" → entity: "submissions", query_type: "breakdown", group_by: "department", filters: {status: ["SUBMITTED", "IN_REVIEW"]}, interpretation: "Breaking down pending submissions by department"
 - "thank you" → is_casual_message: true, interpretation: null
+- Follow-up: Previous was about "leave requests last month", new query "how about yesterday?" → entity: "submissions", filters: {form_type: "leave", time_range: "yesterday"}, interpretation: "Showing leave requests from yesterday"
 """
+
+        # Build conversation context string
+        conversation_context = ""
+        if conversation_history and len(conversation_history) > 0:
+            conversation_context = "\n\nRecent conversation for context:\n"
+            for msg in conversation_history:
+                role = msg.get('role', 'user').capitalize()
+                content = msg.get('content', '')
+                conversation_context += f"{role}: {content}\n"
 
         user_prompt = f"""User query: "{query}"
 
@@ -425,7 +441,7 @@ Available context:
 - Form types: {json.dumps(available_context.get('form_types', []))}
 - User role: {available_context.get('user_role', 'USER')}
 - User department: {available_context.get('user_department', 'Not specified')}
-
+{conversation_context}
 Parse this query and return the structured intent as JSON."""
 
         messages = [

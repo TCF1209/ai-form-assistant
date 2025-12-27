@@ -65,6 +65,12 @@ class ConversationResponseSerializer(serializers.Serializer):
     session_id = serializers.CharField(required=False)
 
 
+class ConversationMessageItemSerializer(serializers.Serializer):
+    """Serializer for a single conversation message in history"""
+    role = serializers.ChoiceField(choices=['user', 'assistant'])
+    content = serializers.CharField(max_length=2000)
+
+
 class NLQueryRequestSerializer(serializers.Serializer):
     """Serializer for natural language query requests"""
     query = serializers.CharField(
@@ -75,6 +81,11 @@ class NLQueryRequestSerializer(serializers.Serializer):
     context = serializers.DictField(
         help_text="Additional context for the query",
         required=False
+    )
+    conversation_history = ConversationMessageItemSerializer(
+        many=True,
+        required=False,
+        help_text="Recent conversation history for context"
     )
 
 

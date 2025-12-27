@@ -58,8 +58,9 @@ const analyticsService = {
    * Process an analytics query
    * @param {string} query - Natural language query
    * @param {object} context - Optional context
+   * @param {Array} conversationHistory - Recent conversation messages for context
    */
-  async processQuery(query, context = {}) {
+  async processQuery(query, context = {}, conversationHistory = []) {
     // Add artificial delay for better UX
     await delay(300 + Math.random() * 300);
 
@@ -101,10 +102,20 @@ const analyticsService = {
       };
     }
 
+    // Extract last few meaningful messages for context (user + assistant pairs)
+    const recentHistory = conversationHistory
+      .filter(msg => !msg.isAnalyticsResult || msg.summary || msg.interpretation)
+      .slice(-6)  // Last 6 messages (about 3 exchanges)
+      .map(msg => ({
+        role: msg.isUser ? 'user' : 'assistant',
+        content: msg.isUser ? msg.content : (msg.summary || msg.interpretation || msg.content)
+      }));
+
     try {
       const response = await api.post('/ai/query/', {
         query: query,
-        context: context
+        context: context,
+        conversation_history: recentHistory
       });
 
       return {

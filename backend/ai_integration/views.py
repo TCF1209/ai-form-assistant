@@ -454,6 +454,7 @@ class NaturalLanguageQueryView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         query = serializer.validated_data['query']
+        conversation_history = serializer.validated_data.get('conversation_history', [])
         user_role = request.user.role
         user_department = request.user.department if request.user.department else None
 
@@ -463,8 +464,8 @@ class NaturalLanguageQueryView(APIView):
         # Build context for AI
         available_context = self._build_context(user_role, user_department)
 
-        # Step 1: AI parses the query to understand intent
-        intent = ai_service.parse_analytics_intent(query, available_context)
+        # Step 1: AI parses the query to understand intent (with conversation history for context)
+        intent = ai_service.parse_analytics_intent(query, available_context, conversation_history)
         logger.info(f"Analytics query intent: {intent}")
         logger.info(f"Analytics query - entity: {intent.get('entity')}, filters: {intent.get('filters')}")
 
@@ -671,6 +672,12 @@ class NaturalLanguageQueryView(APIView):
         if time_range == 'today':
             start = now.replace(hour=0, minute=0, second=0, microsecond=0)
             return queryset.filter(submitted_at__gte=start)
+
+        elif time_range == 'yesterday':
+            yesterday = now - timedelta(days=1)
+            start = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            return queryset.filter(submitted_at__gte=start, submitted_at__lt=end)
 
         elif time_range == 'this_week':
             start = now - timedelta(days=now.weekday())

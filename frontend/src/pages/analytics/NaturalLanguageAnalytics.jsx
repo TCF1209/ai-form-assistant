@@ -54,6 +54,18 @@ const TrendUpIcon = () => (
   </svg>
 );
 
+const TrendDownIcon = () => (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" />
+  </svg>
+);
+
+const FormIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
+
 // Message component
 const ChatMessage = ({ message, isUser, user }) => {
   return (
@@ -100,8 +112,8 @@ const TypingIndicator = () => (
   </div>
 );
 
-// Metric Card component
-const MetricCard = ({ label, value, unit, trend, icon }) => {
+// Metric Card component - Enhanced with better styling
+const MetricCard = ({ label, value, unit, trend, icon, comparison, color }) => {
   const getIcon = () => {
     switch (icon) {
       case 'document':
@@ -110,38 +122,91 @@ const MetricCard = ({ label, value, unit, trend, icon }) => {
         return <ClockIcon />;
       case 'check':
         return <CheckIcon />;
+      case 'form':
+        return <FormIcon />;
       default:
         return <ChartBarIcon />;
     }
   };
 
+  // Determine color scheme based on label or explicit color
+  const getColorScheme = () => {
+    if (color) return color;
+    const labelLower = label?.toLowerCase() || '';
+    if (labelLower.includes('approved') || labelLower.includes('approval rate')) {
+      return 'emerald';
+    } else if (labelLower.includes('rejected') || labelLower.includes('cancelled')) {
+      return 'red';
+    } else if (labelLower.includes('pending') || labelLower.includes('review')) {
+      return 'amber';
+    } else if (labelLower.includes('active') || labelLower.includes('form')) {
+      return 'sky';
+    }
+    return 'sky';
+  };
+
+  const colorScheme = getColorScheme();
+  const colorClasses = {
+    sky: { bg: 'bg-sky-100', text: 'text-sky-500', accent: 'bg-sky-500' },
+    emerald: { bg: 'bg-emerald-100', text: 'text-emerald-500', accent: 'bg-emerald-500' },
+    red: { bg: 'bg-red-100', text: 'text-red-500', accent: 'bg-red-500' },
+    amber: { bg: 'bg-amber-100', text: 'text-amber-500', accent: 'bg-amber-500' },
+    purple: { bg: 'bg-purple-100', text: 'text-purple-500', accent: 'bg-purple-500' },
+  };
+  const colors = colorClasses[colorScheme] || colorClasses.sky;
+
+  // Parse trend to determine if it's positive or negative
+  const isTrendPositive = trend && (trend.includes('+') || trend.includes('up') || parseFloat(trend) > 0);
+  const isTrendNegative = trend && (trend.includes('-') || trend.includes('down') || parseFloat(trend) < 0);
+
+  // Format value display
+  const formatValue = () => {
+    if (typeof value === 'string') return value;
+    if (unit === '$') return `$${value.toLocaleString()}`;
+    if (typeof value === 'number') return value.toLocaleString();
+    return value;
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 border border-slate-200">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-slate-500 text-sm">{label}</span>
-        <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-500">
+    <div className="bg-white rounded-xl shadow-md p-5 border border-slate-200 hover:shadow-lg transition-shadow">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-slate-500 text-sm font-medium">{label}</span>
+        <div className={`w-10 h-10 rounded-xl ${colors.bg} flex items-center justify-center ${colors.text}`}>
           {getIcon()}
         </div>
       </div>
-      <div className="flex items-baseline gap-1">
-        <span className="text-2xl font-bold text-slate-800">
-          {unit === '$' ? `$${value.toLocaleString()}` : value}
+      <div className="flex items-baseline gap-2">
+        <span className="text-3xl font-bold text-slate-800">
+          {formatValue()}
         </span>
-        {unit && unit !== '$' && <span className="text-slate-500 text-sm">{unit}</span>}
+        {unit && unit !== '$' && <span className="text-slate-400 text-sm">{unit}</span>}
       </div>
-      {trend && (
-        <div className="flex items-center gap-1 mt-2 text-emerald-500 text-sm">
-          <TrendUpIcon />
-          <span>{trend}</span>
+      {(trend || comparison) && (
+        <div className="flex items-center gap-2 mt-3">
+          {trend && (
+            <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+              isTrendPositive ? 'bg-emerald-50 text-emerald-600' :
+              isTrendNegative ? 'bg-red-50 text-red-600' :
+              'bg-slate-50 text-slate-600'
+            }`}>
+              {isTrendPositive && <TrendUpIcon />}
+              {isTrendNegative && <TrendDownIcon />}
+              <span>{trend}</span>
+            </div>
+          )}
+          {comparison && (
+            <span className="text-slate-400 text-xs">{comparison}</span>
+          )}
         </div>
       )}
     </div>
   );
 };
 
-// Bar Chart component (simple implementation)
+// Bar Chart component - Enhanced with gradient bars and ranking
 const BarChart = ({ data }) => {
   const maxValue = Math.max(...data.map(d => d.submissions || d.pending || d.value || d.count || 0));
+  const total = data.reduce((sum, item) => sum + (item.submissions || item.pending || item.value || item.count || 0), 0);
 
   // Helper to get the label from item - check various possible field names
   const getLabel = (item) => {
@@ -155,66 +220,122 @@ const BarChart = ({ data }) => {
     return item.submissions || item.pending || item.value || item.count || 0;
   };
 
+  // Color gradient based on position in ranking
+  const getBarColor = (index) => {
+    const colors = [
+      'from-sky-500 to-sky-600',      // 1st
+      'from-sky-400 to-sky-500',      // 2nd
+      'from-sky-300 to-sky-400',      // 3rd
+      'from-slate-400 to-slate-500',  // 4th+
+      'from-slate-300 to-slate-400',
+    ];
+    return colors[Math.min(index, colors.length - 1)];
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 border border-slate-200">
-      <div className="space-y-3">
+    <div className="bg-white rounded-xl shadow-md p-5 border border-slate-200">
+      <div className="space-y-4">
         {data.map((item, index) => {
           const value = getValue(item);
           const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
+          const percentOfTotal = total > 0 ? Math.round((value / total) * 100) : 0;
           const label = getLabel(item);
           return (
-            <div key={index} className="flex items-center gap-3">
-              <div className="w-32 text-sm text-slate-600 truncate" title={label}>
-                {label}
+            <div key={index} className="group">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
+                    index === 0 ? 'bg-sky-100 text-sky-600' : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {index + 1}
+                  </span>
+                  <span className="text-sm font-medium text-slate-700 truncate max-w-[150px]" title={label}>
+                    {label}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-slate-800">{value.toLocaleString()}</span>
+                  <span className="text-xs text-slate-400">({percentOfTotal}%)</span>
+                </div>
               </div>
-              <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-sky-500 rounded-full transition-all duration-500"
+                  className={`h-full bg-gradient-to-r ${getBarColor(index)} rounded-full transition-all duration-500 ease-out group-hover:opacity-80`}
                   style={{ width: `${percentage}%` }}
                 />
-              </div>
-              <div className="w-12 text-sm font-medium text-slate-700 text-right">
-                {value}
               </div>
             </div>
           );
         })}
       </div>
+      {total > 0 && (
+        <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm">
+          <span className="text-slate-500">Total</span>
+          <span className="font-bold text-slate-700">{total.toLocaleString()}</span>
+        </div>
+      )}
     </div>
   );
 };
 
-// Status/Pie data display (as horizontal bars for simplicity)
+// Status/Pie data display - Enhanced with better colors and stats
 const StatusBreakdown = ({ data }) => {
-  const colors = {
-    'Submitted': 'bg-blue-500',
-    'Approved': 'bg-emerald-500',
-    'Rejected': 'bg-red-500',
-    'Pending': 'bg-amber-500'
+  const colorConfig = {
+    'Submitted': { bg: 'bg-blue-500', light: 'bg-blue-100', text: 'text-blue-600' },
+    'Approved': { bg: 'bg-emerald-500', light: 'bg-emerald-100', text: 'text-emerald-600' },
+    'Rejected': { bg: 'bg-red-500', light: 'bg-red-100', text: 'text-red-600' },
+    'Cancelled': { bg: 'bg-slate-400', light: 'bg-slate-100', text: 'text-slate-600' },
+    'Pending': { bg: 'bg-amber-500', light: 'bg-amber-100', text: 'text-amber-600' },
+    'In Review': { bg: 'bg-purple-500', light: 'bg-purple-100', text: 'text-purple-600' },
+    'Draft': { bg: 'bg-slate-300', light: 'bg-slate-50', text: 'text-slate-500' },
   };
+
+  const getColor = (status) => colorConfig[status] || { bg: 'bg-slate-400', light: 'bg-slate-100', text: 'text-slate-600' };
 
   const total = data.reduce((sum, item) => sum + item.count, 0);
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4 border border-slate-200">
-      <div className="flex h-4 rounded-full overflow-hidden mb-4">
-        {data.map((item, index) => (
-          <div
-            key={index}
-            className={`${colors[item.status] || 'bg-slate-400'}`}
-            style={{ width: `${(item.count / total) * 100}%` }}
-            title={`${item.status}: ${item.count}`}
-          />
-        ))}
+    <div className="bg-white rounded-xl shadow-md p-5 border border-slate-200">
+      {/* Visual progress bar */}
+      <div className="flex h-4 rounded-full overflow-hidden mb-6 shadow-inner bg-slate-100">
+        {data.map((item, index) => {
+          const percentage = total > 0 ? (item.count / total) * 100 : 0;
+          if (percentage === 0) return null;
+          return (
+            <div
+              key={index}
+              className={`${getColor(item.status).bg} transition-all duration-500 first:rounded-l-full last:rounded-r-full`}
+              style={{ width: `${percentage}%` }}
+              title={`${item.status}: ${item.count} (${Math.round(percentage)}%)`}
+            />
+          );
+        })}
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        {data.map((item, index) => (
-          <div key={index} className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded-full ${colors[item.status] || 'bg-slate-400'}`} />
-            <span className="text-sm text-slate-600">{item.status}</span>
-            <span className="text-sm font-medium text-slate-800 ml-auto">{item.count}</span>
-          </div>
-        ))}
+
+      {/* Status cards grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {data.map((item, index) => {
+          const percentage = total > 0 ? Math.round((item.count / total) * 100) : 0;
+          const colors = getColor(item.status);
+          return (
+            <div key={index} className={`rounded-lg p-3 ${colors.light} border border-opacity-50`}>
+              <div className="flex items-center gap-2 mb-1">
+                <div className={`w-2 h-2 rounded-full ${colors.bg}`} />
+                <span className={`text-sm font-medium ${colors.text}`}>{item.status}</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-xl font-bold text-slate-800">{item.count.toLocaleString()}</span>
+                <span className="text-xs text-slate-500">{percentage}%</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Total footer */}
+      <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center">
+        <span className="text-sm text-slate-500">Total</span>
+        <span className="text-lg font-bold text-slate-700">{total.toLocaleString()}</span>
       </div>
     </div>
   );
@@ -239,6 +360,8 @@ const AnalyticsResultCard = ({ result }) => {
                 unit={item.unit}
                 trend={item.trend}
                 icon={item.icon}
+                comparison={item.comparison}
+                color={item.color}
               />
             ))}
           </div>
@@ -268,6 +391,9 @@ const AnalyticsResultCard = ({ result }) => {
                 label={item.label}
                 value={item.value}
                 icon={item.icon}
+                trend={item.trend}
+                comparison={item.comparison}
+                color={item.color}
               />
             ))}
           </div>
@@ -334,17 +460,29 @@ const AnalyticsResultCard = ({ result }) => {
   );
 };
 
-// Suggested Query Chips
+// Suggested Query Chips - Enhanced with icons
 const SuggestedQueries = ({ queries, onSelect }) => {
+  // Helper to get appropriate icon for query type
+  const getQueryIcon = (query) => {
+    const q = query.toLowerCase();
+    if (q.includes('how many') || q.includes('count')) return '📊';
+    if (q.includes('trend') || q.includes('over time')) return '📈';
+    if (q.includes('average')) return '⏱️';
+    if (q.includes('department') || q.includes('breakdown')) return '🏢';
+    if (q.includes('status')) return '📋';
+    return '💡';
+  };
+
   return (
     <div className="flex flex-wrap gap-2 mb-4">
       {queries.slice(0, 4).map((query, index) => (
         <button
           key={index}
           onClick={() => onSelect(query)}
-          className="px-3 py-1.5 bg-white border border-slate-200 rounded-full text-sm text-slate-600 hover:bg-sky-50 hover:border-sky-300 hover:text-sky-600 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 transition-all hover:shadow-md group"
         >
-          {query}
+          <span className="text-base group-hover:scale-110 transition-transform">{getQueryIcon(query)}</span>
+          <span>{query}</span>
         </button>
       ))}
     </div>
@@ -455,7 +593,8 @@ const NaturalLanguageAnalytics = () => {
     setIsTyping(true);
 
     try {
-      const response = await analyticsService.processQuery(messageText);
+      // Pass conversation history for context (so AI understands follow-up questions)
+      const response = await analyticsService.processQuery(messageText, {}, messages);
 
       setIsTyping(false);
 

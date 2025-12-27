@@ -808,7 +808,7 @@ class NaturalLanguageQueryView(APIView):
             "interpretation": intent.get('interpretation', f"Listing forms{dept_note}"),
             "filters": filters,
             "aggregation": "list",
-            "visualization": "bar",
+            "visualization": "ranking",
             "data": forms_data if forms_data else [{"name": "No forms", "department": "-", "submissions": 0}],
             "summary": f"Found {len(forms_data)} active forms."
         }
@@ -819,7 +819,7 @@ class NaturalLanguageQueryView(APIView):
         from users.models import Department
 
         if group_by == 'department':
-            # Group by department
+            # Group by department - show as ranking
             dept_data = []
             departments = Department.objects.filter(is_active=True)
             if user_role == 'MANAGER' and user_department:
@@ -828,7 +828,7 @@ class NaturalLanguageQueryView(APIView):
             for dept in departments:
                 count = queryset.filter(form__department=dept).count()
                 if count > 0:
-                    dept_data.append({"department": dept.name, "submissions": count})
+                    dept_data.append({"name": dept.name, "submissions": count})
 
             dept_data.sort(key=lambda x: x['submissions'], reverse=True)
 
@@ -836,8 +836,8 @@ class NaturalLanguageQueryView(APIView):
                 "interpretation": intent.get('interpretation', f"Breakdown by department{dept_note}"),
                 "filters": intent.get('filters', {}),
                 "aggregation": "group_by_department",
-                "visualization": "bar",
-                "data": dept_data if dept_data else [{"department": "No data", "submissions": 0}],
+                "visualization": "ranking",
+                "data": dept_data if dept_data else [{"name": "No data", "submissions": 0}],
                 "summary": f"Breakdown across {len(dept_data)} departments."
             }
 
@@ -869,23 +869,23 @@ class NaturalLanguageQueryView(APIView):
                 "interpretation": intent.get('interpretation', f"Status breakdown{dept_note}"),
                 "filters": intent.get('filters', {}),
                 "aggregation": "count_by_status",
-                "visualization": "pie",
+                "visualization": "donut",
                 "data": data if data else [{"status": "No Data", "count": 0, "percentage": 0}],
                 "summary": f"Status distribution across {total} submissions."
             }
 
         elif group_by == 'form':
-            # Group by form type
+            # Group by form type - show as ranking
             form_counts = queryset.values('form__name').annotate(count=Count('id')).order_by('-count')[:10]
 
-            data = [{"form": f['form__name'], "submissions": f['count']} for f in form_counts]
+            data = [{"form_name": f['form__name'], "submissions": f['count']} for f in form_counts]
 
             return {
                 "interpretation": intent.get('interpretation', f"Breakdown by form type{dept_note}"),
                 "filters": intent.get('filters', {}),
                 "aggregation": "group_by_form",
-                "visualization": "bar",
-                "data": data if data else [{"form": "No data", "submissions": 0}],
+                "visualization": "ranking",
+                "data": data if data else [{"form_name": "No data", "submissions": 0}],
                 "summary": f"Top {len(data)} forms by submission count."
             }
 
@@ -971,7 +971,7 @@ class NaturalLanguageQueryView(APIView):
 
         for dept in departments:
             count = queryset.filter(form__department=dept).count()
-            dept_data.append({"department": dept.name, "submissions": count})
+            dept_data.append({"name": dept.name, "submissions": count})
 
         dept_data.sort(key=lambda x: x['submissions'], reverse=True)
 
@@ -980,7 +980,7 @@ class NaturalLanguageQueryView(APIView):
             "filters": intent.get('filters', {}),
             "aggregation": "comparison",
             "visualization": "bar",
-            "data": dept_data if dept_data else [{"department": "No data", "submissions": 0}],
+            "data": dept_data if dept_data else [{"name": "No data", "submissions": 0}],
             "summary": f"Comparison data across {len(dept_data)} departments."
         }
 

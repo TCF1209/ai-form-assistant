@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import analyticsService from '../../services/analyticsService';
+import {
+  LineChart, Line, AreaChart, Area,
+  BarChart as RechartsBarChart, Bar,
+  PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
 
 // Icons
 const SendIcon = () => (
@@ -341,6 +347,315 @@ const StatusBreakdown = ({ data }) => {
   );
 };
 
+// Color palette for charts - consistent and professional
+const CHART_COLORS = [
+  '#0ea5e9', // sky-500
+  '#10b981', // emerald-500
+  '#8b5cf6', // violet-500
+  '#f59e0b', // amber-500
+  '#ef4444', // red-500
+  '#ec4899', // pink-500
+  '#06b6d4', // cyan-500
+  '#84cc16', // lime-500
+];
+
+// Trend Line Chart component - for time series data
+const TrendLineChart = ({ data, title }) => {
+  // Helper to get the label (x-axis) from item
+  const getLabel = (item) => {
+    return item.date || item.month || item.period || item.day || item.week || item.label || 'Unknown';
+  };
+
+  // Helper to get the value (y-axis) from item
+  const getValue = (item) => {
+    return item.submissions || item.count || item.value || item.total || 0;
+  };
+
+  // Transform data for Recharts
+  const chartData = data.map(item => ({
+    name: getLabel(item),
+    value: getValue(item),
+    ...item
+  }));
+
+  // Custom tooltip
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-slate-200">
+          <p className="text-sm font-medium text-slate-700">{label}</p>
+          <p className="text-sm text-sky-600 font-bold">{payload[0].value.toLocaleString()}</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-md p-5 border border-slate-200">
+      {title && <h3 className="text-sm font-medium text-slate-600 mb-4">{title}</h3>}
+      <ResponsiveContainer width="100%" height={280}>
+        <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0}/>
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 12, fill: '#64748b' }}
+            axisLine={{ stroke: '#e2e8f0' }}
+            tickLine={{ stroke: '#e2e8f0' }}
+          />
+          <YAxis
+            tick={{ fontSize: 12, fill: '#64748b' }}
+            axisLine={{ stroke: '#e2e8f0' }}
+            tickLine={{ stroke: '#e2e8f0' }}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke="#0ea5e9"
+            strokeWidth={2}
+            fillOpacity={1}
+            fill="url(#colorValue)"
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+// Vertical Bar Chart component - for category comparisons
+const VerticalBarChart = ({ data, title }) => {
+  // Helper to get the label from item
+  const getLabel = (item) => {
+    return item.form_name || item.name || item.form || item.department ||
+           item.label || item.status || item.user || item.category || item.type || 'Unknown';
+  };
+
+  // Helper to get the value from item
+  const getValue = (item) => {
+    return item.submissions || item.pending || item.value || item.count || 0;
+  };
+
+  // Transform and sort data for Recharts (top items)
+  const chartData = data
+    .map(item => ({
+      name: getLabel(item).length > 15 ? getLabel(item).substring(0, 15) + '...' : getLabel(item),
+      fullName: getLabel(item),
+      value: getValue(item),
+    }))
+    .slice(0, 8); // Limit to top 8 for readability
+
+  // Custom tooltip
+  const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-slate-200">
+          <p className="text-sm font-medium text-slate-700">{payload[0].payload.fullName}</p>
+          <p className="text-sm text-sky-600 font-bold">{payload[0].value.toLocaleString()}</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-md p-5 border border-slate-200">
+      {title && <h3 className="text-sm font-medium text-slate-600 mb-4">{title}</h3>}
+      <ResponsiveContainer width="100%" height={280}>
+        <RechartsBarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 40 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 11, fill: '#64748b' }}
+            axisLine={{ stroke: '#e2e8f0' }}
+            tickLine={{ stroke: '#e2e8f0' }}
+            angle={-45}
+            textAnchor="end"
+            interval={0}
+          />
+          <YAxis
+            tick={{ fontSize: 12, fill: '#64748b' }}
+            axisLine={{ stroke: '#e2e8f0' }}
+            tickLine={{ stroke: '#e2e8f0' }}
+          />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(14, 165, 233, 0.1)' }} />
+          <Bar
+            dataKey="value"
+            fill="#0ea5e9"
+            radius={[4, 4, 0, 0]}
+            maxBarSize={50}
+          />
+        </RechartsBarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+// Donut Chart component - for distributions/proportions
+const DonutChart = ({ data, title }) => {
+  // Transform data for Recharts
+  const chartData = data.map((item, index) => ({
+    name: item.status || item.label || item.name || `Item ${index + 1}`,
+    value: item.count || item.value || item.submissions || 0,
+  }));
+
+  const total = chartData.reduce((sum, item) => sum + item.value, 0);
+
+  // Custom label for pie slices
+  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+    if (percent < 0.05) return null; // Don't show label for small slices
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight="bold">
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+
+  // Custom tooltip
+  const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const percent = ((payload[0].value / total) * 100).toFixed(1);
+      return (
+        <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-slate-200">
+          <p className="text-sm font-medium text-slate-700">{payload[0].name}</p>
+          <p className="text-sm font-bold" style={{ color: payload[0].payload.fill }}>
+            {payload[0].value.toLocaleString()} ({percent}%)
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-md p-5 border border-slate-200">
+      {title && <h3 className="text-sm font-medium text-slate-600 mb-4">{title}</h3>}
+      <div className="flex flex-col md:flex-row items-center">
+        <ResponsiveContainer width="100%" height={250}>
+          <PieChart>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              label={renderCustomLabel}
+              innerRadius={60}
+              outerRadius={100}
+              paddingAngle={2}
+              dataKey="value"
+            >
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+
+        {/* Legend */}
+        <div className="flex flex-wrap justify-center gap-3 mt-4 md:mt-0 md:ml-4">
+          {chartData.map((item, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+              />
+              <span className="text-xs text-slate-600">{item.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Total */}
+      <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center">
+        <span className="text-sm text-slate-500">Total</span>
+        <span className="text-lg font-bold text-slate-700">{total.toLocaleString()}</span>
+      </div>
+    </div>
+  );
+};
+
+// Horizontal Ranking Chart - improved version with consistent colors
+const RankingChart = ({ data }) => {
+  const maxValue = Math.max(...data.map(d => d.submissions || d.pending || d.value || d.count || 0));
+  const total = data.reduce((sum, item) => sum + (item.submissions || item.pending || item.value || item.count || 0), 0);
+
+  // Helper to get the label from item
+  const getLabel = (item) => {
+    return item.form_name || item.name || item.form || item.department ||
+           item.label || item.month || item.status || item.user ||
+           item.category || item.type || 'Unknown';
+  };
+
+  // Helper to get the value from item
+  const getValue = (item) => {
+    return item.submissions || item.pending || item.value || item.count || 0;
+  };
+
+  // Medal colors for top 3, then gradient for rest
+  const getRankStyle = (index) => {
+    if (index === 0) return { bg: 'bg-amber-400', badge: 'bg-amber-100 text-amber-700' }; // Gold
+    if (index === 1) return { bg: 'bg-slate-400', badge: 'bg-slate-100 text-slate-600' }; // Silver
+    if (index === 2) return { bg: 'bg-amber-600', badge: 'bg-amber-50 text-amber-600' }; // Bronze
+    return { bg: 'bg-sky-400', badge: 'bg-slate-50 text-slate-500' }; // Rest
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-md p-5 border border-slate-200">
+      <div className="space-y-4">
+        {data.map((item, index) => {
+          const value = getValue(item);
+          const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
+          const percentOfTotal = total > 0 ? Math.round((value / total) * 100) : 0;
+          const label = getLabel(item);
+          const rankStyle = getRankStyle(index);
+
+          return (
+            <div key={index} className="group">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${rankStyle.badge}`}>
+                    {index + 1}
+                  </span>
+                  <span className="text-sm font-medium text-slate-700 truncate max-w-[180px]" title={label}>
+                    {label}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-slate-800">{value.toLocaleString()}</span>
+                  <span className="text-xs text-slate-400">({percentOfTotal}%)</span>
+                </div>
+              </div>
+              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${rankStyle.bg} rounded-full transition-all duration-500 ease-out`}
+                  style={{ width: `${percentage}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {total > 0 && (
+        <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm">
+          <span className="text-slate-500">Total</span>
+          <span className="font-bold text-slate-700">{total.toLocaleString()}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Analytics Result Card component
 const AnalyticsResultCard = ({ result }) => {
   const renderVisualization = () => {
@@ -368,14 +683,37 @@ const AnalyticsResultCard = ({ result }) => {
         );
 
       case 'bar':
-      case 'line':
         return (
           <div>
-            <BarChart data={result.data} />
+            <VerticalBarChart data={result.data} title={result.title} />
+          </div>
+        );
+
+      case 'line':
+      case 'trend':
+      case 'area':
+        return (
+          <div>
+            <TrendLineChart data={result.data} title={result.title} />
           </div>
         );
 
       case 'pie':
+      case 'donut':
+        return (
+          <div>
+            <DonutChart data={result.data} title={result.title} />
+          </div>
+        );
+
+      case 'ranking':
+        return (
+          <div>
+            <RankingChart data={result.data} />
+          </div>
+        );
+
+      case 'status':
         return (
           <div>
             <StatusBreakdown data={result.data} />

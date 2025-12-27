@@ -5,9 +5,27 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Chart, registerables } from 'chart.js';
+import {
+  AreaChart, Area,
+  BarChart as RechartsBarChart, Bar,
+  PieChart as RechartsPieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts';
 
-// Register Chart.js components
+// Register Chart.js components (for PDF export only)
 Chart.register(...registerables);
+
+// Color palette for charts
+const CHART_COLORS = [
+  '#0ea5e9', // sky-500
+  '#10b981', // emerald-500
+  '#f59e0b', // amber-500
+  '#ef4444', // red-500
+  '#8b5cf6', // violet-500
+  '#ec4899', // pink-500
+  '#06b6d4', // cyan-500
+  '#64748b', // slate-500
+];
 
 // Icons
 const ReportsIcon = () => (
@@ -59,7 +77,7 @@ const StatCard = ({ title, value, subtitle, icon, color = 'sky' }) => {
   );
 };
 
-// Simple Bar Chart Component
+// Bar Chart Component using Recharts
 const BarChart = ({ data, title, xKey, yKey, color = 'sky' }) => {
   if (!data || data.length === 0) {
     return (
@@ -70,45 +88,57 @@ const BarChart = ({ data, title, xKey, yKey, color = 'sky' }) => {
     );
   }
 
-  const maxValue = Math.max(...data.map(d => d[yKey] || 0));
-  const colorClass = color === 'sky' ? 'bg-sky-500' : color === 'emerald' ? 'bg-emerald-500' : 'bg-sky-500';
+  const colorMap = {
+    sky: '#0ea5e9',
+    emerald: '#10b981',
+    amber: '#f59e0b',
+    red: '#ef4444',
+  };
+  const barColor = colorMap[color] || colorMap.sky;
+
+  // Transform data for Recharts
+  const chartData = data.map(item => ({
+    name: item[xKey]?.length > 12 ? item[xKey].substring(0, 12) + '...' : item[xKey],
+    fullName: item[xKey],
+    value: item[yKey] || 0,
+  }));
+
+  // Custom tooltip
+  const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-slate-200">
+          <p className="text-sm font-medium text-slate-700">{payload[0].payload.fullName}</p>
+          <p className="text-sm font-bold" style={{ color: barColor }}>{payload[0].value.toLocaleString()}</p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <h3 className="text-lg font-semibold text-slate-800 mb-4">{title}</h3>
-      <div className="space-y-3">
-        {data.map((item, index) => {
-          const value = item[yKey] || 0;
-          const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
-          return (
-            <div key={index} className="flex items-center gap-3">
-              <div className="w-28 text-sm text-slate-600 truncate" title={item[xKey]}>
-                {item[xKey]}
-              </div>
-              <div className="flex-1 h-8 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full ${colorClass} rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
-                  style={{ width: `${Math.max(percentage, 5)}%` }}
-                >
-                  {percentage > 20 && (
-                    <span className="text-xs font-medium text-white">{value}</span>
-                  )}
-                </div>
-              </div>
-              {percentage <= 20 && (
-                <div className="w-12 text-sm font-medium text-slate-700 text-right">
-                  {value}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <ResponsiveContainer width="100%" height={250}>
+        <RechartsBarChart data={chartData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={true} vertical={false} />
+          <XAxis type="number" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} />
+          <YAxis
+            dataKey="name"
+            type="category"
+            tick={{ fontSize: 11, fill: '#64748b' }}
+            axisLine={{ stroke: '#e2e8f0' }}
+            width={100}
+          />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(14, 165, 233, 0.1)' }} />
+          <Bar dataKey="value" fill={barColor} radius={[0, 4, 4, 0]} barSize={20} />
+        </RechartsBarChart>
+      </ResponsiveContainer>
     </div>
   );
 };
 
-// Simple Pie Chart Component (using CSS)
+// Donut Chart Component using Recharts
 const PieChart = ({ data, title, labelKey, valueKey }) => {
   if (!data || data.length === 0) {
     return (
@@ -119,63 +149,93 @@ const PieChart = ({ data, title, labelKey, valueKey }) => {
     );
   }
 
-  const total = data.reduce((sum, item) => sum + (item[valueKey] || 0), 0);
-  const colors = [
-    { bg: 'bg-sky-500', text: 'text-sky-500' },
-    { bg: 'bg-emerald-500', text: 'text-emerald-500' },
-    { bg: 'bg-amber-500', text: 'text-amber-500' },
-    { bg: 'bg-red-500', text: 'text-red-500' },
-    { bg: 'bg-purple-500', text: 'text-purple-500' },
-    { bg: 'bg-slate-500', text: 'text-slate-500' },
-  ];
+  // Transform data for Recharts
+  const chartData = data.map((item, index) => ({
+    name: item[labelKey] || `Item ${index + 1}`,
+    value: item[valueKey] || 0,
+  }));
 
-  // Calculate conic gradient
-  let currentAngle = 0;
-  const gradientParts = data.map((item, index) => {
-    const value = item[valueKey] || 0;
-    const percentage = total > 0 ? (value / total) * 100 : 0;
-    const startAngle = currentAngle;
-    currentAngle += percentage * 3.6; // Convert to degrees
-    const colorHex = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'][index % 6];
-    return `${colorHex} ${startAngle}deg ${currentAngle}deg`;
-  });
+  const total = chartData.reduce((sum, item) => sum + item.value, 0);
 
-  const conicGradient = `conic-gradient(${gradientParts.join(', ')})`;
+  // Custom label for pie slices
+  const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+    if (percent < 0.05) return null;
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="bold">
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+
+  // Custom tooltip
+  const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      const percent = ((payload[0].value / total) * 100).toFixed(1);
+      return (
+        <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-slate-200">
+          <p className="text-sm font-medium text-slate-700">{payload[0].name}</p>
+          <p className="text-sm font-bold" style={{ color: payload[0].payload.fill }}>
+            {payload[0].value.toLocaleString()} ({percent}%)
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <h3 className="text-lg font-semibold text-slate-800 mb-4">{title}</h3>
-      <div className="flex items-center gap-6">
-        {/* Pie Chart */}
-        <div
-          className="w-32 h-32 rounded-full flex-shrink-0"
-          style={{ background: conicGradient }}
-        />
+      <div className="flex flex-col md:flex-row items-center">
+        <ResponsiveContainer width="100%" height={220}>
+          <RechartsPieChart>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              label={renderCustomLabel}
+              innerRadius={50}
+              outerRadius={85}
+              paddingAngle={2}
+              dataKey="value"
+            >
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+          </RechartsPieChart>
+        </ResponsiveContainer>
+
         {/* Legend */}
-        <div className="flex-1 space-y-2">
-          {data.map((item, index) => {
-            const value = item[valueKey] || 0;
-            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-            return (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${colors[index % colors.length].bg}`} />
-                  <span className="text-sm text-slate-600">{item[labelKey]}</span>
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium text-slate-800">{value}</span>
-                  <span className="text-slate-400 ml-1">({percentage}%)</span>
-                </div>
-              </div>
-            );
-          })}
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-4 md:mt-0 md:ml-2">
+          {chartData.map((item, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+              />
+              <span className="text-xs text-slate-600">{item.name}</span>
+            </div>
+          ))}
         </div>
+      </div>
+
+      {/* Total */}
+      <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center">
+        <span className="text-sm text-slate-500">Total</span>
+        <span className="text-lg font-bold text-slate-700">{total.toLocaleString()}</span>
       </div>
     </div>
   );
 };
 
-// Line Chart Component (improved with proper scaling and continuous lines)
+// Line/Area Chart Component using Recharts
 const LineChart = ({ data, title, xKey, yKey }) => {
   if (!data || data.length === 0) {
     return (
@@ -186,131 +246,61 @@ const LineChart = ({ data, title, xKey, yKey }) => {
     );
   }
 
-  // Chart dimensions with padding
-  const padding = { top: 20, right: 20, bottom: 30, left: 40 };
-  const chartWidth = 400;
-  const chartHeight = 200;
-  const innerWidth = chartWidth - padding.left - padding.right;
-  const innerHeight = chartHeight - padding.top - padding.bottom;
+  // Transform data for Recharts
+  const chartData = data.map(item => ({
+    name: item[xKey],
+    value: item[yKey] || 0,
+  }));
 
-  const maxValue = Math.max(...data.map(d => d[yKey] || 0), 1);
-  const minValue = 0;
-
-  // Calculate points for the line
-  const points = data.map((item, index) => {
-    const x = padding.left + (index / Math.max(data.length - 1, 1)) * innerWidth;
-    const y = padding.top + innerHeight - ((item[yKey] || 0) / maxValue) * innerHeight;
-    return { x, y, value: item[yKey] || 0, label: item[xKey] };
-  });
-
-  // Create SVG path - ensure continuous line
-  const pathD = points.length > 0
-    ? points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ')
-    : '';
-
-  // Area path for fill
-  const areaPath = points.length > 0
-    ? `${pathD} L ${points[points.length - 1].x.toFixed(2)} ${padding.top + innerHeight} L ${padding.left} ${padding.top + innerHeight} Z`
-    : '';
-
-  // Y-axis labels
-  const yAxisLabels = [0, Math.round(maxValue / 2), maxValue];
+  // Custom tooltip
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-slate-200">
+          <p className="text-sm font-medium text-slate-700">{label}</p>
+          <p className="text-sm text-sky-600 font-bold">{payload[0].value.toLocaleString()}</p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <h3 className="text-lg font-semibold text-slate-800 mb-4">{title}</h3>
-      <div className="relative">
-        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-52" preserveAspectRatio="xMidYMid meet">
-          {/* Grid lines */}
-          {[0, 0.25, 0.5, 0.75, 1].map((percent, i) => (
-            <line
-              key={i}
-              x1={padding.left}
-              y1={padding.top + innerHeight * (1 - percent)}
-              x2={chartWidth - padding.right}
-              y2={padding.top + innerHeight * (1 - percent)}
-              stroke="#e2e8f0"
-              strokeWidth="1"
-            />
-          ))}
-
-          {/* Y-axis labels */}
-          {yAxisLabels.map((val, i) => (
-            <text
-              key={i}
-              x={padding.left - 8}
-              y={padding.top + innerHeight - (val / maxValue) * innerHeight + 4}
-              textAnchor="end"
-              className="text-xs fill-slate-400"
-              fontSize="10"
-            >
-              {val}
-            </text>
-          ))}
-
-          {/* Area fill */}
-          {areaPath && (
-            <path
-              d={areaPath}
-              fill="url(#lineGradient)"
-              opacity="0.3"
-            />
-          )}
-
-          {/* Line */}
-          {pathD && (
-            <path
-              d={pathD}
-              fill="none"
-              stroke="#0ea5e9"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          )}
-
-          {/* Points */}
-          {points.map((p, i) => (
-            <g key={i}>
-              <circle
-                cx={p.x}
-                cy={p.y}
-                r="4"
-                fill="#0ea5e9"
-                stroke="white"
-                strokeWidth="2"
-              />
-              {/* Value label on hover - show for all points */}
-              <text
-                x={p.x}
-                y={p.y - 10}
-                textAnchor="middle"
-                className="text-xs fill-slate-600 font-medium"
-                fontSize="9"
-              >
-                {p.value}
-              </text>
-            </g>
-          ))}
-
-          {/* Gradient definition */}
+      <ResponsiveContainer width="100%" height={250}>
+        <AreaChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
           <defs>
-            <linearGradient id="lineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0" />
+            <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3}/>
+              <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0}/>
             </linearGradient>
           </defs>
-        </svg>
-
-        {/* X-axis labels */}
-        <div className="flex justify-between px-10 text-xs text-slate-500">
-          {data.map((item, index) => (
-            <span key={index} className="truncate max-w-[50px] text-center" title={item[xKey]}>
-              {item[xKey]}
-            </span>
-          ))}
-        </div>
-      </div>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 12, fill: '#64748b' }}
+            axisLine={{ stroke: '#e2e8f0' }}
+            tickLine={{ stroke: '#e2e8f0' }}
+          />
+          <YAxis
+            tick={{ fontSize: 12, fill: '#64748b' }}
+            axisLine={{ stroke: '#e2e8f0' }}
+            tickLine={{ stroke: '#e2e8f0' }}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke="#0ea5e9"
+            strokeWidth={2}
+            fillOpacity={1}
+            fill="url(#colorValue)"
+            dot={{ fill: '#0ea5e9', strokeWidth: 2, stroke: '#fff', r: 4 }}
+            activeDot={{ r: 6, fill: '#0ea5e9', stroke: '#fff', strokeWidth: 2 }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
     </div>
   );
 };

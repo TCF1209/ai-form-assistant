@@ -7,7 +7,6 @@ import autoTable from 'jspdf-autotable';
 import { Chart, registerables } from 'chart.js';
 import {
   AreaChart, Area,
-  BarChart as RechartsBarChart, Bar,
   PieChart as RechartsPieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
@@ -77,7 +76,7 @@ const StatCard = ({ title, value, subtitle, icon, color = 'sky' }) => {
   );
 };
 
-// Bar Chart Component using Recharts
+// Simple Bar Chart Component (horizontal bars)
 const BarChart = ({ data, title, xKey, yKey, color = 'sky' }) => {
   if (!data || data.length === 0) {
     return (
@@ -88,52 +87,40 @@ const BarChart = ({ data, title, xKey, yKey, color = 'sky' }) => {
     );
   }
 
-  const colorMap = {
-    sky: '#0ea5e9',
-    emerald: '#10b981',
-    amber: '#f59e0b',
-    red: '#ef4444',
-  };
-  const barColor = colorMap[color] || colorMap.sky;
-
-  // Transform data for Recharts
-  const chartData = data.map(item => ({
-    name: item[xKey]?.length > 12 ? item[xKey].substring(0, 12) + '...' : item[xKey],
-    fullName: item[xKey],
-    value: item[yKey] || 0,
-  }));
-
-  // Custom tooltip
-  const CustomTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-slate-200">
-          <p className="text-sm font-medium text-slate-700">{payload[0].payload.fullName}</p>
-          <p className="text-sm font-bold" style={{ color: barColor }}>{payload[0].value.toLocaleString()}</p>
-        </div>
-      );
-    }
-    return null;
-  };
+  const maxValue = Math.max(...data.map(d => d[yKey] || 0));
+  const colorClass = color === 'sky' ? 'bg-sky-500' : color === 'emerald' ? 'bg-emerald-500' : 'bg-sky-500';
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <h3 className="text-lg font-semibold text-slate-800 mb-4">{title}</h3>
-      <ResponsiveContainer width="100%" height={250}>
-        <RechartsBarChart data={chartData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={true} vertical={false} />
-          <XAxis type="number" tick={{ fontSize: 12, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} />
-          <YAxis
-            dataKey="name"
-            type="category"
-            tick={{ fontSize: 11, fill: '#64748b' }}
-            axisLine={{ stroke: '#e2e8f0' }}
-            width={100}
-          />
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(14, 165, 233, 0.1)' }} />
-          <Bar dataKey="value" fill={barColor} radius={[0, 4, 4, 0]} barSize={20} />
-        </RechartsBarChart>
-      </ResponsiveContainer>
+      <div className="space-y-3">
+        {data.map((item, index) => {
+          const value = item[yKey] || 0;
+          const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
+          return (
+            <div key={index} className="flex items-center gap-3">
+              <div className="w-28 text-sm text-slate-600 truncate" title={item[xKey]}>
+                {item[xKey]}
+              </div>
+              <div className="flex-1 h-8 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${colorClass} rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
+                  style={{ width: `${Math.max(percentage, 5)}%` }}
+                >
+                  {percentage > 20 && (
+                    <span className="text-xs font-medium text-white">{value}</span>
+                  )}
+                </div>
+              </div>
+              {percentage <= 20 && (
+                <div className="w-12 text-sm font-medium text-slate-700 text-right">
+                  {value}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

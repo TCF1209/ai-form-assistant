@@ -73,8 +73,9 @@ const analyticsService = {
       .slice(-6)  // Last 6 messages (about 3 exchanges)
       .map(msg => ({
         role: msg.isUser ? 'user' : 'assistant',
-        content: msg.isUser ? msg.content : (msg.summary || msg.interpretation || msg.content)
-      }));
+        content: msg.isUser ? msg.content : (msg.summary || msg.interpretation || msg.content || '')
+      }))
+      .filter(msg => msg.content && msg.content.trim().length > 0);  // Filter out empty messages
 
     try {
       const response = await api.post('/ai/query/', {

@@ -68,14 +68,14 @@ class ConversationResponseSerializer(serializers.Serializer):
 class ConversationMessageItemSerializer(serializers.Serializer):
     """Serializer for a single conversation message in history"""
     role = serializers.ChoiceField(choices=['user', 'assistant'])
-    content = serializers.CharField(max_length=2000)
+    content = serializers.CharField(max_length=2000, allow_blank=True, default='')
 
 
 class NLQueryRequestSerializer(serializers.Serializer):
     """Serializer for natural language query requests"""
     query = serializers.CharField(
         help_text="Natural language analytics query",
-        min_length=5,
+        min_length=1,  # Allow short queries - AI will handle gibberish detection
         max_length=500
     )
     context = serializers.DictField(

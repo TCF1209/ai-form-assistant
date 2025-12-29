@@ -167,7 +167,7 @@ REST_FRAMEWORK = {
         'anon': os.getenv('THROTTLE_RATE_ANON', '100/hour'),  # Anonymous users
         'user': os.getenv('THROTTLE_RATE_USER', '1000/hour'),  # Authenticated users
         'login': os.getenv('THROTTLE_RATE_LOGIN', '5/minute'),  # Login attempts
-        'ai': os.getenv('THROTTLE_RATE_AI', '30/hour'),  # AI API calls (expensive)
+        'ai': os.getenv('THROTTLE_RATE_AI', '120/hour'),  # AI API calls (2 per minute avg)
     },
 }
 

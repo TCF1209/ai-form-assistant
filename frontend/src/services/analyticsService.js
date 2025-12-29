@@ -108,6 +108,14 @@ const analyticsService = {
         };
       }
 
+      if (error.response?.status === 429) {
+        return {
+          type: 'error',
+          content: 'You\'re sending too many requests. Please wait a moment and try again.',
+          timestamp: new Date().toISOString(),
+        };
+      }
+
       return {
         type: 'error',
         content: 'Sorry, I encountered an error processing your query. Please try again.',

@@ -9,6 +9,9 @@ const api = axios.create({
   },
 });
 
+// Extended timeout for AI endpoints (OpenAI can take 30-60 seconds)
+export const AI_TIMEOUT = 60000; // 60 seconds for AI calls
+
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {

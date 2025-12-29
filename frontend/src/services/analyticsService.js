@@ -3,7 +3,7 @@
  * Connects to the backend AI integration API for analytics queries
  */
 
-import api from './api';
+import api, { AI_TIMEOUT } from './api';
 
 // Suggested queries for users
 const SUGGESTED_QUERIES = [
@@ -82,6 +82,8 @@ const analyticsService = {
         query: query,
         context: context,
         conversation_history: recentHistory
+      }, {
+        timeout: AI_TIMEOUT  // 60 seconds for AI calls
       });
 
       return {
@@ -99,6 +101,15 @@ const analyticsService = {
     } catch (error) {
       console.error('Analytics query failed:', error);
 
+      // Handle timeout errors
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        return {
+          type: 'error',
+          content: 'The AI is taking too long to respond. Please try a simpler question or try again.',
+          timestamp: new Date().toISOString(),
+        };
+      }
+
       // Handle specific error responses
       if (error.response?.status === 403) {
         return {
@@ -112,6 +123,15 @@ const analyticsService = {
         return {
           type: 'error',
           content: 'You\'re sending too many requests. Please wait a moment and try again.',
+          timestamp: new Date().toISOString(),
+        };
+      }
+
+      // Handle network errors
+      if (!error.response) {
+        return {
+          type: 'error',
+          content: 'Network error. Please check your connection and try again.',
           timestamp: new Date().toISOString(),
         };
       }

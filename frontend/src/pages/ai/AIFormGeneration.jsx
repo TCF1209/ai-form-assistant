@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import api from '../../services/api';
+import api, { AI_TIMEOUT } from '../../services/api';
 import formService from '../../services/formService';
 import { message } from 'antd';
 import { validateFormPrompt, getFormSuggestions } from '../../utils/inputValidation';
@@ -168,10 +168,12 @@ const AIFormGeneration = () => {
       // Get department name for context
       const dept = departments.find(d => d.id === selectedDepartment);
 
-      // Call the real AI backend endpoint
+      // Call the real AI backend endpoint with extended timeout for AI
       const response = await api.post('/ai/form-generation/generate/', {
         description: prompt,
         department: dept?.name || ''
+      }, {
+        timeout: AI_TIMEOUT  // 60 seconds for AI calls
       });
 
       if (response.data.success && response.data.form_data) {
@@ -211,8 +213,14 @@ const AIFormGeneration = () => {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to generate form';
       const errorType = error.response?.data?.error_type;
 
+      // Handle timeout errors
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        setCurrentStep(0);
+        message.error('AI is taking too long to respond. Please try again with a simpler description.');
+        saveToHistory(prompt, selectedDepartment, 'failed');
+      }
       // Handle rate limit errors (429)
-      if (error.response?.status === 429) {
+      else if (error.response?.status === 429) {
         setCurrentStep(0);
         message.error('Too many requests. Please wait a moment and try again.');
         saveToHistory(prompt, selectedDepartment, 'failed');

@@ -880,26 +880,32 @@ class NaturalLanguageQueryView(APIView):
         from users.models import Department
 
         if group_by == 'department':
-            # Group by department - show as ranking
-            dept_data = []
-            departments = Department.objects.filter(is_active=True)
+            # Group by department - show as ranking (optimized with single query)
+            # Apply manager filter if needed
             if user_role == 'MANAGER' and user_department:
-                departments = departments.filter(id=user_department.id)
+                queryset = queryset.filter(form__department=user_department)
 
-            for dept in departments:
-                count = queryset.filter(form__department=dept).count()
-                if count > 0:
-                    dept_data.append({"name": dept.name, "submissions": count})
+            # Single optimized query with annotation
+            dept_data = list(
+                queryset.values('form__department__name')
+                .annotate(submissions=Count('id'))
+                .filter(form__department__isnull=False, submissions__gt=0)
+                .order_by('-submissions')
+            )
 
-            dept_data.sort(key=lambda x: x['submissions'], reverse=True)
+            # Format results
+            formatted_data = [
+                {"name": item['form__department__name'], "submissions": item['submissions']}
+                for item in dept_data
+            ]
 
             return {
                 "interpretation": intent.get('interpretation', f"Breakdown by department{dept_note}"),
                 "filters": intent.get('filters', {}),
                 "aggregation": "group_by_department",
                 "visualization": "ranking",
-                "data": dept_data if dept_data else [{"name": "No data", "submissions": 0}],
-                "summary": f"Breakdown across {len(dept_data)} departments."
+                "data": formatted_data if formatted_data else [{"name": "No data", "submissions": 0}],
+                "summary": f"Breakdown across {len(formatted_data)} departments."
             }
 
         elif group_by == 'status':

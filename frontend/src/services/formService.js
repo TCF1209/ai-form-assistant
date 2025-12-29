@@ -71,13 +71,14 @@ const formService = {
             label: field.label || field.name,
             field_type: this.mapFieldType(field.type),
             placeholder: field.placeholder || '',
-            help_text: field.helpText || '',
+            help_text: field.helpText || field.help_text || '',
             required: field.required || false,
             order: i,
-            validation_rules: field.validation || {},
+            validation_rules: field.validation || field.validation_rules || {},
             options: field.options || [],
-            default_value: field.defaultValue || '',
-            width: field.width || 100
+            default_value: field.defaultValue || field.default_value || '',
+            width: field.width || 100,
+            conditional_logic: field.conditions || field.conditional_logic || {}
           });
         }
       }

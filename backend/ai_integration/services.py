@@ -364,6 +364,14 @@ Your job is to understand what the user is asking and return a structured intent
 
 IMPORTANT: You must return ONLY a valid JSON object, no other text.
 
+MULTI-LANGUAGE SUPPORT:
+- Detect the language the user is using (English, Chinese, Malay, etc.)
+- Write the "interpretation" field in the SAME LANGUAGE as the user's query
+- If user asks in Chinese, respond interpretation in Chinese
+- If user asks in Malay, respond interpretation in Malay
+- Example: "上个月有多少请假申请?" → interpretation: "显示上个月的请假申请数量"
+- Example: "Berapa banyak borang yang dihantar?" → interpretation: "Menunjukkan jumlah borang yang dihantar"
+
 The system has TWO different concepts:
 1. FORMS - The form templates (like "Leave Request Form", "Expense Claim Form")
    - Forms have statuses: DRAFT, ACTIVE, INACTIVE, ARCHIVED
@@ -556,6 +564,13 @@ Parse this query and return the structured intent as JSON."""
         """
         system_prompt = """You are an analytics assistant that explains data insights in natural language.
 Given the user's query and the actual data from the database, provide a clear, concise summary.
+
+IMPORTANT - LANGUAGE:
+- Detect the language of the user's query
+- Respond in the SAME LANGUAGE as the user's query
+- If user asks in Chinese, respond in Chinese
+- If user asks in Malay, respond in Malay
+- If user asks in English, respond in English
 
 Guidelines:
 - Be conversational but professional

@@ -61,7 +61,7 @@ const FormPreview = ({ formData, viewMode = 'desktop' }) => {
             <input
               type="text"
               id={fieldId}
-              placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+              placeholder={field.placeholder || `Enter ${(field.label || 'value').toLowerCase()}`}
               className={baseInputClass}
               value={value}
               onChange={(e) => handleFieldChange(field.name, e.target.value)}
@@ -73,7 +73,7 @@ const FormPreview = ({ formData, viewMode = 'desktop' }) => {
           return (
             <textarea
               id={fieldId}
-              placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+              placeholder={field.placeholder || `Enter ${(field.label || 'value').toLowerCase()}`}
               className={`${baseInputClass} min-h-[100px] resize-y`}
               rows={4}
               value={value}
@@ -311,7 +311,7 @@ const FormPreview = ({ formData, viewMode = 'desktop' }) => {
             <input
               type="text"
               id={fieldId}
-              placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}`}
+              placeholder={field.placeholder || `Enter ${(field.label || 'value').toLowerCase()}`}
               className={baseInputClass}
               value={value}
               onChange={(e) => handleFieldChange(field.name, e.target.value)}

@@ -901,7 +901,7 @@ const AIFormGeneration = () => {
                             {field.type}
                           </span>
                           {field.conditions && field.conditions.length > 0 && (
-                            <span className="inline-block px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded" title={`Shows when: ${field.conditions.map(c => `${c.field} ${c.operator} ${c.value}`).join(', ')}`}>
+                            <span className="inline-block px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded" title={`Shows when: ${field.conditions.map(c => `${c.field || 'field'} ${c.operator || 'equals'} ${c.value || ''}`).join(', ')}`}>
                               Conditional
                             </span>
                           )}
@@ -915,7 +915,7 @@ const AIFormGeneration = () => {
                         )}
                         {field.conditions && field.conditions.length > 0 && (
                           <p className="text-xs text-amber-600 mt-1">
-                            Shows when: {field.conditions.map(c => `"${c.field}" ${c.operator.replace('_', ' ')} "${c.value}"`).join(' AND ')}
+                            Shows when: {field.conditions.map(c => `"${c.field || 'field'}" ${(c.operator || 'equals').replace('_', ' ')} "${c.value || ''}"`).join(' AND ')}
                           </p>
                         )}
                       </div>

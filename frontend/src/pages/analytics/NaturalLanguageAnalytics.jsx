@@ -585,8 +585,11 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-// Horizontal Ranking Chart - improved version with consistent colors
+// Horizontal Ranking Chart - improved version with consistent colors and pagination
 const RankingChart = ({ data }) => {
+  const ITEMS_PER_PAGE = 5;
+  const [showAll, setShowAll] = useState(false);
+
   const maxValue = Math.max(...data.map(d => d.submissions || d.pending || d.value || d.count || 0));
   const total = data.reduce((sum, item) => sum + (item.submissions || item.pending || item.value || item.count || 0), 0);
 
@@ -610,10 +613,15 @@ const RankingChart = ({ data }) => {
     return { bg: 'bg-sky-400', badge: 'bg-slate-50 text-slate-500' }; // Rest
   };
 
+  // Get displayed items based on pagination
+  const displayedData = showAll ? data : data.slice(0, ITEMS_PER_PAGE);
+  const hasMore = data.length > ITEMS_PER_PAGE;
+  const hiddenCount = data.length - ITEMS_PER_PAGE;
+
   return (
     <div className="bg-white rounded-xl shadow-md p-5 border border-slate-200">
       <div className="space-y-4">
-        {data.map((item, index) => {
+        {displayedData.map((item, index) => {
           const value = getValue(item);
           const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
           const percentOfTotal = total > 0 ? Math.round((value / total) * 100) : 0;
@@ -646,10 +654,157 @@ const RankingChart = ({ data }) => {
           );
         })}
       </div>
+
+      {/* Show more/less button */}
+      {hasMore && (
+        <div className="mt-4 pt-3 border-t border-slate-100">
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="w-full py-2 text-sm text-sky-600 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors flex items-center justify-center gap-1"
+          >
+            {showAll ? (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
+                Show less
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                Show {hiddenCount} more
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
       {total > 0 && (
-        <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm">
-          <span className="text-slate-500">Total</span>
+        <div className={`${hasMore ? '' : 'mt-4'} pt-3 border-t border-slate-100 flex justify-between items-center text-sm`}>
+          <span className="text-slate-500">Total ({data.length} items)</span>
           <span className="font-bold text-slate-700">{total.toLocaleString()}</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Query Transparency component - shows what AI understood
+const QueryTransparency = ({ metadata }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!metadata || Object.keys(metadata).length === 0) return null;
+
+  // Format the query type for display
+  const formatQueryType = (type) => {
+    const typeLabels = {
+      'trend': 'Time Series Trend',
+      'comparison': 'Category Comparison',
+      'breakdown': 'Status Breakdown',
+      'count': 'Count Query',
+      'average': 'Average Calculation',
+      'overview': 'Dashboard Overview',
+      'ranking': 'Ranking Analysis'
+    };
+    return typeLabels[type] || type || 'General Query';
+  };
+
+  // Format filters for display
+  const formatFilters = (filters) => {
+    if (!filters || Object.keys(filters).length === 0) return null;
+    const formatted = [];
+    if (filters.status) formatted.push(`Status: ${filters.status}`);
+    if (filters.form_type) formatted.push(`Form: ${filters.form_type}`);
+    if (filters.department) formatted.push(`Department: ${filters.department}`);
+    if (filters.date_range) formatted.push(`Time: ${filters.date_range}`);
+    if (filters.time_period) formatted.push(`Period: ${filters.time_period}`);
+    if (filters.time_range) formatted.push(`Period: ${filters.time_range}`);
+    return formatted.length > 0 ? formatted : null;
+  };
+
+  // Get confidence styling
+  const getConfidenceStyle = (confidence) => {
+    if (confidence >= 0.8) return { color: 'text-emerald-600', bg: 'bg-emerald-50', label: 'High' };
+    if (confidence >= 0.6) return { color: 'text-amber-600', bg: 'bg-amber-50', label: 'Medium' };
+    return { color: 'text-red-600', bg: 'bg-red-50', label: 'Low' };
+  };
+
+  const filters = formatFilters(metadata.filters_applied);
+  const confidence = metadata.confidence || 0.8;
+  const confidenceStyle = getConfidenceStyle(confidence);
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 transition-colors"
+      >
+        <svg
+          className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+        <span>What I understood</span>
+        {/* Confidence indicator - always visible */}
+        <span className={`ml-1 px-1.5 py-0.5 rounded ${confidenceStyle.bg} ${confidenceStyle.color} font-medium`}>
+          {Math.round(confidence * 100)}%
+        </span>
+      </button>
+
+      {isExpanded && (
+        <div className="mt-2 p-3 bg-slate-50 rounded-lg text-xs space-y-1.5 border border-slate-100">
+          {/* Confidence bar */}
+          <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
+            <span className="text-slate-500">Confidence:</span>
+            <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full ${confidence >= 0.8 ? 'bg-emerald-500' : confidence >= 0.6 ? 'bg-amber-500' : 'bg-red-500'} rounded-full transition-all`}
+                style={{ width: `${confidence * 100}%` }}
+              />
+            </div>
+            <span className={`font-medium ${confidenceStyle.color}`}>
+              {confidenceStyle.label} ({Math.round(confidence * 100)}%)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500">Query Type:</span>
+            <span className="font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+              {formatQueryType(metadata.query_type)}
+            </span>
+          </div>
+
+          {metadata.entity && (
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500">Analyzing:</span>
+              <span className="font-medium text-slate-700 capitalize">{metadata.entity}</span>
+            </div>
+          )}
+
+          {metadata.group_by && (
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500">Grouped by:</span>
+              <span className="font-medium text-slate-700 capitalize">{metadata.group_by}</span>
+            </div>
+          )}
+
+          {filters && filters.length > 0 && (
+            <div className="flex items-start gap-2">
+              <span className="text-slate-500">Filters:</span>
+              <div className="flex flex-wrap gap-1">
+                {filters.map((filter, idx) => (
+                  <span key={idx} className="bg-sky-50 text-sky-700 px-2 py-0.5 rounded">
+                    {filter}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -785,6 +940,8 @@ const AnalyticsResultCard = ({ result }) => {
           <div className="text-xs text-slate-400 mt-1">
             {new Date(result.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
+          {/* Query Transparency - shows what AI understood */}
+          <QueryTransparency metadata={result.query_metadata} />
         </div>
       </div>
 
@@ -862,7 +1019,8 @@ const NaturalLanguageAnalytics = () => {
               visualization: msg.metadata.visualization,
               data: msg.metadata.data || [],
               summary: msg.metadata.summary,
-              interpretation: msg.metadata.interpretation
+              interpretation: msg.metadata.interpretation,
+              query_metadata: msg.metadata.query_metadata
             };
           }
 
@@ -958,7 +1116,8 @@ const NaturalLanguageAnalytics = () => {
             summary: response.summary,
             interpretation: response.interpretation,
             filters: response.filters,
-            aggregation: response.aggregation
+            aggregation: response.aggregation,
+            query_metadata: response.query_metadata
           }
         );
       }

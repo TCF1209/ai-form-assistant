@@ -114,6 +114,10 @@ class NLQueryResponseSerializer(serializers.Serializer):
         help_text="Human-readable summary of the results"
     )
     error = serializers.CharField(required=False)
+    query_metadata = serializers.DictField(
+        required=False,
+        help_text="Query transparency metadata (what AI understood)"
+    )
 
 
 class RecommendationRequestSerializer(serializers.Serializer):

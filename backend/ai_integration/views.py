@@ -513,15 +513,50 @@ class NaturalLanguageQueryView(APIView):
         # Step 2: Execute database query based on AI intent
         try:
             query_result = self._execute_query(intent, user_role, user_department)
-        except Exception as e:
-            logger.error(f"Error executing analytics query: {e}")
+        except ValueError as e:
+            # Data validation error - provide specific feedback
+            logger.error(f"Validation error in analytics query: {e}")
             return Response({
-                "interpretation": "",
-                "filters": {},
+                "interpretation": intent.get('interpretation', ''),
+                "filters": intent.get('filters', {}),
                 "aggregation": None,
                 "visualization": "text",
                 "data": [],
-                "summary": "Sorry, I encountered an error processing your query. Please try rephrasing your question."
+                "summary": f"I couldn't process that query: {str(e)}\n\nTry being more specific, for example:\n• \"How many leave requests last month?\"\n• \"Show submissions by department\""
+            })
+        except PermissionError as e:
+            # Authorization error
+            logger.error(f"Permission error in analytics query: {e}")
+            return Response({
+                "interpretation": intent.get('interpretation', ''),
+                "filters": intent.get('filters', {}),
+                "aggregation": None,
+                "visualization": "text",
+                "data": [],
+                "summary": "You don't have permission to access that data. Please contact your administrator if you need access."
+            })
+        except Exception as e:
+            # General error with helpful suggestions
+            logger.error(f"Error executing analytics query: {e}")
+            error_type = type(e).__name__
+
+            # Provide specific suggestions based on query type
+            query_type = intent.get('query_type', 'unknown')
+            suggestions = {
+                'trend': "• \"Show submission trends\"\n• \"Monthly submissions over time\"",
+                'breakdown': "• \"Breakdown by status\"\n• \"Show submissions by department\"",
+                'count': "• \"How many submissions this month?\"\n• \"Count approved forms\"",
+                'comparison': "• \"Compare departments\"\n• \"Show IT vs Finance submissions\"",
+            }
+            suggestion_text = suggestions.get(query_type, "• \"How many submissions?\"\n• \"Show status breakdown\"")
+
+            return Response({
+                "interpretation": intent.get('interpretation', ''),
+                "filters": intent.get('filters', {}),
+                "aggregation": None,
+                "visualization": "text",
+                "data": [],
+                "summary": f"I had trouble processing your query. Here's what I understood:\n\n**Query type:** {query_type}\n**Filters:** {intent.get('filters', 'None')}\n\nTry these instead:\n{suggestion_text}"
             })
 
         # Step 3: AI formats the response (if AI is available)
@@ -537,13 +572,32 @@ class NaturalLanguageQueryView(APIView):
                 logger.error(f"Error formatting AI response: {e}")
                 # Keep the default summary from _execute_query
 
-        # Use interpretation from AI only if it's user-friendly (not internal description)
+        # Always include interpretation for query transparency
         interpretation = intent.get('interpretation', '')
         if interpretation and not interpretation.lower().startswith('user '):
             query_result['interpretation'] = interpretation
         else:
-            # Clear interpretation if it's an internal message
-            query_result['interpretation'] = ""
+            # Generate a default interpretation based on query type
+            query_type = intent.get('query_type', 'overview')
+            default_interpretations = {
+                'count': 'Counting submissions',
+                'trend': 'Showing submission trends over time',
+                'breakdown': 'Breaking down data by category',
+                'comparison': 'Comparing data across categories',
+                'average': 'Calculating average metrics',
+                'overview': 'Showing system overview',
+                'list': 'Listing items',
+            }
+            query_result['interpretation'] = default_interpretations.get(query_type, 'Processing your query')
+
+        # Add query metadata for transparency (what the AI understood)
+        query_result['query_metadata'] = {
+            'query_type': intent.get('query_type', 'unknown'),
+            'filters_applied': intent.get('filters', {}),
+            'group_by': intent.get('group_by'),
+            'entity': intent.get('entity', 'submissions'),
+            'confidence': intent.get('confidence', 0.8),
+        }
 
         response_serializer = NLQueryResponseSerializer(query_result)
         return Response(response_serializer.data, status=status.HTTP_200_OK)
@@ -897,33 +951,51 @@ class NaturalLanguageQueryView(APIView):
             return self._execute_breakdown_query(queryset, intent, 'status', user_role, user_department, dept_note)
 
     def _execute_trend_query(self, queryset, intent, now, dept_note):
-        """Execute a trend/time series query"""
+        """Execute a trend/time series query using optimized database aggregation"""
         from datetime import timedelta
+        from django.db.models import Count, Q
+        from django.db.models.functions import TruncMonth
 
+        # Calculate date range (last 6 months)
+        six_months_ago = (now - timedelta(days=180)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        # Single optimized query with aggregation by month
+        trend_qs = queryset.filter(
+            submitted_at__gte=six_months_ago
+        ).annotate(
+            month=TruncMonth('submitted_at')
+        ).values('month').annotate(
+            submissions=Count('id'),
+            approved=Count('id', filter=Q(status='APPROVED'))
+        ).order_by('month')
+
+        # Convert to dict using year-month string as key (avoids timezone comparison issues)
+        trend_results = {}
+        for item in trend_qs:
+            if item['month']:
+                key = item['month'].strftime('%Y-%m')
+                trend_results[key] = item
+
+        # Generate all 6 months with zeros for empty months
         trend_data = []
         for i in range(5, -1, -1):
             month_date = now - timedelta(days=i*30)
             month_start = month_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            if i > 0:
-                next_month = (month_date + timedelta(days=32)).replace(day=1)
-            else:
-                next_month = now + timedelta(days=1)
-
+            month_key = month_start.strftime('%Y-%m')
             month_name = month_start.strftime('%b')
-            submissions = queryset.filter(
-                submitted_at__gte=month_start,
-                submitted_at__lt=next_month
-            ).count()
-            approved = queryset.filter(
-                submitted_at__gte=month_start,
-                submitted_at__lt=next_month,
-                status='APPROVED'
-            ).count()
-            trend_data.append({
-                "month": month_name,
-                "submissions": submissions,
-                "approved": approved
-            })
+
+            if month_key in trend_results:
+                trend_data.append({
+                    "month": month_name,
+                    "submissions": trend_results[month_key]['submissions'],
+                    "approved": trend_results[month_key]['approved']
+                })
+            else:
+                trend_data.append({
+                    "month": month_name,
+                    "submissions": 0,
+                    "approved": 0
+                })
 
         return {
             "interpretation": intent.get('interpretation', f"Submission trends over time{dept_note}"),
@@ -935,22 +1007,39 @@ class NaturalLanguageQueryView(APIView):
         }
 
     def _execute_average_query(self, queryset, intent, dept_note):
-        """Execute an average/metric query (e.g., approval time)"""
-        # Calculate approval time for approved submissions
-        approved_qs = queryset.filter(status='APPROVED', submitted_at__isnull=False)
+        """Execute an average/metric query using optimized database aggregation"""
+        from django.db.models import Avg, Min, Max, F, ExpressionWrapper, DurationField
 
-        times = []
-        for sub in approved_qs:
-            if sub.submitted_at and sub.updated_at:
-                diff = (sub.updated_at - sub.submitted_at).total_seconds() / 86400  # days
-                times.append(diff)
+        # Calculate approval time using database aggregation
+        approved_qs = queryset.filter(
+            status='APPROVED',
+            submitted_at__isnull=False,
+            updated_at__isnull=False
+        ).annotate(
+            approval_duration=ExpressionWrapper(
+                F('updated_at') - F('submitted_at'),
+                output_field=DurationField()
+            )
+        )
 
-        if times:
-            avg_time = round(sum(times) / len(times), 1)
-            min_time = round(min(times), 1)
-            max_time = round(min(max(times), 30), 1)
-        else:
-            avg_time, min_time, max_time = 0, 0, 0
+        # Aggregate stats in single query
+        stats = approved_qs.aggregate(
+            avg_duration=Avg('approval_duration'),
+            min_duration=Min('approval_duration'),
+            max_duration=Max('approval_duration')
+        )
+
+        # Convert timedelta to days
+        def duration_to_days(duration):
+            if duration:
+                return round(duration.total_seconds() / 86400, 1)
+            return 0
+
+        avg_time = duration_to_days(stats.get('avg_duration'))
+        min_time = duration_to_days(stats.get('min_duration'))
+        max_time = min(duration_to_days(stats.get('max_duration')), 30)  # Cap at 30 days
+
+        has_data = stats.get('avg_duration') is not None
 
         return {
             "interpretation": intent.get('interpretation', f"Average metrics{dept_note}"),
@@ -962,29 +1051,34 @@ class NaturalLanguageQueryView(APIView):
                 {"label": "Fastest", "value": min_time, "unit": "days"},
                 {"label": "Slowest", "value": max_time, "unit": "days"}
             ],
-            "summary": f"Average approval time is {avg_time} days." if times else "No data available to calculate averages."
+            "summary": f"Average approval time is {avg_time} days." if has_data else "No data available to calculate averages."
         }
 
     def _execute_comparison_query(self, queryset, intent, user_role, user_department, dept_note):
-        """Execute a comparison query (e.g., department vs department)"""
-        from users.models import Department
+        """Execute a comparison query using optimized database aggregation"""
+        from django.db.models import Count
 
-        dept_data = []
-        departments = Department.objects.filter(is_active=True)
+        # Single query with annotation instead of N queries
+        dept_data = list(
+            queryset.values('form__department__name')
+            .annotate(submissions=Count('id'))
+            .filter(form__department__isnull=False)
+            .order_by('-submissions')
+        )
 
-        for dept in departments:
-            count = queryset.filter(form__department=dept).count()
-            dept_data.append({"name": dept.name, "submissions": count})
-
-        dept_data.sort(key=lambda x: x['submissions'], reverse=True)
+        # Format results
+        formatted_data = [
+            {"name": item['form__department__name'], "submissions": item['submissions']}
+            for item in dept_data
+        ]
 
         return {
             "interpretation": intent.get('interpretation', f"Comparison across departments{dept_note}"),
             "filters": intent.get('filters', {}),
             "aggregation": "comparison",
             "visualization": "bar",
-            "data": dept_data if dept_data else [{"name": "No data", "submissions": 0}],
-            "summary": f"Comparison data across {len(dept_data)} departments."
+            "data": formatted_data if formatted_data else [{"name": "No data", "submissions": 0}],
+            "summary": f"Comparison data across {len(formatted_data)} departments."
         }
 
     def _execute_overview_query(self, base_qs, forms_qs, dept_note):

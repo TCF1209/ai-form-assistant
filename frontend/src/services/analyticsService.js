@@ -127,6 +127,7 @@ const analyticsService = {
         visualization: response.data.visualization,
         data: response.data.data || [],
         summary: response.data.summary,
+        query_metadata: response.data.query_metadata || null,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {

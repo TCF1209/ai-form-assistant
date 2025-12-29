@@ -426,8 +426,22 @@ Analyze the user's query and return a JSON object with this structure:
     "visualization": "number|bar|pie|line|table|cards|ranking|donut",
     "sort": "asc|desc" or null,
     "limit": number or null,
-    "interpretation": "A user-friendly description of what they're asking. This will be shown to the user, so make it natural and helpful."
+    "interpretation": "A user-friendly description of what they're asking. This will be shown to the user, so make it natural and helpful.",
+    "confidence": 0.9
 }
+
+CONFIDENCE SCORING (0.0-1.0):
+- 1.0: Crystal clear, unambiguous query (e.g., "How many approved leave requests last month?")
+- 0.8-0.9: Clear query with some inference needed (e.g., "Show me leave request trends")
+- 0.6-0.7: Somewhat ambiguous, had to make assumptions (e.g., "Show me the data")
+- 0.4-0.5: Very ambiguous, multiple interpretations possible (e.g., "Compare them")
+- 0.0-0.3: Cannot understand at all or gibberish
+
+Set confidence based on:
+- How specific the query is
+- Whether you had to infer entity, filters, or time range
+- Whether the query matches known patterns
+- Whether conversation context was needed to understand
 
 Special cases - set the appropriate flag to true:
 - is_greeting: User says hi, hello, hey, good morning, etc.

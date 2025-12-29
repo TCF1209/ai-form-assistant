@@ -51,12 +51,28 @@ export const containsProfanity = (text) => {
 };
 
 /**
+ * Check if text contains non-Latin characters (Chinese, Japanese, Korean, etc.)
+ * @param {string} text - Input text to check
+ * @returns {boolean} - True if contains CJK or other non-Latin scripts
+ */
+export const containsNonLatinChars = (text) => {
+  // Check for Chinese, Japanese, Korean, Thai, Arabic, Hebrew, etc.
+  return /[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0600-\u06ff\u0590-\u05ff\u0e00-\u0e7f]/.test(text);
+};
+
+/**
  * Check if text appears to be gibberish
  * Uses multiple heuristics to detect random/meaningless text
  * @param {string} text - Input text to check
  * @returns {boolean} - True if likely gibberish
  */
 export const isGibberish = (text) => {
+  // Skip gibberish check for non-Latin text (Chinese, Japanese, Korean, etc.)
+  // These languages have different character patterns
+  if (containsNonLatinChars(text)) {
+    return false;
+  }
+
   const cleanText = text.toLowerCase().replace(/[^a-z\s]/g, '');
 
   if (cleanText.length < 5) return false; // Too short to determine
@@ -104,11 +120,24 @@ export const hasFormIntent = (text) => {
 
 /**
  * Count meaningful words in text
+ * For non-Latin text (Chinese, Japanese, Korean), counts characters instead
  * @param {string} text - Input text
- * @returns {number} - Number of words with 2+ characters
+ * @returns {number} - Number of words (or character count for CJK text)
  */
 export const countMeaningfulWords = (text) => {
-  const words = text.trim().split(/\s+/);
+  const trimmedText = text.trim();
+
+  // For Chinese/Japanese/Korean text, count characters instead of words
+  // Since these languages don't use spaces between words
+  if (containsNonLatinChars(trimmedText)) {
+    // Count non-whitespace characters - if >= 5 chars, consider it as valid "2 words"
+    const charCount = trimmedText.replace(/\s/g, '').length;
+    // Map character count to approximate word count (5 chars ≈ 2 words in Chinese)
+    return Math.ceil(charCount / 2.5);
+  }
+
+  // For Latin text, count words
+  const words = trimmedText.split(/\s+/);
   return words.filter(word => word.length >= 2).length;
 };
 
@@ -303,6 +332,7 @@ export default {
   validateFormPrompt,
   validateAssistantMessage,
   containsProfanity,
+  containsNonLatinChars,
   isGibberish,
   hasFormIntent,
   hasAssistantIntent,

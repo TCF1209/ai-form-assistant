@@ -97,15 +97,21 @@ IMPORTANT VALIDATION RULES:
 
 4. If the input is unclear but seems like a legitimate attempt, make reasonable assumptions and generate a basic form.
 
+MULTI-LANGUAGE SUPPORT:
+- Detect the language the user is using (English, Chinese, Malay, etc.)
+- Generate the form title, description, field labels and help text in the SAME LANGUAGE as the user's input
+- If user describes the form in Chinese, generate Chinese form content
+- If user describes in Malay, generate Malay form content
+
 For valid form requests, return a JSON object with this structure:
 {
     "title": "Form Title",
     "description": "Brief form description",
     "fields": [
         {
-            "name": "field_name",
-            "label": "Field Label",
-            "type": "text|number|email|date|select|checkbox|radio|file|textarea",
+            "name": "field_name_in_english_lowercase_with_underscores",
+            "label": "Field Label (in user's language)",
+            "type": "text|number|email|date|time|phone|url|select|multiselect|checkbox|radio|file|textarea",
             "required": true/false,
             "validation": {
                 "min": number (for number fields),
@@ -114,16 +120,31 @@ For valid form requests, return a JSON object with this structure:
                 "maxLength": number (for text fields),
                 "pattern": "regex pattern" (optional)
             },
-            "options": ["option1", "option2"] (for select/radio/checkbox),
-            "placeholder": "placeholder text",
-            "helpText": "help text for the field"
+            "options": ["option1", "option2"] (for select/radio/multiselect),
+            "placeholder": "placeholder text (in user's language)",
+            "helpText": "help text for the field (in user's language)"
         }
     ],
     "workflow": {
         "requiresApproval": true/false,
         "approvalSteps": ["step1", "step2"]
     }
-}"""
+}
+
+FIELD TYPE GUIDELINES:
+- text: Short single-line text input
+- textarea: Long multi-line text input
+- number: Numeric input
+- email: Email address
+- date: Date picker
+- time: Time picker
+- phone: Phone number
+- url: Web URL
+- select: Single-choice dropdown
+- multiselect: Multiple-choice selection
+- radio: Radio buttons (single choice)
+- checkbox: Checkbox (yes/no or multiple options)
+- file: File upload"""
 
         user_prompt = f"Create a form based on this description: {description}"
         if context:
@@ -658,7 +679,8 @@ class FormGenerationService:
         if not ai_structure:
             return {
                 "success": False,
-                "error": "Failed to generate form structure. Please try again."
+                "error": "Unable to generate form at this time. Please try again in a moment.",
+                "error_type": "ai_unavailable"
             }
 
         # Check if AI returned an error response (for invalid inputs)
@@ -673,7 +695,7 @@ class FormGenerationService:
         if not ai_structure.get("fields") or len(ai_structure.get("fields", [])) == 0:
             return {
                 "success": False,
-                "error": "Could not generate form fields from the description. Please provide more details.",
+                "error": "I couldn't understand what fields to create. Try being more specific, like: 'Create a leave form with employee name, leave type, start date, end date, and reason'",
                 "error_type": "insufficient_input"
             }
 
@@ -722,14 +744,14 @@ class FormGenerationService:
         """
         import re
 
-        # Check minimum length
-        if not description or len(description.strip()) < 5:
+        # Check minimum length (aligned with serializer min_length=10)
+        if not description or len(description.strip()) < 10:
             return {
                 'valid': False,
-                'error': 'Description is too short. Please provide more details.'
+                'error': 'Description is too short. Please provide at least 10 characters.'
             }
 
-        # Check maximum length
+        # Check maximum length (aligned with serializer max_length=1000)
         if len(description) > 1000:
             return {
                 'valid': False,
@@ -756,19 +778,33 @@ class FormGenerationService:
         return {'valid': True}
 
     def _map_field_type(self, ai_type: str) -> str:
-        """Map AI field types to our system's field types"""
+        """Map AI field types to Django FormField.FieldType choices"""
+        # AI may return lowercase types, map to Django model's FieldType choices
         type_mapping = {
-            "text": "short_text",
-            "textarea": "long_text",
-            "number": "number",
-            "email": "email",
-            "date": "date",
-            "select": "dropdown",
-            "checkbox": "checkbox",
-            "radio": "radio",
-            "file": "file_upload"
+            "text": "TEXT",
+            "short_text": "TEXT",
+            "textarea": "TEXTAREA",
+            "long_text": "TEXTAREA",
+            "number": "NUMBER",
+            "email": "EMAIL",
+            "date": "DATE",
+            "time": "TIME",
+            "datetime": "DATETIME",
+            "phone": "PHONE",
+            "url": "URL",
+            "select": "SELECT",
+            "dropdown": "SELECT",
+            "multiselect": "MULTISELECT",
+            "checkbox": "CHECKBOX",
+            "radio": "RADIO",
+            "file": "FILE",
+            "file_upload": "FILE",
+            "signature": "SIGNATURE",
+            "rating": "RATING"
         }
-        return type_mapping.get(ai_type, "short_text")
+        # Handle case-insensitive matching
+        ai_type_lower = ai_type.lower() if ai_type else "text"
+        return type_mapping.get(ai_type_lower, "TEXT")
 
     def enhance_existing_form(self, form_data: Dict) -> Dict:
         """

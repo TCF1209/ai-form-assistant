@@ -135,11 +135,11 @@ export const validateFormPrompt = (prompt) => {
     };
   }
 
-  // Check 2: Too long
-  if (trimmedPrompt.length > 500) {
+  // Check 2: Too long (aligned with backend max_length=1000)
+  if (trimmedPrompt.length > 1000) {
     return {
       valid: false,
-      error: 'Your description is too long. Please keep it under 500 characters.'
+      error: 'Your description is too long. Please keep it under 1000 characters.'
     };
   }
 

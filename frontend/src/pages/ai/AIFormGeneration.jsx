@@ -157,6 +157,11 @@ const AIFormGeneration = () => {
 
   // Real AI form generation using OpenAI API
   const generateFormWithAI = async () => {
+    // Idempotency protection - prevent double submit
+    if (loading) {
+      console.log('Request already in progress, ignoring duplicate call');
+      return;
+    }
     setLoading(true);
 
     try {
@@ -172,9 +177,11 @@ const AIFormGeneration = () => {
       if (response.data.success && response.data.form_data) {
         // Transform the AI response to our form format
         const aiFormData = response.data.form_data;
+        // Generate unique form code with timestamp + random suffix to prevent collisions
+        const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
         const generatedFormData = {
           name: aiFormData.title || 'AI Generated Form',
-          code: `${dept?.code || 'FORM'}_AI_${Date.now()}`,
+          code: `${dept?.code || 'FORM'}_AI_${Date.now()}_${randomSuffix}`,
           description: aiFormData.description || `AI-generated form based on: "${prompt}"`,
           department_id: selectedDepartment,
           fields: (aiFormData.fields || []).map(field => ({
@@ -204,8 +211,14 @@ const AIFormGeneration = () => {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to generate form';
       const errorType = error.response?.data?.error_type;
 
+      // Handle rate limit errors (429)
+      if (error.response?.status === 429) {
+        setCurrentStep(0);
+        message.error('Too many requests. Please wait a moment and try again.');
+        saveToHistory(prompt, selectedDepartment, 'failed');
+      }
       // Handle validation errors from backend (400 status)
-      if (error.response?.status === 400) {
+      else if (error.response?.status === 400) {
         // This is a validation error - show the message and go back to step 0
         setCurrentStep(0);
         setValidationError(errorMessage);
@@ -220,10 +233,18 @@ const AIFormGeneration = () => {
         setFormData(mockForm);
         saveToHistory(prompt, selectedDepartment);
         setCurrentStep(2);
-      } else {
+      }
+      // Handle network errors
+      else if (!error.response) {
+        setCurrentStep(0);
+        message.error('Network error. Please check your connection and try again.');
+        saveToHistory(prompt, selectedDepartment, 'failed');
+      }
+      // Handle other errors
+      else {
         setCurrentStep(0);
         saveToHistory(prompt, selectedDepartment, 'failed');
-        message.error(`Failed to generate form: ${errorMessage}`);
+        message.error(errorMessage);
       }
     } finally {
       setLoading(false);
@@ -234,12 +255,14 @@ const AIFormGeneration = () => {
   const generateMockForm = (userPrompt, deptId) => {
     const dept = departments.find(d => d.id === deptId);
     const promptLower = userPrompt.toLowerCase();
+    // Generate unique suffix for mock forms
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
 
     // Different form templates based on keywords in prompt
     if (promptLower.includes('leave') || promptLower.includes('vacation')) {
       return {
         name: 'Leave Application Form',
-        code: `${dept?.code || 'FORM'}_LEAVE_${Date.now()}`,
+        code: `${dept?.code || 'FORM'}_LEAVE_${Date.now()}_${randomSuffix}`,
         description: 'AI-generated form for leave/vacation requests',
         department_id: deptId,
         fields: [
@@ -257,7 +280,7 @@ const AIFormGeneration = () => {
     } else if (promptLower.includes('expense') || promptLower.includes('reimbursement')) {
       return {
         name: 'Expense Reimbursement Form',
-        code: `${dept?.code || 'FORM'}_EXPENSE_${Date.now()}`,
+        code: `${dept?.code || 'FORM'}_EXPENSE_${Date.now()}_${randomSuffix}`,
         description: 'AI-generated form for expense reimbursement requests',
         department_id: deptId,
         fields: [
@@ -279,7 +302,7 @@ const AIFormGeneration = () => {
       // Generic form based on prompt
       return {
         name: `Custom Form - ${userPrompt.substring(0, 30)}`,
-        code: `${dept?.code || 'FORM'}_CUSTOM_${Date.now()}`,
+        code: `${dept?.code || 'FORM'}_CUSTOM_${Date.now()}_${randomSuffix}`,
         description: `AI-generated form based on: "${userPrompt}"`,
         department_id: deptId,
         fields: [
@@ -330,6 +353,11 @@ const AIFormGeneration = () => {
   };
 
   const handleSaveForm = async () => {
+    // Idempotency protection - prevent double submit
+    if (loading) {
+      console.log('Save already in progress, ignoring duplicate call');
+      return;
+    }
     setLoading(true);
     try {
       const savedForm = await saveFormToBackend();
@@ -354,6 +382,11 @@ const AIFormGeneration = () => {
   };
 
   const handleEditInBuilder = async () => {
+    // Idempotency protection - prevent double submit
+    if (loading) {
+      console.log('Edit already in progress, ignoring duplicate call');
+      return;
+    }
     setLoading(true);
     try {
       const savedForm = await saveFormToBackend();
@@ -456,7 +489,7 @@ const AIFormGeneration = () => {
                     setValidationWarning('');
                   }
                 }}
-                maxLength={500}
+                maxLength={1000}
               />
               <div className="flex justify-between items-start mt-1">
                 <div className="flex-1">
@@ -477,7 +510,7 @@ const AIFormGeneration = () => {
                     </p>
                   )}
                 </div>
-                <p className="text-sm text-slate-500">{prompt.length}/500 characters</p>
+                <p className="text-sm text-slate-500">{prompt.length}/1000 characters</p>
               </div>
             </div>
 

@@ -10,7 +10,7 @@ class FormGenerationRequestSerializer(serializers.Serializer):
     description = serializers.CharField(
         help_text="Natural language description of the form to generate",
         min_length=10,
-        max_length=2000
+        max_length=1000  # Aligned with frontend validation
     )
     department = serializers.CharField(
         required=False,

@@ -5,6 +5,7 @@ import api, { AI_TIMEOUT } from '../../services/api';
 import formService from '../../services/formService';
 import { message } from 'antd';
 import { validateFormPrompt, getFormSuggestions } from '../../utils/inputValidation';
+import FormPreview from '../../components/FormPreview';
 
 const AIFormGeneration = () => {
   const { user } = useAuth();
@@ -27,6 +28,9 @@ const AIFormGeneration = () => {
   const [generationHistory, setGenerationHistory] = useState([]);
   const [validationError, setValidationError] = useState('');
   const [validationWarning, setValidationWarning] = useState('');
+  // Preview mode states
+  const [viewMode, setViewMode] = useState('edit'); // 'edit' or 'preview'
+  const [previewDevice, setPreviewDevice] = useState('desktop'); // 'desktop' or 'mobile'
 
   // Quick suggestions for form types
   const formSuggestions = getFormSuggestions();
@@ -192,9 +196,10 @@ const AIFormGeneration = () => {
             type: field.field_type || field.type || 'text',
             required: field.required || false,
             placeholder: field.placeholder || '',
-            help_text: field.help_text || '',
+            help_text: field.helpText || field.help_text || '',
             options: field.options || [],
-            validation_rules: field.validation_rules || {}
+            validation_rules: field.validation || field.validation_rules || {},
+            conditions: field.conditions || []  // Conditional logic support
           }))
         };
 
@@ -711,18 +716,19 @@ const AIFormGeneration = () => {
 
   const renderReviewStep = () => (
     <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-6 flex justify-between items-center">
+        <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold text-slate-800 mb-2">Review Generated Form</h1>
-            <p className="text-slate-600">AI has generated your form. Review and customize as needed.</p>
+            <p className="text-slate-600">AI has generated your form. Review, preview, and customize as needed.</p>
           </div>
           <div className="flex gap-3">
             <button
               onClick={() => {
                 setCurrentStep(0);
                 setGeneratedForm(null);
+                setViewMode('edit');
               }}
               className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md transition-colors"
             >
@@ -748,94 +754,199 @@ const AIFormGeneration = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Form Details */}
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <h3 className="text-lg font-semibold text-slate-800 mb-4">Form Details</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Form Name</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Form Code</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={formData.code}
-                    disabled
-                    className="w-full px-3 py-2 pr-24 border border-slate-300 rounded-md bg-slate-50 text-slate-500"
-                  />
-                  <span className="absolute right-2 top-2 inline-block px-2 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded">
-                    Auto-generated
-                  </span>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Generated Fields */}
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-800">Generated Fields ({formData.fields?.length || 0})</h3>
-              <span className="text-xs text-slate-500">Use Form Builder to add more fields</span>
-            </div>
-
-            <div className="max-h-96 overflow-y-auto space-y-2">
-              {formData.fields?.map((field, index) => (
-                <div
-                  key={index}
-                  className="p-3 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors"
+        {/* View Mode Toggle */}
+        <div className="mb-6 bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            {/* Edit/Preview Toggle */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-slate-700 mr-2">View:</span>
+              <div className="flex bg-slate-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('edit')}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    viewMode === 'edit'
+                      ? 'bg-white text-slate-800 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-800'
+                  }`}
                 >
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-slate-700">{field.label}</span>
-                        {field.required && (
-                          <span className="inline-block px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
-                            Required
-                          </span>
-                        )}
-                        <span className="inline-block px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-700 rounded">
-                          {field.type}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500">Field name: {field.name}</p>
-                      {field.options && (
-                        <p className="text-xs text-slate-500 mt-1">
-                          Options: {Array.isArray(field.options) ? field.options.join(', ') : 'Custom options'}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => handleDeleteField(index)}
-                      className="text-slate-400 hover:text-red-500 transition-colors"
-                      title="Remove field"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  <span className="flex items-center">
+                    <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit
+                  </span>
+                </button>
+                <button
+                  onClick={() => setViewMode('preview')}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    viewMode === 'preview'
+                      ? 'bg-white text-slate-800 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-800'
+                  }`}
+                >
+                  <span className="flex items-center">
+                    <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    Preview
+                  </span>
+                </button>
+              </div>
             </div>
+
+            {/* Device Toggle (only show in preview mode) */}
+            {viewMode === 'preview' && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-slate-700 mr-2">Device:</span>
+                <div className="flex bg-slate-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setPreviewDevice('desktop')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                      previewDevice === 'desktop'
+                        ? 'bg-white text-slate-800 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-800'
+                    }`}
+                    title="Desktop view"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setPreviewDevice('mobile')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                      previewDevice === 'mobile'
+                        ? 'bg-white text-slate-800 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-800'
+                    }`}
+                    title="Mobile view"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Content based on view mode */}
+        {viewMode === 'edit' ? (
+          /* Edit Mode - Original grid layout */
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Form Details */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h3 className="text-lg font-semibold text-slate-800 mb-4">Form Details</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Form Name</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Form Code</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={formData.code}
+                      disabled
+                      className="w-full px-3 py-2 pr-24 border border-slate-300 rounded-md bg-slate-50 text-slate-500"
+                    />
+                    <span className="absolute right-2 top-2 inline-block px-2 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded">
+                      Auto-generated
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-sky-500 focus:border-sky-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Generated Fields */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-slate-800">Generated Fields ({formData.fields?.length || 0})</h3>
+                <span className="text-xs text-slate-500">Use Form Builder to add more fields</span>
+              </div>
+
+              <div className="max-h-96 overflow-y-auto space-y-2">
+                {formData.fields?.map((field, index) => (
+                  <div
+                    key={index}
+                    className="p-3 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="font-medium text-slate-700">{field.label}</span>
+                          {field.required && (
+                            <span className="inline-block px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">
+                              Required
+                            </span>
+                          )}
+                          <span className="inline-block px-2 py-0.5 text-xs font-medium bg-sky-100 text-sky-700 rounded">
+                            {field.type}
+                          </span>
+                          {field.conditions && field.conditions.length > 0 && (
+                            <span className="inline-block px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded" title={`Shows when: ${field.conditions.map(c => `${c.field} ${c.operator} ${c.value}`).join(', ')}`}>
+                              Conditional
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500">Field name: {field.name}</p>
+                        {field.options && field.options.length > 0 && (
+                          <p className="text-xs text-slate-500 mt-1">
+                            Options: {Array.isArray(field.options) ? field.options.slice(0, 3).join(', ') : 'Custom options'}
+                            {field.options.length > 3 && ` +${field.options.length - 3} more`}
+                          </p>
+                        )}
+                        {field.conditions && field.conditions.length > 0 && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            Shows when: {field.conditions.map(c => `"${c.field}" ${c.operator.replace('_', ' ')} "${c.value}"`).join(' AND ')}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteField(index)}
+                        className="text-slate-400 hover:text-red-500 transition-colors"
+                        title="Remove field"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Preview Mode - Form Preview Component */
+          <div className={`${previewDevice === 'mobile' ? 'bg-slate-200 p-8 rounded-lg' : ''}`}>
+            {previewDevice === 'mobile' && (
+              <div className="text-center mb-4">
+                <span className="text-xs text-slate-500 bg-slate-300 px-3 py-1 rounded-full">
+                  Mobile Preview (375px)
+                </span>
+              </div>
+            )}
+            <FormPreview formData={formData} viewMode={previewDevice} />
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 mt-6">

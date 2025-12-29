@@ -45,8 +45,10 @@ class OpenAIService:
             self.client = None
 
     def _get_cache_key(self, prompt: str, context: str = "") -> str:
-        """Generate cache key for prompt"""
-        return f"openai:{hash(prompt + context)}"
+        """Generate cache key for prompt using secure hash"""
+        import hashlib
+        content = (prompt + context).encode('utf-8')
+        return f"openai:{hashlib.sha256(content).hexdigest()[:32]}"
 
     def _make_api_call(self, messages: List[Dict], **kwargs) -> Optional[str]:
         """Make API call to OpenAI with error handling"""
@@ -122,7 +124,14 @@ For valid form requests, return a JSON object with this structure:
             },
             "options": ["option1", "option2"] (for select/radio/multiselect),
             "placeholder": "placeholder text (in user's language)",
-            "helpText": "help text for the field (in user's language)"
+            "helpText": "help text for the field (in user's language)",
+            "conditions": [
+                {
+                    "field": "name_of_dependent_field",
+                    "operator": "equals|not_equals|contains|is_empty|is_not_empty",
+                    "value": "value to compare"
+                }
+            ]
         }
     ],
     "workflow": {
@@ -130,6 +139,15 @@ For valid form requests, return a JSON object with this structure:
         "approvalSteps": ["step1", "step2"]
     }
 }
+
+CONDITIONAL LOGIC GUIDELINES:
+- Use "conditions" to show/hide fields based on other field values
+- Common patterns:
+  - Show "Other" text field when user selects "Other" in a dropdown
+  - Show "Reason" field when leave type is "Emergency" or "Medical"
+  - Show additional fields based on yes/no answers
+- Only add conditions when logically appropriate (don't overuse)
+- A field with conditions will only appear when ALL conditions are met
 
 FIELD TYPE GUIDELINES:
 - text: Short single-line text input

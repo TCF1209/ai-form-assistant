@@ -1126,7 +1126,7 @@ class NaturalLanguageQueryView(APIView):
 
             list_data.append({
                 "submitter": submitter_name,
-                "form": sub.form.title if sub.form else "Unknown Form",
+                "form": sub.form.name if sub.form else "Unknown Form",
                 "department": sub.form.department.name if sub.form and sub.form.department else "N/A",
                 "status": sub.status,
                 "submitted_at": sub.submitted_at.strftime("%Y-%m-%d %H:%M") if sub.submitted_at else "N/A"

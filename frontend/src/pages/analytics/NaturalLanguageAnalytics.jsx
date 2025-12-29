@@ -892,8 +892,9 @@ const AnalyticsResultCard = ({ result }) => {
           </div>
         );
 
+      case 'table':
       default:
-        // Table view
+        // Table view - used for list queries (who submitted, etc.)
         return (
           <div className="bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
             <table className="w-full text-sm">

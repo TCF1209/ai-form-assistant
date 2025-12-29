@@ -718,6 +718,10 @@ class NaturalLanguageQueryView(APIView):
             # Handle listing forms
             return self._execute_forms_list_query(forms_qs, intent, dept_note)
 
+        elif query_type == 'list':
+            # Handle listing submissions (who submitted, which forms, etc.)
+            return self._execute_submissions_list_query(base_qs, intent, dept_note)
+
         else:
             # Default: overview
             return self._execute_overview_query(base_qs, forms_qs, dept_note)
@@ -1102,6 +1106,44 @@ class NaturalLanguageQueryView(APIView):
                 {"label": "Approval Rate", "value": f"{approval_rate}%", "icon": "check"}
             ],
             "summary": f"Overview: {total_forms} active forms, {total_submissions} submissions, {pending} pending review."
+        }
+
+    def _execute_submissions_list_query(self, queryset, intent, dept_note):
+        """Execute a list query - returns actual submission records (who submitted, etc.)"""
+        # Limit results to avoid overwhelming response
+        limit = intent.get('limit', 20)
+        submissions = queryset.select_related('form', 'submitted_by', 'form__department').order_by('-submitted_at')[:limit]
+
+        # Build list data with submitter info
+        list_data = []
+        for sub in submissions:
+            submitter_name = "Unknown"
+            if sub.submitted_by:
+                if sub.submitted_by.first_name and sub.submitted_by.last_name:
+                    submitter_name = f"{sub.submitted_by.first_name} {sub.submitted_by.last_name}"
+                elif sub.submitted_by.username:
+                    submitter_name = sub.submitted_by.username
+
+            list_data.append({
+                "submitter": submitter_name,
+                "form": sub.form.title if sub.form else "Unknown Form",
+                "department": sub.form.department.name if sub.form and sub.form.department else "N/A",
+                "status": sub.status,
+                "submitted_at": sub.submitted_at.strftime("%Y-%m-%d %H:%M") if sub.submitted_at else "N/A"
+            })
+
+        total_count = queryset.count()
+        filters = intent.get('filters', {}) or {}
+        time_range = filters.get('time_range', '')
+        time_label = f" {time_range.replace('_', ' ')}" if time_range else ""
+
+        return {
+            "interpretation": intent.get('interpretation', f"List of submissions{time_label}{dept_note}"),
+            "filters": filters,
+            "aggregation": "list",
+            "visualization": "table",
+            "data": list_data,
+            "summary": f"Found {total_count} submission(s){time_label}. Showing {len(list_data)} most recent." if total_count > len(list_data) else f"Found {total_count} submission(s){time_label}."
         }
 
 

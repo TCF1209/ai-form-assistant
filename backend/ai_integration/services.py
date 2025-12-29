@@ -407,6 +407,12 @@ QUERY TYPE CLASSIFICATION (VERY IMPORTANT - read carefully):
 5. "average" - Use for average/metric questions:
    - Keywords: "average", "mean", "typical", "approval time"
 
+6. "list" - Use when user wants to see a LIST of specific items or people:
+   - Keywords: "who", "which", "list", "show me", "what are"
+   - Examples: "who submitted forms last week?", "list pending submissions", "which forms were approved?"
+   - IMPORTANT: "Who submitted..." should ALWAYS be query_type: "list"
+   - This returns a TABLE with actual records, not aggregated counts
+
 Analyze the user's query and return a JSON object with this structure:
 {
     "query_type": "count|list|trend|comparison|breakdown|average|overview",
@@ -466,6 +472,10 @@ Examples:
 - "Show by department" → query_type: "breakdown", group_by: "department"
 - "How many approved vs rejected?" → query_type: "breakdown", group_by: "status"
 - "Most submitted form" → query_type: "breakdown", group_by: "form"
+- "Who submitted forms last week?" → query_type: "list", entity: "submissions", filters: {time_range: "last_week"}, visualization: "table"
+- "Who submitted leave requests?" → query_type: "list", entity: "submissions", filters: {form_type: "leave"}, visualization: "table"
+- "List pending submissions" → query_type: "list", entity: "submissions", filters: {status: ["SUBMITTED", "IN_REVIEW"]}, visualization: "table"
+- "Which forms were approved today?" → query_type: "list", entity: "submissions", filters: {status: ["APPROVED"], time_range: "today"}, visualization: "table"
 - "thank you" → is_casual_message: true
 """
 

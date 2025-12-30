@@ -598,7 +598,16 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
         escalation_days: data.escalation_days || 3
       });
 
-      setSteps(data.steps || []);
+      // Map assigned_users_detail to approvers array for each step
+      const stepsWithApprovers = (data.steps || []).map(step => ({
+        ...step,
+        // Convert assigned_users_detail (from API) to approvers array (for frontend)
+        approvers: step.approvers ||
+          (step.assigned_users_detail && step.assigned_users_detail.length > 0
+            ? step.assigned_users_detail.map(u => u.id)
+            : step.assigned_user ? [step.assigned_user] : [])
+      }));
+      setSteps(stepsWithApprovers);
       setSelectedForm(data.form);
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to fetch workflow details' });

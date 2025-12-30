@@ -786,6 +786,79 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
         return Response(data)
 
     @action(detail=True, methods=['post'])
+    def withdraw(self, request, pk=None):
+        """
+        Withdraw/recall a pending submission.
+        Only the submitter can withdraw their own submission.
+        Only submissions in SUBMITTED or IN_REVIEW status can be withdrawn.
+        """
+        from workflows.models import WorkflowInstance
+        from django.utils import timezone
+
+        submission = self.get_object()
+
+        # Check that the user is the submitter
+        if submission.submitted_by != request.user:
+            return Response(
+                {"error": "You can only withdraw your own submissions."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Check that submission is in a withdrawable state
+        withdrawable_statuses = [
+            FormSubmission.SubmissionStatus.SUBMITTED,
+            FormSubmission.SubmissionStatus.IN_REVIEW,
+        ]
+        if submission.status not in withdrawable_statuses:
+            return Response(
+                {"error": f"Cannot withdraw submission with status '{submission.status}'. "
+                          "Only SUBMITTED or IN_REVIEW submissions can be withdrawn."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get the reason for withdrawal (optional)
+        reason = request.data.get('reason', '')
+
+        # Cancel any associated workflow instances
+        workflow_instances = WorkflowInstance.objects.filter(
+            submission=submission,
+            status__in=['PENDING', 'IN_PROGRESS', 'NEEDS_ADMIN_ACTION']
+        )
+
+        for instance in workflow_instances:
+            instance.status = 'CANCELLED'
+            instance.cancelled_at = timezone.now()
+            instance.cancelled_by = request.user
+            instance.cancellation_reason = f"Submission withdrawn by submitter. Reason: {reason}" if reason else "Submission withdrawn by submitter"
+            instance.save()
+
+            # Cancel all pending approvals for this instance
+            instance.approvals.filter(status='PENDING').update(
+                status='CANCELLED',
+                comments='Submission withdrawn by submitter'
+            )
+
+        # Update submission status to WITHDRAWN
+        submission.status = FormSubmission.SubmissionStatus.WITHDRAWN
+        submission.save()
+
+        # Log the withdrawal
+        log_update(
+            request.user,
+            'FormSubmission',
+            submission,
+            {'action': 'withdraw', 'reason': reason},
+            request
+        )
+
+        serializer = self.get_serializer(submission)
+        return Response({
+            'status': 'success',
+            'message': 'Submission withdrawn successfully.',
+            'submission': serializer.data
+        })
+
+    @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
         """Approve a submission (Manager/Admin only)."""
         submission = self.get_object()

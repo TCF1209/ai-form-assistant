@@ -170,7 +170,8 @@ const StatusBadge = ({ status }) => {
     'APPROVED': 'bg-emerald-100 text-emerald-700',
     'FAILED': 'bg-red-100 text-red-700',
     'REJECTED': 'bg-red-100 text-red-700',
-    'CANCELLED': 'bg-slate-100 text-slate-700'
+    'CANCELLED': 'bg-slate-100 text-slate-700',
+    'WITHDRAWN': 'bg-orange-100 text-orange-700'
   };
 
   // User-friendly status labels
@@ -184,7 +185,8 @@ const StatusBadge = ({ status }) => {
     'APPROVED': 'Approved',
     'FAILED': 'Failed',
     'REJECTED': 'Rejected',
-    'CANCELLED': 'Cancelled'
+    'CANCELLED': 'Cancelled',
+    'WITHDRAWN': 'Withdrawn'
   };
 
   return (
@@ -288,8 +290,22 @@ const MySubmissions = () => {
     completed: 0,
     rejected: 0
   });
+  // Withdraw modal state
+  const [withdrawModal, setWithdrawModal] = useState(false);
+  const [submissionToWithdraw, setSubmissionToWithdraw] = useState(null);
+  const [withdrawReason, setWithdrawReason] = useState('');
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Auto-hide message after 3 seconds
+  useEffect(() => {
+    if (message.text) {
+      const timer = setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   useEffect(() => {
     fetchSubmissions();
@@ -369,6 +385,58 @@ const MySubmissions = () => {
     setDetailModal(true);
   };
 
+  // Check if submission can be withdrawn
+  const canWithdraw = (submission) => {
+    // Can only withdraw SUBMITTED or IN_REVIEW submissions
+    const withdrawableStatuses = ['SUBMITTED', 'IN_REVIEW'];
+    // Also check workflow instance status if exists
+    const workflowStatus = submission.workflow_instance?.status;
+    const withdrawableWorkflowStatuses = ['PENDING', 'IN_PROGRESS', 'NEEDS_ADMIN_ACTION'];
+
+    if (withdrawableStatuses.includes(submission.status)) {
+      // If there's a workflow, check its status too
+      if (workflowStatus) {
+        return withdrawableWorkflowStatuses.includes(workflowStatus);
+      }
+      return true;
+    }
+    return false;
+  };
+
+  // Open withdraw confirmation modal
+  const handleWithdrawClick = (submission) => {
+    setSubmissionToWithdraw(submission);
+    setWithdrawReason('');
+    setWithdrawModal(true);
+  };
+
+  // Perform withdrawal
+  const handleWithdraw = async () => {
+    if (!submissionToWithdraw) return;
+
+    setWithdrawing(true);
+    try {
+      await api.post(`/submissions/${submissionToWithdraw.id}/withdraw/`, {
+        reason: withdrawReason
+      });
+
+      setMessage({ type: 'success', text: 'Submission withdrawn successfully' });
+      setWithdrawModal(false);
+      setSubmissionToWithdraw(null);
+      setWithdrawReason('');
+
+      // Refresh submissions list
+      fetchSubmissions();
+      fetchStats();
+    } catch (error) {
+      console.error('Error withdrawing submission:', error);
+      const errorMsg = error.response?.data?.error || 'Failed to withdraw submission';
+      setMessage({ type: 'error', text: errorMsg });
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
   const getProgressPercent = (instance) => {
     if (!instance || !instance.approvals) return 0;
     const total = instance.approvals.length;
@@ -381,6 +449,15 @@ const MySubmissions = () => {
 
   return (
     <div className="space-y-6">
+      {/* Toast Message */}
+      {message.text && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg ${
+          message.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {message.text}
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -524,14 +601,28 @@ const MySubmissions = () => {
                         <StepIndicator stepInfo={stepInfo} workflowStatus={workflowStatus} />
                       </td>
                       <td className="px-6 py-4">
-                        <button
-                          onClick={() => handleViewDetails(submission)}
-                          className="flex items-center gap-1 px-3 py-1.5 text-sky-600 hover:bg-sky-50 rounded-lg transition-colors text-sm font-medium"
-                          title="View Details"
-                        >
-                          <EyeIcon />
-                          View
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleViewDetails(submission)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-sky-600 hover:bg-sky-50 rounded-lg transition-colors text-sm font-medium"
+                            title="View Details"
+                          >
+                            <EyeIcon />
+                            View
+                          </button>
+                          {canWithdraw(submission) && (
+                            <button
+                              onClick={() => handleWithdrawClick(submission)}
+                              className="flex items-center gap-1 px-3 py-1.5 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors text-sm font-medium"
+                              title="Withdraw Submission"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                              </svg>
+                              Withdraw
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -674,6 +765,105 @@ const MySubmissions = () => {
                   className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Withdraw Confirmation Modal */}
+      {withdrawModal && submissionToWithdraw && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div className="fixed inset-0 bg-slate-500 bg-opacity-75 transition-opacity" onClick={() => setWithdrawModal(false)} />
+
+            <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-auto z-10">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-800">Withdraw Submission</h3>
+                </div>
+                <button
+                  onClick={() => setWithdrawModal(false)}
+                  className="p-2 hover:bg-slate-100 rounded-lg"
+                >
+                  <XIcon />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="px-6 py-4 space-y-4">
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                  <p className="text-orange-800 text-sm">
+                    Are you sure you want to withdraw this submission? This action will:
+                  </p>
+                  <ul className="mt-2 text-sm text-orange-700 list-disc list-inside space-y-1">
+                    <li>Cancel the submission</li>
+                    <li>Stop the approval workflow</li>
+                    <li>Notify approvers that the submission was withdrawn</li>
+                  </ul>
+                </div>
+
+                <div className="bg-slate-50 rounded-lg p-3">
+                  <p className="text-sm text-slate-600">
+                    <span className="font-medium">Form:</span> {submissionToWithdraw.form_detail?.name}
+                  </p>
+                  <p className="text-sm text-slate-600 mt-1">
+                    <span className="font-medium">Submitted:</span> {formatDate(submissionToWithdraw.created_at)}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Reason for withdrawal (optional)
+                  </label>
+                  <textarea
+                    value={withdrawReason}
+                    onChange={(e) => setWithdrawReason(e.target.value)}
+                    placeholder="e.g., Made a mistake in the form, need to resubmit with corrections..."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setWithdrawModal(false);
+                    setSubmissionToWithdraw(null);
+                    setWithdrawReason('');
+                  }}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                  disabled={withdrawing}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleWithdraw}
+                  disabled={withdrawing}
+                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {withdrawing ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Withdrawing...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                      </svg>
+                      Withdraw Submission
+                    </>
+                  )}
                 </button>
               </div>
             </div>

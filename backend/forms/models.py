@@ -183,6 +183,7 @@ class FormSubmission(models.Model):
         APPROVED = 'APPROVED', _('Approved')
         REJECTED = 'REJECTED', _('Rejected')
         CANCELLED = 'CANCELLED', _('Cancelled')
+        WITHDRAWN = 'WITHDRAWN', _('Withdrawn')  # User withdrew their submission
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     form = models.ForeignKey(

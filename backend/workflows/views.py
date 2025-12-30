@@ -396,6 +396,7 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
         """
         Admin action to approve a workflow instance that needs admin action.
         This is used when all approvers are the submitter (self-approval conflict).
+        Only approves the current step and progresses workflow normally.
         """
         instance = self.get_object()
         user = request.user
@@ -417,33 +418,56 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
         comments = request.data.get('comments', '')
 
         with transaction.atomic():
-            # Mark all pending approvals as approved by admin
-            pending_approvals = instance.approvals.filter(status='PENDING')
+            # Get pending approvals for the CURRENT step only (not all steps)
+            current_step = instance.current_step
+            if current_step:
+                pending_approvals = instance.approvals.filter(
+                    status='PENDING',
+                    workflow_step=current_step
+                )
+            else:
+                # Fallback: get all pending approvals if no current step
+                pending_approvals = instance.approvals.filter(status='PENDING')
+
+            if not pending_approvals.exists():
+                return Response(
+                    {'error': 'No pending approvals found for current step'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Use workflow engine to properly handle approval and progression
+            engine = WorkflowEngine()
+
             for approval in pending_approvals:
-                approval.status = 'APPROVED'
-                approval.approved_by = user
-                approval.completed_at = timezone.now()
                 approval.comments = comments or 'Approved by administrator (self-approval conflict resolution)'
                 approval.save()
+                engine.approve_step(approval, user, approval.comments)
 
-            # Complete the workflow instance
-            instance.status = 'COMPLETED'
-            instance.completed_at = timezone.now()
-            instance.context_data['admin_resolved'] = True
-            instance.context_data['resolved_by'] = user.username
+            # Change status back to IN_PROGRESS to allow normal workflow progression
+            # The engine will set it to COMPLETED if all steps are done
+            instance.refresh_from_db()
+
+            # Track admin action in context
+            admin_actions = instance.context_data.get('admin_actions', [])
+            admin_actions.append({
+                'action': 'approve',
+                'step': current_step.name if current_step else 'unknown',
+                'admin': user.username,
+                'timestamp': timezone.now().isoformat()
+            })
+            instance.context_data['admin_actions'] = admin_actions
             instance.save()
 
-            # Update submission status
-            submission = instance.submission
-            submission.status = 'APPROVED'
-            submission.save()
-
             # Log the action
-            log_approve(user, 'WorkflowInstance', instance, comments=comments, request=request)
+            log_approve(user, 'WorkflowApproval', approval, comments=comments, request=request)
+
+        # Refresh to get latest status
+        instance.refresh_from_db()
 
         return Response({
             'status': 'success',
-            'message': 'Workflow approved by administrator'
+            'message': f'Step approved by administrator. Workflow status: {instance.status}',
+            'workflow_status': instance.status
         })
 
     @action(detail=True, methods=['post'])
@@ -451,6 +475,7 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
         """
         Admin action to reject a workflow instance that needs admin action.
         This is used when all approvers are the submitter (self-approval conflict).
+        Only rejects the current step and lets workflow engine handle failure logic.
         """
         instance = self.get_object()
         user = request.user
@@ -472,33 +497,55 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
         comments = request.data.get('comments', '')
 
         with transaction.atomic():
-            # Mark all pending approvals as rejected by admin
-            pending_approvals = instance.approvals.filter(status='PENDING')
+            # Get pending approvals for the CURRENT step only
+            current_step = instance.current_step
+            if current_step:
+                pending_approvals = instance.approvals.filter(
+                    status='PENDING',
+                    workflow_step=current_step
+                )
+            else:
+                # Fallback: get all pending approvals if no current step
+                pending_approvals = instance.approvals.filter(status='PENDING')
+
+            if not pending_approvals.exists():
+                return Response(
+                    {'error': 'No pending approvals found for current step'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Use workflow engine to properly handle rejection
+            engine = WorkflowEngine()
+
             for approval in pending_approvals:
-                approval.status = 'REJECTED'
-                approval.approved_by = user
-                approval.completed_at = timezone.now()
                 approval.comments = comments or 'Rejected by administrator (self-approval conflict resolution)'
                 approval.save()
+                engine.reject_step(approval, user, approval.comments)
 
-            # Fail the workflow instance
-            instance.status = 'FAILED'
-            instance.completed_at = timezone.now()
-            instance.context_data['admin_resolved'] = True
-            instance.context_data['resolved_by'] = user.username
+            # Refresh to get latest status after engine processing
+            instance.refresh_from_db()
+
+            # Track admin action in context
+            admin_actions = instance.context_data.get('admin_actions', [])
+            admin_actions.append({
+                'action': 'reject',
+                'step': current_step.name if current_step else 'unknown',
+                'admin': user.username,
+                'timestamp': timezone.now().isoformat()
+            })
+            instance.context_data['admin_actions'] = admin_actions
             instance.save()
 
-            # Update submission status
-            submission = instance.submission
-            submission.status = 'REJECTED'
-            submission.save()
-
             # Log the action
-            log_reject(user, 'WorkflowInstance', instance, comments=comments, request=request)
+            log_reject(user, 'WorkflowApproval', approval, comments=comments, request=request)
+
+        # Refresh to get latest status
+        instance.refresh_from_db()
 
         return Response({
             'status': 'success',
-            'message': 'Workflow rejected by administrator'
+            'message': f'Step rejected by administrator. Workflow status: {instance.status}',
+            'workflow_status': instance.status
         })
 
 

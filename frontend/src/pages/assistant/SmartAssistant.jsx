@@ -1160,6 +1160,10 @@ const SmartAssistant = () => {
     }
   };
 
+  // Silence timeout ref for auto-stop after pause
+  const silenceTimeoutRef = useRef(null);
+  const SILENCE_TIMEOUT = 3000; // 3 seconds of silence before auto-stop
+
   // Handle voice input using Web Speech API
   const handleVoiceInput = () => {
     // Check browser support
@@ -1176,6 +1180,11 @@ const SmartAssistant = () => {
 
     // If already listening, stop
     if (isListening && recognitionRef.current) {
+      // Clear silence timeout
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
       recognitionRef.current.stop();
       setIsListening(false);
       setInterimTranscript('');
@@ -1187,13 +1196,28 @@ const SmartAssistant = () => {
     recognitionRef.current = recognition;
 
     recognition.lang = voiceLanguage;
-    recognition.continuous = false;
+    recognition.continuous = true;  // Keep listening until manually stopped
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
+
+    // Function to reset silence timeout
+    const resetSilenceTimeout = () => {
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+      silenceTimeoutRef.current = setTimeout(() => {
+        // Auto-stop after silence
+        if (recognitionRef.current && isListening) {
+          recognitionRef.current.stop();
+        }
+      }, SILENCE_TIMEOUT);
+    };
 
     recognition.onstart = () => {
       setIsListening(true);
       setInterimTranscript('');
+      // Start initial silence timeout
+      resetSilenceTimeout();
     };
 
     recognition.onresult = (event) => {
@@ -1209,6 +1233,9 @@ const SmartAssistant = () => {
         }
       }
 
+      // Reset silence timeout on any speech activity
+      resetSilenceTimeout();
+
       // Show interim results while speaking
       if (interim) {
         setInterimTranscript(interim);
@@ -1221,18 +1248,45 @@ const SmartAssistant = () => {
       }
     };
 
+    recognition.onspeechend = () => {
+      // Speech ended, start silence timeout for auto-stop
+      resetSilenceTimeout();
+    };
+
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
+
+      // Clear silence timeout
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+
+      // Don't show error for 'no-speech' when using continuous mode - just keep listening
+      if (event.error === 'no-speech') {
+        // Restart listening if still in listening mode
+        if (isListening && recognitionRef.current) {
+          try {
+            recognitionRef.current.start();
+            resetSilenceTimeout();
+          } catch (e) {
+            // Already started, ignore
+          }
+        }
+        return;
+      }
+
       setIsListening(false);
       setInterimTranscript('');
 
       let errorMessage = "Sorry, I couldn't hear you clearly. Please try again.";
-      if (event.error === 'no-speech') {
-        errorMessage = "No speech detected. Please speak clearly and try again.";
-      } else if (event.error === 'audio-capture') {
+      if (event.error === 'audio-capture') {
         errorMessage = "No microphone found. Please check your microphone settings.";
       } else if (event.error === 'not-allowed') {
         errorMessage = "Microphone access denied. Please allow microphone access in your browser settings.";
+      } else if (event.error === 'aborted') {
+        // User stopped, no error message needed
+        return;
       }
 
       addMessage({
@@ -1243,6 +1297,12 @@ const SmartAssistant = () => {
     };
 
     recognition.onend = () => {
+      // Clear silence timeout
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+
       setIsListening(false);
       setInterimTranscript('');
       recognitionRef.current = null;
@@ -1429,16 +1489,31 @@ const SmartAssistant = () => {
 
         {/* Listening indicator */}
         {isListening && (
-          <div className="mb-3 flex items-center justify-center gap-2 py-2 px-4 bg-red-50 border border-red-200 rounded-full">
-            <div className="flex gap-1">
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
+          <div className="mb-3 flex flex-col items-center gap-2">
+            <div className="flex items-center justify-center gap-2 py-2 px-4 bg-red-50 border border-red-200 rounded-full">
+              <div className="flex gap-1">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
+              </div>
+              <span className="text-sm text-red-600 font-medium">
+                {interimTranscript ? 'Listening...' : 'Speak now...'}
+              </span>
+              <button
+                onClick={handleVoiceInput}
+                className="ml-2 px-2 py-0.5 text-xs bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+              >
+                Stop
+              </button>
             </div>
-            <span className="text-sm text-red-600 font-medium">Listening... Speak now</span>
             {interimTranscript && (
-              <span className="text-sm text-red-400 italic ml-2">"{interimTranscript}"</span>
+              <div className="text-sm text-slate-500 italic bg-slate-100 px-3 py-1 rounded-lg">
+                "{interimTranscript}"
+              </div>
             )}
+            <p className="text-xs text-slate-400">
+              Speak naturally with pauses • Auto-stops after 3 seconds of silence
+            </p>
           </div>
         )}
 

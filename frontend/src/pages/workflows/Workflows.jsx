@@ -19,8 +19,17 @@ const Workflows = () => {
   const [deletionError, setDeletionError] = useState(null);
   const [actionMenuOpen, setActionMenuOpen] = useState(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [message, setMessage] = useState({ type: '', text: '' });
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Auto-hide message after 3 seconds
+  useEffect(() => {
+    if (message.text) {
+      const timer = setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   // Handle opening dropdown menu with position calculation
   const handleMenuOpen = (workflowId, event) => {
@@ -168,18 +177,24 @@ const Workflows = () => {
   const handleActivateWorkflow = async (workflow) => {
     try {
       await api.post(`/workflows/${workflow.id}/activate/`);
+      setMessage({ type: 'success', text: `Workflow "${workflow.name}" activated successfully.` });
       fetchWorkflows();
     } catch (error) {
       console.error('Failed to activate workflow:', error);
+      const errorMsg = error.response?.data?.detail || error.response?.data?.error || 'Failed to activate workflow';
+      setMessage({ type: 'error', text: errorMsg });
     }
   };
 
   const handleDeactivateWorkflow = async (workflow) => {
     try {
       await api.post(`/workflows/${workflow.id}/deactivate/`);
+      setMessage({ type: 'success', text: `Workflow "${workflow.name}" deactivated successfully.` });
       await fetchWorkflows();
     } catch (error) {
       console.error('Error deactivating workflow:', error);
+      const errorMsg = error.response?.data?.detail || error.response?.data?.error || 'Failed to deactivate workflow';
+      setMessage({ type: 'error', text: errorMsg });
     }
   };
 
@@ -243,7 +258,12 @@ const Workflows = () => {
   const canCreateWorkflow = user?.role === 'ADMIN' || user?.role === 'MANAGER';
   const canEditWorkflow = (workflow) => {
     if (user?.role === 'ADMIN') return true;
-    if (user?.role === 'MANAGER' && workflow.department_name === user.department_name) return true;
+    if (user?.role === 'MANAGER') {
+      // Compare department names case-insensitively with null safety
+      const workflowDept = workflow.department_name?.toLowerCase?.() || '';
+      const userDept = user.department_name?.toLowerCase?.() || '';
+      return workflowDept && userDept && workflowDept === userDept;
+    }
     return false;
   };
 
@@ -269,6 +289,17 @@ const Workflows = () => {
           </button>
         )}
       </div>
+
+      {/* Message Toast */}
+      {message.text && (
+        <div className={`p-4 rounded-lg ${
+          message.type === 'success'
+            ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+            : 'bg-red-50 border border-red-200 text-red-700'
+        }`}>
+          {message.text}
+        </div>
+      )}
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

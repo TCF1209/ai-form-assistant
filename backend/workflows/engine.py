@@ -26,11 +26,11 @@ class WorkflowEngine:
             'lt': operator.lt,
             'gte': operator.ge,
             'lte': operator.le,
-            'in': lambda a, b: a in b,
-            'not_in': lambda a, b: a not in b,
-            'contains': lambda a, b: b in a,
-            'starts_with': lambda a, b: a.startswith(b),
-            'ends_with': lambda a, b: a.endswith(b),
+            'in': lambda a, b: a in b if b is not None else False,
+            'not_in': lambda a, b: a not in b if b is not None else True,
+            'contains': lambda a, b: str(b) in str(a) if a is not None and b is not None else False,
+            'starts_with': lambda a, b: str(a).startswith(str(b)) if a is not None and b is not None else False,
+            'ends_with': lambda a, b: str(a).endswith(str(b)) if a is not None and b is not None else False,
         }
 
     # =====================================================
@@ -604,7 +604,11 @@ class WorkflowEngine:
             try:
                 result = op_func(field_value, value)
                 results.append(result)
-            except:
+            except (TypeError, ValueError, AttributeError) as e:
+                # Log the error for debugging but don't crash the workflow
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Condition evaluation failed for field '{field}': {e}")
                 results.append(False)
 
         # Apply logic

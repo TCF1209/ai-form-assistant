@@ -84,8 +84,13 @@ class WorkflowEngine:
                     'fallback_to': admin.username,
                     'reason': 'no_eligible_approvers'
                 })
+                # Set instance status to NEEDS_ADMIN_ACTION so admin can use admin_approve/admin_reject
+                instance.status = 'NEEDS_ADMIN_ACTION'
+                instance.context_data['admin_fallback'] = True
+                instance.context_data['admin_fallback_step'] = step.name
+                instance.save()
             else:
-                # Mark instance as needing admin action
+                # Mark instance as needing admin action (no admin available)
                 instance.status = 'NEEDS_ADMIN_ACTION'
                 instance.context_data['no_approvers_step'] = step.name
                 instance.save()
@@ -451,6 +456,11 @@ class WorkflowEngine:
         admin = self._get_admin_fallback()
         if admin:
             approval = self._create_reassigned_approval(instance, step, admin, submitter, is_admin_fallback=True)
+            # Set instance status to NEEDS_ADMIN_ACTION so admin can use admin_approve/admin_reject endpoints
+            instance.status = 'NEEDS_ADMIN_ACTION'
+            instance.context_data['admin_fallback'] = True
+            instance.context_data['admin_fallback_step'] = step.name
+            instance.save()
             return approval, admin
 
         # Last resort: If no department users and no admin available,

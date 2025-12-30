@@ -460,9 +460,12 @@ QUERY TYPE CLASSIFICATION (VERY IMPORTANT - read carefully):
    - Keywords: "average", "mean", "typical", "approval time"
 
 6. "list" - Use when user wants to see a LIST of specific items or people:
-   - Keywords: "who", "which", "list", "show me", "what are"
+   - Keywords: "who", "which", "list", "show me", "what are", "show forms"
    - Examples: "who submitted forms last week?", "list pending submissions", "which forms were approved?"
    - IMPORTANT: "Who submitted..." should ALWAYS be query_type: "list"
+   - IMPORTANT: "Show forms from [department]" → query_type: "list", entity: "forms", NO group_by
+   - IMPORTANT: "What forms are in [department]?" → query_type: "list", entity: "forms", NO group_by
+   - When listing FORMS (entity: "forms"), do NOT set group_by - just list the form names
    - This returns a TABLE with actual records, not aggregated counts
 
 Analyze the user's query and return a JSON object with this structure:
@@ -528,6 +531,9 @@ Examples:
 - "Who submitted leave requests?" → query_type: "list", entity: "submissions", filters: {form_type: "leave"}, visualization: "table"
 - "List pending submissions" → query_type: "list", entity: "submissions", filters: {status: ["SUBMITTED", "IN_REVIEW"]}, visualization: "table"
 - "Which forms were approved today?" → query_type: "list", entity: "submissions", filters: {status: ["APPROVED"], time_range: "today"}, visualization: "table"
+- "Show forms from Administration" → query_type: "list", entity: "forms", filters: {department: "Administration"}, group_by: null, visualization: "ranking"
+- "What forms are in HR department?" → query_type: "list", entity: "forms", filters: {department: "HR"}, group_by: null, visualization: "ranking"
+- "List all forms" → query_type: "list", entity: "forms", group_by: null, visualization: "ranking"
 - "thank you" → is_casual_message: true
 """
 

@@ -695,6 +695,8 @@ class NaturalLanguageQueryView(APIView):
         # Apply department filter
         if dept_filter and isinstance(dept_filter, str):
             base_qs = base_qs.filter(form__department__name__icontains=dept_filter)
+            # Also apply to forms queryset for entity='forms' queries
+            forms_qs = forms_qs.filter(department__name__icontains=dept_filter)
 
         # Execute based on query type (order matters - specific types before breakdown)
         if query_type == 'count':
@@ -715,13 +717,13 @@ class NaturalLanguageQueryView(APIView):
         elif query_type == 'average':
             return self._execute_average_query(base_qs, intent, dept_note)
 
+        elif query_type == 'list' and entity == 'forms':
+            # Handle listing forms - check BEFORE breakdown to ensure "show forms" works correctly
+            return self._execute_forms_list_query(forms_qs, intent, dept_note)
+
         elif query_type == 'breakdown' or group_by:
             # Breakdown queries - ranking or donut based on group_by
             return self._execute_breakdown_query(base_qs, intent, group_by, user_role, user_department, dept_note)
-
-        elif query_type == 'list' and entity == 'forms':
-            # Handle listing forms
-            return self._execute_forms_list_query(forms_qs, intent, dept_note)
 
         elif query_type == 'list':
             # Handle listing submissions (who submitted, which forms, etc.)

@@ -76,7 +76,8 @@ class WorkflowEngine:
 
         if not approvers:
             # No approvers left after excluding submitter - need admin fallback
-            admin = self._get_admin_fallback()
+            # Pass submitter to prefer a different admin if available
+            admin = self._get_admin_fallback(exclude_user=submitter)
             if admin:
                 approvers = [admin]
                 exclusions.append({
@@ -421,17 +422,32 @@ class WorkflowEngine:
 
         return eligible_users.first()
 
-    def _get_admin_fallback(self):
-        """Get an admin user as fallback when no eligible users found."""
+    def _get_admin_fallback(self, exclude_user=None):
+        """
+        Get an admin user as fallback when no eligible users found.
+
+        Args:
+            exclude_user: Optional user to exclude (usually the submitter)
+                         Tries to find a different admin first, but if submitter
+                         is the only admin, returns them as last resort.
+        """
         from users.models import User
 
-        # Get any active admin
-        admin = User.objects.filter(
+        # First, try to find an admin who is NOT the excluded user
+        admins = User.objects.filter(
             role='ADMIN',
             is_active=True
-        ).first()
+        )
 
-        return admin
+        if exclude_user:
+            # Prefer a different admin
+            other_admin = admins.exclude(id=exclude_user.id).first()
+            if other_admin:
+                return other_admin
+
+        # If no other admin available, return any admin (including submitter as last resort)
+        # This allows admin_approve to be used for self-approval override
+        return admins.first()
 
     def _get_next_non_self_step(self, workflow, instance, current_step, submitter):
         """Get the next step where the approver is not the submitter (deprecated - kept for compatibility)."""
@@ -461,8 +477,8 @@ class WorkflowEngine:
             approval = self._create_reassigned_approval(instance, step, eligible_user, submitter)
             return approval, eligible_user
 
-        # Fallback to admin
-        admin = self._get_admin_fallback()
+        # Fallback to admin (prefer a different admin if submitter is also admin)
+        admin = self._get_admin_fallback(exclude_user=submitter)
         if admin:
             approval = self._create_reassigned_approval(instance, step, admin, submitter, is_admin_fallback=True)
             # Set instance status to NEEDS_ADMIN_ACTION so admin can use admin_approve/admin_reject endpoints

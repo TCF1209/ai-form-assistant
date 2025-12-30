@@ -865,12 +865,15 @@ class NaturalLanguageQueryView(APIView):
 
         # Get form data
         forms_data = []
-        for form in forms_queryset[:10]:  # Limit to 10
+        for form in forms_queryset:
             forms_data.append({
                 "name": form.name,
                 "department": form.department.name if form.department else "General",
                 "submissions": form.submissions.count()
             })
+
+        # Sort by submissions descending (highest first) and limit to 10
+        forms_data = sorted(forms_data, key=lambda x: x['submissions'], reverse=True)[:10]
 
         return {
             "interpretation": intent.get('interpretation', f"Listing forms{dept_note}"),

@@ -124,11 +124,11 @@ const WorkflowPreview = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <span className="text-slate-500">Form:</span>
-            <p className="font-medium text-slate-800">{workflow?.form_name || 'N/A'}</p>
+            <p className="font-medium text-slate-800">{workflow?.form_detail?.name || workflow?.form_name || 'N/A'}</p>
           </div>
           <div>
             <span className="text-slate-500">Department:</span>
-            <p className="font-medium text-slate-800">{workflow?.department_name || 'N/A'}</p>
+            <p className="font-medium text-slate-800">{workflow?.form_detail?.department_name || workflow?.department_name || 'N/A'}</p>
           </div>
           <div>
             <span className="text-slate-500">Steps:</span>

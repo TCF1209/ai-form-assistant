@@ -40,10 +40,17 @@ const Workflows = () => {
 
     const button = event.currentTarget;
     const rect = button.getBoundingClientRect();
+    const menuHeight = 180; // Approximate menu height
+    const viewportHeight = window.innerHeight;
+    const spaceBelow = viewportHeight - rect.bottom;
+
+    // If not enough space below, open upward
+    const openUpward = spaceBelow < menuHeight;
 
     setMenuPosition({
-      top: rect.bottom + 4,
-      left: rect.right - 192 // 192px = w-48 (menu width)
+      top: openUpward ? rect.top - menuHeight : rect.bottom + 4,
+      left: rect.right - 192, // 192px = w-48 (menu width)
+      openUpward
     });
     setActionMenuOpen(workflowId);
   };

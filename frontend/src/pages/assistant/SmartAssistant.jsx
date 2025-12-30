@@ -593,6 +593,7 @@ const SmartAssistant = () => {
   const [voiceSupported, setVoiceSupported] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState('');
   const recognitionRef = useRef(null);
+  const silenceTimeoutRef = useRef(null); // For auto-stop after silence
 
   // AI form filling state
   const [isFillingForm, setIsFillingForm] = useState(false);
@@ -606,12 +607,24 @@ const SmartAssistant = () => {
   const [isEditingSingleField, setIsEditingSingleField] = useState(false);  // Editing one specific field
   const [editingField, setEditingField] = useState(null);  // The field being edited
 
-  // Check for Web Speech API support on mount
+  // Check for Web Speech API support on mount and cleanup on unmount
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       setVoiceSupported(true);
     }
+
+    // Cleanup on unmount - stop recognition and clear timeouts
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+    };
   }, []);
 
   // Load chat history on mount
@@ -1160,8 +1173,7 @@ const SmartAssistant = () => {
     }
   };
 
-  // Silence timeout ref for auto-stop after pause
-  const silenceTimeoutRef = useRef(null);
+  // Silence timeout duration for auto-stop after pause
   const SILENCE_TIMEOUT = 3000; // 3 seconds of silence before auto-stop
 
   // Handle voice input using Web Speech API
@@ -1206,8 +1218,8 @@ const SmartAssistant = () => {
         clearTimeout(silenceTimeoutRef.current);
       }
       silenceTimeoutRef.current = setTimeout(() => {
-        // Auto-stop after silence
-        if (recognitionRef.current && isListening) {
+        // Auto-stop after silence - check recognitionRef instead of isListening (avoids stale closure)
+        if (recognitionRef.current) {
           recognitionRef.current.stop();
         }
       }, SILENCE_TIMEOUT);
@@ -1264,8 +1276,8 @@ const SmartAssistant = () => {
 
       // Don't show error for 'no-speech' when using continuous mode - just keep listening
       if (event.error === 'no-speech') {
-        // Restart listening if still in listening mode
-        if (isListening && recognitionRef.current) {
+        // Restart listening if recognition is still active (check ref instead of state to avoid stale closure)
+        if (recognitionRef.current) {
           try {
             recognitionRef.current.start();
             resetSilenceTimeout();

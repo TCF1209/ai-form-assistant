@@ -21,6 +21,7 @@ import FormBuilder from './pages/forms/FormBuilder';
 import FormSubmission from './pages/forms/FormSubmission';
 import FormView from './pages/forms/FormView';
 import Workflows from './pages/workflows/Workflows';
+import WorkflowPreview from './pages/workflows/WorkflowPreview';
 import MyApprovals from './pages/approvals/MyApprovals';
 import MySubmissions from './pages/submissions/MySubmissions';
 import SubmissionsManagement from './pages/submissions/SubmissionsManagement';
@@ -127,6 +128,7 @@ function App() {
                   </RoleBasedRoute>
                 }
               />
+              <Route path="/workflows/:id/preview" element={<WorkflowPreview />} />
               <Route path="/approvals" element={<MyApprovals />} />
               <Route path="/submissions" element={<MySubmissions />} />
               <Route

@@ -94,6 +94,15 @@ const StepIndicator = ({ stepInfo, workflowStatus }) => {
         icon: <XCircleIcon />
       };
     }
+    if (workflowStatus === 'CANCELLED') {
+      return {
+        bg: 'bg-orange-50',
+        border: 'border-orange-200',
+        iconBg: 'bg-orange-500',
+        text: 'text-orange-700',
+        icon: <XCircleIcon />
+      };
+    }
     if (workflowStatus === 'IN_PROGRESS') {
       return {
         bg: 'bg-sky-50',
@@ -553,6 +562,11 @@ const MySubmissions = () => {
                       return { text: 'Completed', stepNumber: null, subtext: null };
                     }
 
+                    // If cancelled/withdrawn, show "Withdrawn"
+                    if (instance.status === 'CANCELLED') {
+                      return { text: 'Withdrawn', stepNumber: null, subtext: null };
+                    }
+
                     // If failed/rejected, show last step from approvals
                     if (instance.status === 'FAILED' && instance.approvals?.length > 0) {
                       const lastApproval = instance.approvals[instance.approvals.length - 1];
@@ -585,7 +599,10 @@ const MySubmissions = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        {submission.workflow_instance ? (
+                        {/* Show submission status if WITHDRAWN, otherwise show workflow status */}
+                        {submission.status === 'WITHDRAWN' ? (
+                          <StatusBadge status="WITHDRAWN" />
+                        ) : submission.workflow_instance ? (
                           <div className="space-y-2">
                             <StatusBadge status={submission.workflow_instance.status} />
                             <ProgressBar

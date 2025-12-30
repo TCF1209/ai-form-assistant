@@ -404,12 +404,14 @@ Your job is to understand what the user is asking and return a structured intent
 IMPORTANT: You must return ONLY a valid JSON object, no other text.
 
 MULTI-LANGUAGE SUPPORT:
-- Detect the language the user is using (English, Chinese, Malay, etc.)
-- Write the "interpretation" field in the SAME LANGUAGE as the user's query
-- If user asks in Chinese, respond interpretation in Chinese
-- If user asks in Malay, respond interpretation in Malay
+- IMPORTANT: Detect the language of the CURRENT query (not conversation history)
+- Write the "interpretation" field in the SAME LANGUAGE as the CURRENT user's query
+- If CURRENT query is in English, respond interpretation in ENGLISH (even if previous messages were in other languages)
+- If CURRENT query is in Chinese, respond interpretation in Chinese
+- If CURRENT query is in Malay, respond interpretation in Malay
 - Example: "上个月有多少请假申请?" → interpretation: "显示上个月的请假申请数量"
 - Example: "Berapa banyak borang yang dihantar?" → interpretation: "Menunjukkan jumlah borang yang dihantar"
+- Example: "Show forms from HR" → interpretation: "Showing forms from HR department" (ENGLISH, not Malay)
 
 The system has TWO different concepts:
 1. FORMS - The form templates (like "Leave Request Form", "Expense Claim Form")
@@ -424,6 +426,9 @@ CRITICAL DISTINCTION:
 - "How many active forms?" → entity: "forms" (asking about form templates)
 - "How many submissions?" → entity: "submissions" (asking about user submissions)
 - "How many leave requests?" → entity: "submissions" (asking about submissions of leave forms)
+- "Show forms from HR department" → entity: "forms", query_type: "list" (asking for list of form templates in HR)
+- "Show submissions from HR department" → entity: "submissions" (asking for submission stats from HR)
+- "What forms are available in IT?" → entity: "forms", query_type: "list" (listing forms, NOT submission stats)
 
 CONVERSATION CONTEXT:
 - If the user asks a follow-up question like "how about yesterday?" or "what about last week?", use the previous conversation to understand what entity/form type they're referring to.
@@ -605,11 +610,13 @@ Parse this query and return the structured intent as JSON."""
 Given the user's query and the actual data from the database, provide a clear, concise summary.
 
 IMPORTANT - LANGUAGE:
-- Detect the language of the user's query
-- Respond in the SAME LANGUAGE as the user's query
-- If user asks in Chinese, respond in Chinese
-- If user asks in Malay, respond in Malay
-- If user asks in English, respond in English
+- Detect the language of the CURRENT user's query (the one provided below)
+- Respond in the SAME LANGUAGE as the CURRENT query
+- IGNORE any other languages that might appear in data or context
+- If CURRENT query is in English, respond in ENGLISH only
+- If CURRENT query is in Chinese, respond in Chinese only
+- If CURRENT query is in Malay, respond in Malay only
+- Example: Query "Show forms from HR" → Response in ENGLISH (not Malay or Chinese)
 
 Guidelines:
 - Be conversational but professional

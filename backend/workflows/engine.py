@@ -95,6 +95,15 @@ class WorkflowEngine:
                 instance.context_data['no_approvers_step'] = step.name
                 instance.save()
                 return [], exclusions
+        else:
+            # Valid approvers exist - reset status to IN_PROGRESS if it was NEEDS_ADMIN_ACTION
+            # This handles the case where previous step had admin fallback but this step has valid approvers
+            if instance.status == 'NEEDS_ADMIN_ACTION':
+                instance.status = 'IN_PROGRESS'
+                # Clear admin fallback flags since this step has valid approvers
+                instance.context_data.pop('admin_fallback', None)
+                instance.context_data.pop('admin_fallback_step', None)
+                instance.save()
 
         # Create approvals for all approvers
         due_date = None

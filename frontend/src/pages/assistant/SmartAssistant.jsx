@@ -588,6 +588,12 @@ const SmartAssistant = () => {
   const [showFormList, setShowFormList] = useState(false);
   const [formListData, setFormListData] = useState([]);
 
+  // Voice input state
+  const [voiceLanguage, setVoiceLanguage] = useState('en-US'); // Default to English
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const recognitionRef = useRef(null);
+
   // AI form filling state
   const [isFillingForm, setIsFillingForm] = useState(false);
   const [currentForm, setCurrentForm] = useState(null);
@@ -599,6 +605,14 @@ const SmartAssistant = () => {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isEditingSingleField, setIsEditingSingleField] = useState(false);  // Editing one specific field
   const [editingField, setEditingField] = useState(null);  // The field being edited
+
+  // Check for Web Speech API support on mount
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      setVoiceSupported(true);
+    }
+  }, []);
 
   // Load chat history on mount
   useEffect(() => {
@@ -1146,21 +1160,122 @@ const SmartAssistant = () => {
     }
   };
 
-  // Handle voice input (placeholder for future implementation)
+  // Handle voice input using Web Speech API
   const handleVoiceInput = () => {
-    setIsListening(!isListening);
-    // Voice input implementation would go here
-    // For now, just toggle the state as a visual indicator
-    if (!isListening) {
-      setTimeout(() => {
-        setIsListening(false);
-        addMessage({
-          content: "Voice input feature coming soon! Please type your message for now.",
-          isUser: false,
-          timestamp: new Date().toISOString()
-        });
-      }, 2000);
+    // Check browser support
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      addMessage({
+        content: "Sorry, voice input is not supported in your browser. Please use Chrome, Edge, or Safari.",
+        isUser: false,
+        timestamp: new Date().toISOString()
+      });
+      return;
     }
+
+    // If already listening, stop
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      setInterimTranscript('');
+      return;
+    }
+
+    // Start listening
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+
+    recognition.lang = voiceLanguage;
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setInterimTranscript('');
+    };
+
+    recognition.onresult = (event) => {
+      let finalTranscript = '';
+      let interim = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interim += transcript;
+        }
+      }
+
+      // Show interim results while speaking
+      if (interim) {
+        setInterimTranscript(interim);
+      }
+
+      // When we have a final result, put it in the input
+      if (finalTranscript) {
+        setInputValue(prev => prev + (prev ? ' ' : '') + finalTranscript);
+        setInterimTranscript('');
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      setInterimTranscript('');
+
+      let errorMessage = "Sorry, I couldn't hear you clearly. Please try again.";
+      if (event.error === 'no-speech') {
+        errorMessage = "No speech detected. Please speak clearly and try again.";
+      } else if (event.error === 'audio-capture') {
+        errorMessage = "No microphone found. Please check your microphone settings.";
+      } else if (event.error === 'not-allowed') {
+        errorMessage = "Microphone access denied. Please allow microphone access in your browser settings.";
+      }
+
+      addMessage({
+        content: errorMessage,
+        isUser: false,
+        timestamp: new Date().toISOString()
+      });
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      setInterimTranscript('');
+      recognitionRef.current = null;
+    };
+
+    try {
+      recognition.start();
+    } catch (error) {
+      console.error('Failed to start speech recognition:', error);
+      setIsListening(false);
+    }
+  };
+
+  // Cycle through voice languages
+  const cycleVoiceLanguage = () => {
+    const languages = [
+      { code: 'en-US', name: 'English' },
+      { code: 'zh-CN', name: '中文' },
+      { code: 'ms-MY', name: 'Malay' }
+    ];
+    const currentIndex = languages.findIndex(l => l.code === voiceLanguage);
+    const nextIndex = (currentIndex + 1) % languages.length;
+    setVoiceLanguage(languages[nextIndex].code);
+  };
+
+  // Get current language name
+  const getVoiceLanguageName = () => {
+    const languages = {
+      'en-US': 'EN',
+      'zh-CN': '中',
+      'ms-MY': 'MS'
+    };
+    return languages[voiceLanguage] || 'EN';
   };
 
   // Handle key press
@@ -1312,6 +1427,21 @@ const SmartAssistant = () => {
           </div>
         )}
 
+        {/* Listening indicator */}
+        {isListening && (
+          <div className="mb-3 flex items-center justify-center gap-2 py-2 px-4 bg-red-50 border border-red-200 rounded-full">
+            <div className="flex gap-1">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <span className="text-sm text-red-600 font-medium">Listening... Speak now</span>
+            {interimTranscript && (
+              <span className="text-sm text-red-400 italic ml-2">"{interimTranscript}"</span>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           <div className="flex-1 relative">
             <input
@@ -1320,19 +1450,39 @@ const SmartAssistant = () => {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type a message..."
-              className="w-full px-4 py-3 border border-slate-300 rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 pr-12"
+              placeholder={isListening ? "Listening..." : "Type a message..."}
+              className={`w-full px-4 py-3 border rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 pr-24 ${
+                isListening ? 'border-red-300 bg-red-50' : 'border-slate-300'
+              }`}
               disabled={isFillingForm}
             />
-            <button
-              onClick={handleVoiceInput}
-              className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-2 rounded-full transition-colors ${
-                isListening ? 'bg-red-100 text-red-500' : 'text-slate-400 hover:text-slate-600'
-              }`}
-              title="Voice input (coming soon)"
-            >
-              <MicrophoneIcon />
-            </button>
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
+              {/* Language selector - only show if voice is supported */}
+              {voiceSupported && (
+                <button
+                  onClick={cycleVoiceLanguage}
+                  className="px-2 py-1 text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors"
+                  title={`Voice language: ${voiceLanguage}. Click to change.`}
+                >
+                  {getVoiceLanguageName()}
+                </button>
+              )}
+              {/* Microphone button */}
+              <button
+                onClick={handleVoiceInput}
+                className={`p-2 rounded-full transition-all ${
+                  isListening
+                    ? 'bg-red-500 text-white animate-pulse shadow-lg'
+                    : voiceSupported
+                      ? 'text-slate-400 hover:text-sky-500 hover:bg-sky-50'
+                      : 'text-slate-300 cursor-not-allowed'
+                }`}
+                title={voiceSupported ? (isListening ? "Click to stop" : "Click to speak") : "Voice not supported in this browser"}
+                disabled={!voiceSupported && !isListening}
+              >
+                <MicrophoneIcon />
+              </button>
+            </div>
           </div>
           <button
             onClick={handleSendMessage}
@@ -1343,7 +1493,10 @@ const SmartAssistant = () => {
           </button>
         </div>
         <p className="text-xs text-slate-400 text-center mt-2">
-          Press Enter to send or click the microphone for voice input
+          {voiceSupported
+            ? `Press Enter to send • Click mic to speak (${getVoiceLanguageName()})`
+            : "Press Enter to send"
+          }
         </p>
       </div>
     </div>

@@ -488,19 +488,19 @@ const FormCompletionCard = ({ form, formData, onSubmit, onEditField, onCancel, i
         <span className="font-medium text-emerald-700">Form Ready to Submit</span>
       </div>
 
-      <h3 className="font-bold text-slate-800 mb-3">{form.name}</h3>
+      <h3 className="font-bold text-slate-800 mb-3">{form.name || 'Form'}</h3>
 
       <p className="text-xs text-slate-500 mb-2">Click any field to edit:</p>
 
       <div className="space-y-1 mb-4 max-h-60 overflow-y-auto">
-        {form.fields.map((field, index) => (
+        {(form.fields || []).map((field, index) => (
           <div
-            key={field.name || field.id}
+            key={field.name || field.id || index}
             onClick={() => !isSubmitting && onEditField(field, index)}
             className="group flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
           >
             <div className="text-sm flex-1 min-w-0">
-              <span className="text-slate-500">{field.label}:</span>
+              <span className="text-slate-500">{field.label || field.name || 'Field'}:</span>
               <span className="ml-2 text-slate-800 truncate">{displayValue(field, formData[field.name])}</span>
             </div>
             <button
@@ -510,7 +510,7 @@ const FormCompletionCard = ({ form, formData, onSubmit, onEditField, onCancel, i
               }}
               disabled={isSubmitting}
               className="ml-2 p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
-              title={`Edit ${field.label}`}
+              title={`Edit ${field.label || field.name || 'field'}`}
             >
               <EditIcon />
             </button>

@@ -293,11 +293,11 @@ const WorkflowPreview = () => {
                     </div>
 
                     {/* Conditions (if any) */}
-                    {step.conditions && step.conditions.length > 0 && (
+                    {step.conditions && step.conditions.rules && step.conditions.rules.length > 0 && (
                       <div className="mt-2 pt-2 border-t border-slate-100">
-                        <span className="text-xs font-medium text-amber-600">Conditions:</span>
+                        <span className="text-xs font-medium text-amber-600">Conditions ({step.conditions.logic || 'AND'}):</span>
                         <div className="mt-1 text-xs text-slate-600">
-                          {step.conditions.map((cond, i) => (
+                          {step.conditions.rules.map((cond, i) => (
                             <div key={i} className="bg-amber-50 px-2 py-1 rounded mt-1">
                               {cond.field} {cond.operator} {cond.value}
                             </div>

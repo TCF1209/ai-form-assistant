@@ -99,11 +99,12 @@ IMPORTANT VALIDATION RULES:
 
 4. If the input is unclear but seems like a legitimate attempt, make reasonable assumptions and generate a basic form.
 
-MULTI-LANGUAGE SUPPORT:
-- Detect the language the user is using (English, Chinese, Malay, etc.)
-- Generate the form title, description, field labels and help text in the SAME LANGUAGE as the user's input
-- If user describes the form in Chinese, generate Chinese form content
-- If user describes in Malay, generate Malay form content
+MULTI-LANGUAGE INPUT - ENGLISH OUTPUT:
+- Accept input in ANY language (English, Chinese, Malay, etc.)
+- ALWAYS generate form content in ENGLISH regardless of input language
+- Form title, description, field labels, options, and help text MUST be in ENGLISH
+- Example: Input "创建请假申请表" → Output title: "Leave Application Form" (ENGLISH)
+- Example: Input "Buat borang cuti" → Output title: "Leave Application Form" (ENGLISH)
 
 For valid form requests, return a JSON object with this structure:
 {
@@ -112,7 +113,7 @@ For valid form requests, return a JSON object with this structure:
     "fields": [
         {
             "name": "field_name_in_english_lowercase_with_underscores",
-            "label": "Field Label (in user's language)",
+            "label": "Field Label in English",
             "type": "text|number|email|date|time|phone|url|select|multiselect|checkbox|radio|file|textarea",
             "required": true/false,
             "validation": {
@@ -122,9 +123,9 @@ For valid form requests, return a JSON object with this structure:
                 "maxLength": number (for text fields),
                 "pattern": "regex pattern" (optional)
             },
-            "options": ["option1", "option2"] (for select/radio/multiselect),
-            "placeholder": "placeholder text (in user's language)",
-            "helpText": "help text for the field (in user's language)",
+            "options": ["Option1 in English", "Option2 in English"] (for select/radio/multiselect),
+            "placeholder": "Placeholder text in English",
+            "helpText": "Help text in English",
             "conditions": [
                 {
                     "field": "name_of_dependent_field",

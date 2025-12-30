@@ -3,7 +3,7 @@
  * Connects to real OpenAI-powered backend for AI form search and assistance
  */
 
-import api from './api';
+import api, { AI_TIMEOUT } from './api';
 
 // Auto-fill field mappings - maps form field names to user profile fields
 const AUTO_FILL_MAPPINGS = {
@@ -149,7 +149,9 @@ const assistantService = {
    */
   async searchFormsWithAI(query) {
     try {
-      const response = await api.post('/ai/assistant/search_forms/', { query });
+      const response = await api.post('/ai/assistant/search_forms/', { query }, {
+        timeout: AI_TIMEOUT  // 60 seconds for AI calls
+      });
       console.log('AI Search Response:', response.data); // Debug logging
       return {
         success: true,
@@ -305,8 +307,10 @@ const assistantService = {
   async processMessage(message, context = {}) {
     const messageLower = message.toLowerCase().trim();
 
-    // Check for greetings
-    if (/^(hi|hello|hey|good morning|good afternoon|good evening)/i.test(messageLower)) {
+    // Check for greetings (English, Chinese, Malay)
+    // Chinese: 你好, 嗨, 早上好, 下午好, 晚上好
+    // Malay: selamat pagi, selamat petang, selamat malam, hai
+    if (/^(hi|hello|hey|good morning|good afternoon|good evening|你好|嗨|早上好|下午好|晚上好|selamat pagi|selamat petang|selamat malam|hai)/i.test(messageLower)) {
       return {
         type: 'greeting',
         content: "Hello! I'm here to help you find and fill out forms. What would you like to do today?",
@@ -314,8 +318,10 @@ const assistantService = {
       };
     }
 
-    // Check for thanks
-    if (/^(thank|thanks|thx|ty|appreciate)/i.test(messageLower)) {
+    // Check for thanks (English, Chinese, Malay)
+    // Chinese: 谢谢, 感谢, 多谢
+    // Malay: terima kasih
+    if (/^(thank|thanks|thx|ty|appreciate|谢谢|感谢|多谢|terima kasih)/i.test(messageLower)) {
       return {
         type: 'thanks',
         content: "You're welcome! Is there anything else I can help you with?",
@@ -323,8 +329,10 @@ const assistantService = {
       };
     }
 
-    // Check for goodbye
-    if (/^(bye|goodbye|see you|exit|quit)/i.test(messageLower)) {
+    // Check for goodbye (English, Chinese, Malay)
+    // Chinese: 再见, 拜拜
+    // Malay: selamat tinggal, jumpa lagi
+    if (/^(bye|goodbye|see you|exit|quit|再见|拜拜|selamat tinggal|jumpa lagi)/i.test(messageLower)) {
       return {
         type: 'goodbye',
         content: "Goodbye! Feel free to come back anytime you need help with forms.",
@@ -506,25 +514,26 @@ const assistantService = {
    */
   _getFieldPrompt(field) {
     const fieldType = field.field_type || field.type;
+    const fieldLabel = (field.label || field.name || 'this field').toLowerCase();
     const prompts = {
-      'TEXT': `Please enter your ${field.label.toLowerCase()}.`,
-      'SHORT_TEXT': `Please enter your ${field.label.toLowerCase()}.`,
-      'LONG_TEXT': `Please provide details for ${field.label.toLowerCase()}.`,
-      'EMAIL': `Please enter a valid email address for ${field.label.toLowerCase()}.`,
-      'DATE': `Please select the ${field.label.toLowerCase()}.`,
-      'NUMBER': `Please enter the ${field.label.toLowerCase()} (numbers only).`,
-      'TEXTAREA': `Please provide details for ${field.label.toLowerCase()}.`,
-      'SELECT': `Please choose an option for ${field.label.toLowerCase()}.`,
-      'DROPDOWN': `Please choose an option for ${field.label.toLowerCase()}.`,
-      'RADIO': `Please select one option for ${field.label.toLowerCase()}.`,
-      'FILE': `Please upload your ${field.label.toLowerCase()}.`,
-      'TIME': `Please select the ${field.label.toLowerCase()}.`,
-      'PHONE': `Please enter a phone number for ${field.label.toLowerCase()}.`,
-      'URL': `Please enter a URL for ${field.label.toLowerCase()}.`,
-      'CHECKBOX': `Do you want to check ${field.label.toLowerCase()}? (yes/no)`,
-      'MULTISELECT': `Please select one or more options for ${field.label.toLowerCase()}.`,
+      'TEXT': `Please enter your ${fieldLabel}.`,
+      'SHORT_TEXT': `Please enter your ${fieldLabel}.`,
+      'LONG_TEXT': `Please provide details for ${fieldLabel}.`,
+      'EMAIL': `Please enter a valid email address for ${fieldLabel}.`,
+      'DATE': `Please select the ${fieldLabel}.`,
+      'NUMBER': `Please enter the ${fieldLabel} (numbers only).`,
+      'TEXTAREA': `Please provide details for ${fieldLabel}.`,
+      'SELECT': `Please choose an option for ${fieldLabel}.`,
+      'DROPDOWN': `Please choose an option for ${fieldLabel}.`,
+      'RADIO': `Please select one option for ${fieldLabel}.`,
+      'FILE': `Please upload your ${fieldLabel}.`,
+      'TIME': `Please select the ${fieldLabel}.`,
+      'PHONE': `Please enter a phone number for ${fieldLabel}.`,
+      'URL': `Please enter a URL for ${fieldLabel}.`,
+      'CHECKBOX': `Do you want to check ${fieldLabel}? (yes/no)`,
+      'MULTISELECT': `Please select one or more options for ${fieldLabel}.`,
     };
-    return prompts[fieldType] || `Please fill in the ${field.label.toLowerCase()}.`;
+    return prompts[fieldType] || `Please fill in the ${fieldLabel}.`;
   },
 
   /**
@@ -725,22 +734,23 @@ const assistantService = {
    * Find a field by name or label (for natural language editing)
    */
   findFieldByNameOrLabel(fields, searchTerm) {
+    if (!fields || !searchTerm) return null;
     const searchLower = searchTerm.toLowerCase().trim();
 
     // Try exact match first
     let found = fields.find(f =>
-      f.name.toLowerCase() === searchLower ||
-      f.label.toLowerCase() === searchLower
+      (f.name || '').toLowerCase() === searchLower ||
+      (f.label || '').toLowerCase() === searchLower
     );
 
     if (found) return found;
 
     // Try partial match
     found = fields.find(f =>
-      f.name.toLowerCase().includes(searchLower) ||
-      f.label.toLowerCase().includes(searchLower) ||
-      searchLower.includes(f.name.toLowerCase()) ||
-      searchLower.includes(f.label.toLowerCase())
+      (f.name || '').toLowerCase().includes(searchLower) ||
+      (f.label || '').toLowerCase().includes(searchLower) ||
+      searchLower.includes((f.name || '').toLowerCase()) ||
+      searchLower.includes((f.label || '').toLowerCase())
     );
 
     return found || null;

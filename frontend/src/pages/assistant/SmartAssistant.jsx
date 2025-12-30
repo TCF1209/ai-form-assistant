@@ -283,7 +283,7 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
             onChange={(e) => setInputValue(e.target.value)}
             rows={3}
             className={commonClasses}
-            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+            placeholder={field.placeholder || `Enter ${(field.label || 'value').toLowerCase()}...`}
           />
         );
       case 'DATE':
@@ -320,7 +320,7 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             className={commonClasses}
-            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+            placeholder={field.placeholder || `Enter ${(field.label || 'value').toLowerCase()}...`}
           />
         );
       case 'EMAIL':
@@ -330,7 +330,7 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             className={commonClasses}
-            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+            placeholder={field.placeholder || `Enter ${(field.label || 'value').toLowerCase()}...`}
           />
         );
       case 'PHONE':
@@ -340,7 +340,7 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             className={commonClasses}
-            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+            placeholder={field.placeholder || `Enter ${(field.label || 'value').toLowerCase()}...`}
           />
         );
       case 'URL':
@@ -350,7 +350,7 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             className={commonClasses}
-            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+            placeholder={field.placeholder || `Enter ${(field.label || 'value').toLowerCase()}...`}
           />
         );
       case 'CHECKBOX':
@@ -404,7 +404,7 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             className={commonClasses}
-            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+            placeholder={field.placeholder || `Enter ${(field.label || 'value').toLowerCase()}...`}
           />
         );
     }
@@ -1242,7 +1242,7 @@ const SmartAssistant = () => {
             </div>
             <FormFillingCard
               form={currentForm}
-              currentField={isEditingSingleField && editingField ? editingField : (fieldsNeedingInput.length > 0 ? fieldsNeedingInput : currentForm.fields)[currentFieldIndex]}
+              currentField={isEditingSingleField && editingField ? editingField : ((fieldsNeedingInput.length > 0 ? fieldsNeedingInput : currentForm.fields) || [])[currentFieldIndex] || currentForm.fields?.[0]}
               onSubmitField={handleFieldSubmit}
               onCancel={isEditingSingleField ? () => {
                 // When editing single field, cancel returns to summary

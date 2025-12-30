@@ -403,15 +403,18 @@ Your job is to understand what the user is asking and return a structured intent
 
 IMPORTANT: You must return ONLY a valid JSON object, no other text.
 
-MULTI-LANGUAGE SUPPORT:
-- IMPORTANT: Detect the language of the CURRENT query (not conversation history)
-- Write the "interpretation" field in the SAME LANGUAGE as the CURRENT user's query
-- If CURRENT query is in English, respond interpretation in ENGLISH (even if previous messages were in other languages)
-- If CURRENT query is in Chinese, respond interpretation in Chinese
-- If CURRENT query is in Malay, respond interpretation in Malay
-- Example: "上个月有多少请假申请?" → interpretation: "显示上个月的请假申请数量"
-- Example: "Berapa banyak borang yang dihantar?" → interpretation: "Menunjukkan jumlah borang yang dihantar"
-- Example: "Show forms from HR" → interpretation: "Showing forms from HR department" (ENGLISH, not Malay)
+CRITICAL - INTERPRETATION LANGUAGE (MUST FOLLOW):
+1. Look ONLY at the CURRENT "User query:" to determine language for interpretation field
+2. COMPLETELY IGNORE languages in conversation history - they may be different
+3. If CURRENT query is in ENGLISH → interpretation MUST be in ENGLISH
+4. If CURRENT query is in CHINESE → interpretation MUST be in CHINESE
+5. If CURRENT query is in MALAY → interpretation MUST be in MALAY
+
+Examples:
+- Query: "Show forms from HR" → interpretation: "Showing forms from HR department" (ENGLISH)
+- Query: "How about IT?" (after Malay conversation) → interpretation: "Showing data for IT department" (ENGLISH, NOT Malay)
+- Query: "上个月有多少请假申请?" → interpretation: "显示上个月的请假申请数量" (CHINESE)
+- Query: "Berapa banyak borang?" → interpretation: "Menunjukkan jumlah borang" (MALAY)
 
 The system has TWO different concepts:
 1. FORMS - The form templates (like "Leave Request Form", "Expense Claim Form")
@@ -615,14 +618,17 @@ Parse this query and return the structured intent as JSON."""
         system_prompt = """You are an analytics assistant that explains data insights in natural language.
 Given the user's query and the actual data from the database, provide a clear, concise summary.
 
-IMPORTANT - LANGUAGE:
-- Detect the language of the CURRENT user's query (the one provided below)
-- Respond in the SAME LANGUAGE as the CURRENT query
-- IGNORE any other languages that might appear in data or context
-- If CURRENT query is in English, respond in ENGLISH only
-- If CURRENT query is in Chinese, respond in Chinese only
-- If CURRENT query is in Malay, respond in Malay only
-- Example: Query "Show forms from HR" → Response in ENGLISH (not Malay or Chinese)
+CRITICAL - RESPONSE LANGUAGE (MUST FOLLOW):
+1. Look ONLY at the "User asked:" line below to determine response language
+2. IGNORE any other languages in "Query interpretation" or data - they may be in wrong language
+3. If user asked in ENGLISH (like "Show forms", "How many") → Respond in ENGLISH ONLY
+4. If user asked in CHINESE (like "显示表单", "有多少") → Respond in CHINESE ONLY
+5. If user asked in MALAY (like "Tunjukkan borang", "Berapa banyak") → Respond in MALAY ONLY
+
+Examples:
+- "Show forms from Administration" → Response: "The Administration department has 4 forms..." (ENGLISH)
+- "显示管理部门的表单" → Response: "管理部门有4个表单..." (CHINESE)
+- "Tunjukkan borang dari Pentadbiran" → Response: "Jabatan Pentadbiran mempunyai..." (MALAY)
 
 Guidelines:
 - Be conversational but professional

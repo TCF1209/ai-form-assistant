@@ -565,7 +565,7 @@ const assistantService = {
 
     if (currentField.required && !processedValue) {
       isValid = false;
-      errorMessage = `${currentField.label} is required. Please provide a value.`;
+      errorMessage = `${currentField.label || currentField.name || 'This field'} is required. Please provide a value.`;
     } else if (processedValue) {
       const fieldType = currentField.field_type || currentField.type;
 
@@ -662,7 +662,7 @@ const assistantService = {
     if (field.required && !processedValue) {
       return {
         valid: false,
-        message: `${field.label} is required. Please provide a value.`,
+        message: `${field.label || field.name || 'This field'} is required. Please provide a value.`,
       };
     }
 

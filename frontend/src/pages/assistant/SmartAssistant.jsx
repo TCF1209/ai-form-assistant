@@ -212,6 +212,15 @@ const FormListCard = ({ forms, onSelectForm, loading }) => {
 const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
   const [inputValue, setInputValue] = useState('');
 
+  // Guard against undefined currentField
+  if (!currentField) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg border border-slate-200 p-4 max-w-md mb-4">
+        <p className="text-slate-500">No field to display.</p>
+      </div>
+    );
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault();
     onSubmitField(inputValue);
@@ -429,10 +438,10 @@ const FormFillingCard = ({ form, currentField, onSubmitField, onCancel }) => {
 
       <div className="mb-3">
         <div className="text-xs text-sky-600 font-medium mb-1">
-          Filling: {form.name}
+          Filling: {form.name || 'Form'}
         </div>
         <label className="block text-sm font-medium text-slate-700">
-          {currentField.label}
+          {currentField.label || currentField.name || 'Field'}
           {currentField.required && <span className="text-red-500 ml-1">*</span>}
         </label>
       </div>

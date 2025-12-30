@@ -202,11 +202,16 @@ IMPORTANT for extracted_fields:
 - For DATE fields, convert to YYYY-MM-DD format if possible
 - Leave out fields that have no clear value in the query
 - Be generous in extraction - if user mentions something related to a field, extract it
+- IMPORTANT: Always translate extracted values to English, even if the user's query is in another language (Chinese, Malay, etc.)
+  - Example: "跟我的家人去度假" → "Family vacation"
+  - Example: "生病了" → "Sick"
+  - Example: "bercuti bersama keluarga" → "Family vacation"
 
 Examples:
 - "I need annual leave for vacation" → {"leave_type": "Annual Leave", "reason_for_leave": "vacation"}
 - "expense claim for $500 taxi" → {"amount": "500", "expense_type": "Transportation", "description": "taxi"}
 - "sick leave tomorrow" → {"leave_type": "Sick Leave"}
+- "我打算请年假，跟家人去度假" → {"leave_type": "Annual Leave", "reason_for_leave": "Family vacation"}
 
 If the query is a greeting or not related to forms, return:
 {

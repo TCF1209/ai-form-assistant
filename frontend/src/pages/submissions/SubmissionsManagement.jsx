@@ -338,20 +338,16 @@ const SubmissionsManagement = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await api.get('/submissions/');
-      const data = response.data.results || response.data;
-
-      const instancesResponse = await api.get('/workflow-instances/');
-      const instances = instancesResponse.data.results || instancesResponse.data;
-
+      // Use dedicated stats endpoint that counts all submissions without pagination
+      const response = await api.get('/submissions/stats/');
       setStats({
-        total: data.length,
-        submitted: data.filter(s => s.status === 'SUBMITTED').length,
-        draft: data.filter(s => s.status === 'DRAFT').length,
-        withWorkflow: instances.length,
-        inProgress: instances.filter(i => i.status === 'IN_PROGRESS').length,
-        completed: instances.filter(i => i.status === 'COMPLETED').length,
-        needsAdminAction: instances.filter(i => i.status === 'NEEDS_ADMIN_ACTION').length
+        total: response.data.total || 0,
+        submitted: response.data.submitted || 0,
+        draft: response.data.draft || 0,
+        withWorkflow: response.data.withWorkflow || 0,
+        inProgress: response.data.inProgress || 0,
+        completed: response.data.completed || 0,
+        needsAdminAction: response.data.needsAdminAction || 0
       });
     } catch (error) {
       console.error('Error fetching stats:', error);

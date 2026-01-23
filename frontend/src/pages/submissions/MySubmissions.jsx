@@ -371,21 +371,13 @@ const MySubmissions = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await api.get('/submissions/');
-      const data = response.data.results || response.data;
-
-      const instancesResponse = await api.get('/workflow-instances/');
-      const instances = instancesResponse.data.results || instancesResponse.data;
-
-      const userInstances = instances.filter(i =>
-        data.some(s => s.id === i.submission)
-      );
-
+      // Use dedicated stats endpoint that counts all submissions without pagination
+      const response = await api.get('/submissions/stats/');
       setStats({
-        total: data.length,
-        inProgress: userInstances.filter(i => i.status === 'IN_PROGRESS').length,
-        completed: userInstances.filter(i => i.status === 'COMPLETED').length,
-        rejected: userInstances.filter(i => i.status === 'FAILED').length
+        total: response.data.total || 0,
+        inProgress: response.data.inProgress || 0,
+        completed: response.data.completed || 0,
+        rejected: response.data.failed || 0
       });
     } catch (error) {
       console.error('Error fetching stats:', error);

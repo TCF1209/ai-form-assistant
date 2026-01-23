@@ -1114,66 +1114,45 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="submissions_report_{timezone.now().strftime("%Y%m%d")}.pdf"'
         return response
 
-    # NOTE: stats functionality can be added to core/urls.py if needed
-    # The @action decorator was removed to prevent router conflicts
-    def _stats_disabled(self, request):
-        """Get submission statistics - DISABLED."""
-        if request.user.role not in ['ADMIN', 'MANAGER']:
-            return Response(
-                {"error": "Only Form Managers and Admins can view statistics."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Get submission statistics for dashboard - counts all submissions without pagination."""
+        from workflows.models import WorkflowInstance
 
-        days = int(request.query_params.get('days', 30))
-        end_date = timezone.now()
-        start_date = end_date - timedelta(days=days)
+        # Get base queryset based on user role (same logic as get_queryset)
+        user = request.user
+        submission_queryset = FormSubmission.objects.all()
 
-        # Base queryset
-        queryset = FormSubmission.objects.filter(
-            submitted_at__gte=start_date,
-            submitted_at__lte=end_date
-        )
+        if user.role == 'USER':
+            submission_queryset = submission_queryset.filter(submitted_by=user)
+        elif user.role == 'MANAGER':
+            if user.department:
+                submission_queryset = submission_queryset.filter(form__department=user.department)
+            else:
+                submission_queryset = submission_queryset.none()
+        # ADMIN can see all submissions
 
-        # Filter by department for managers
-        if request.user.role == 'MANAGER':
-            queryset = queryset.filter(form__department=request.user.department)
+        # Workflow instances queryset (based on accessible submissions)
+        submission_ids = submission_queryset.values_list('id', flat=True)
+        workflow_queryset = WorkflowInstance.objects.filter(submission_id__in=submission_ids)
 
-        # Total submissions
-        total_submissions = queryset.count()
-
-        # Status breakdown
-        status_breakdown = queryset.values('status').annotate(count=Count('id'))
-        status_dict = {item['status']: item['count'] for item in status_breakdown}
-
-        # Submissions by form
-        by_form = queryset.values('form__name').annotate(count=Count('id')).order_by('-count')[:10]
-
-        # Submissions over time (daily)
-        from django.db.models.functions import TruncDate
-        daily_submissions = queryset.annotate(
-            date=TruncDate('submitted_at')
-        ).values('date').annotate(count=Count('id')).order_by('date')
-
-        # Form count
-        form_queryset = Form.objects.all()
-        if request.user.role == 'MANAGER':
-            form_queryset = form_queryset.filter(department=request.user.department)
-        total_forms = form_queryset.count()
-        active_forms = form_queryset.filter(status='ACTIVE').count()
+        # Calculate stats
+        total = submission_queryset.count()
+        submitted = submission_queryset.filter(status='SUBMITTED').count()
+        draft = submission_queryset.filter(status='DRAFT').count()
+        with_workflow = workflow_queryset.count()
+        in_progress = workflow_queryset.filter(status='IN_PROGRESS').count()
+        completed = workflow_queryset.filter(status='COMPLETED').count()
+        failed = workflow_queryset.filter(status='FAILED').count()
+        needs_admin_action = workflow_queryset.filter(status='NEEDS_ADMIN_ACTION').count()
 
         return Response({
-            'total_submissions': total_submissions,
-            'total_forms': total_forms,
-            'active_forms': active_forms,
-            'status_breakdown': status_dict,
-            'submissions_by_form': list(by_form),
-            'daily_submissions': [
-                {'date': item['date'].strftime('%Y-%m-%d') if item['date'] else None, 'count': item['count']}
-                for item in daily_submissions
-            ],
-            'date_range': {
-                'start': start_date.strftime('%Y-%m-%d'),
-                'end': end_date.strftime('%Y-%m-%d'),
-                'days': days
-            }
+            'total': total,
+            'submitted': submitted,
+            'draft': draft,
+            'withWorkflow': with_workflow,
+            'inProgress': in_progress,
+            'completed': completed,
+            'failed': failed,
+            'needsAdminAction': needs_admin_action
         })

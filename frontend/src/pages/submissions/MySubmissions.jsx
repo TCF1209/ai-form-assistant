@@ -299,6 +299,13 @@ const MySubmissions = () => {
     completed: 0,
     rejected: 0
   });
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalCount: 0,
+    pageSize: 20,
+    totalPages: 1
+  });
   // Withdraw modal state
   const [withdrawModal, setWithdrawModal] = useState(false);
   const [submissionToWithdraw, setSubmissionToWithdraw] = useState(null);
@@ -317,15 +324,25 @@ const MySubmissions = () => {
   }, [message]);
 
   useEffect(() => {
-    fetchSubmissions();
+    fetchSubmissions(1);
     fetchStats();
   }, []);
 
-  const fetchSubmissions = async () => {
+  const fetchSubmissions = async (page = 1) => {
     setLoading(true);
     try {
-      const response = await api.get('/submissions/');
+      const response = await api.get('/submissions/', { params: { page } });
       const data = response.data.results || response.data;
+      const totalCount = response.data.count || data.length;
+      const pageSize = 20; // Matches backend PAGE_SIZE
+
+      // Update pagination state
+      setPagination({
+        currentPage: page,
+        totalCount: totalCount,
+        pageSize: pageSize,
+        totalPages: Math.ceil(totalCount / pageSize)
+      });
 
       const submissionsWithWorkflow = await Promise.all(
         data.map(async (submission) => {
@@ -435,7 +452,7 @@ const MySubmissions = () => {
       setWithdrawReason('');
 
       // Refresh submissions list
-      fetchSubmissions();
+      fetchSubmissions(pagination.currentPage);
       fetchStats();
     } catch (error) {
       console.error('Error withdrawing submission:', error);
@@ -474,7 +491,7 @@ const MySubmissions = () => {
           <p className="text-slate-500 mt-1">Track your form submissions and their approval status</p>
         </div>
         <button
-          onClick={fetchSubmissions}
+          onClick={() => fetchSubmissions(pagination.currentPage)}
           className="flex items-center gap-2 px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600 transition-colors"
         >
           <RefreshIcon />
@@ -652,7 +669,44 @@ const MySubmissions = () => {
         {/* Pagination */}
         {submissions.length > 0 && (
           <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between">
-            <p className="text-sm text-slate-500">Total {submissions.length} submissions</p>
+            <p className="text-sm text-slate-500">
+              Showing {((pagination.currentPage - 1) * pagination.pageSize) + 1} to {Math.min(pagination.currentPage * pagination.pageSize, pagination.totalCount)} of {pagination.totalCount} submissions
+            </p>
+            {pagination.totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => fetchSubmissions(1)}
+                  disabled={pagination.currentPage === 1 || loading}
+                  className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => fetchSubmissions(pagination.currentPage - 1)}
+                  disabled={pagination.currentPage === 1 || loading}
+                  className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1 text-sm text-slate-600">
+                  Page {pagination.currentPage} of {pagination.totalPages}
+                </span>
+                <button
+                  onClick={() => fetchSubmissions(pagination.currentPage + 1)}
+                  disabled={pagination.currentPage === pagination.totalPages || loading}
+                  className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => fetchSubmissions(pagination.totalPages)}
+                  disabled={pagination.currentPage === pagination.totalPages || loading}
+                  className="px-3 py-1 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Last
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

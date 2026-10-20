@@ -180,7 +180,7 @@ const WorkflowPreview = () => {
                     {/* Step Header */}
                     <div className="bg-sky-50 px-4 py-3 border-b border-sky-100">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-sky-600">Step {step.order || index + 1}</span>
+                        <span className="text-xs font-medium text-sky-600">Step {index + 1}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full border ${getApprovalModeColor(step.approval_mode)}`}>
                           {getApprovalModeLabel(step.approval_mode)}
                         </span>
@@ -257,7 +257,7 @@ const WorkflowPreview = () => {
                   {/* Step Header */}
                   <div className="bg-sky-50 px-4 py-3 border-b border-sky-100">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-sky-600">Step {step.order || index + 1}</span>
+                      <span className="text-xs font-medium text-sky-600">Step {index + 1}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${getApprovalModeColor(step.approval_mode)}`}>
                         {getApprovalModeLabel(step.approval_mode)}
                       </span>

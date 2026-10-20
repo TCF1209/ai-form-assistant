@@ -2,6 +2,7 @@
 URL configuration for API v1.
 """
 
+from django.http import JsonResponse
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenVerifyView
 from rest_framework.routers import DefaultRouter
@@ -63,7 +64,13 @@ auth_urlpatterns = [
     path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
 ]
 
+def health(request):
+    """Public liveness check, also used by the login page to wake a sleeping server."""
+    return JsonResponse({'status': 'ok'})
+
+
 urlpatterns = [
+    path('health/', health, name='health'),
     # Authentication endpoints
     path('auth/', include(auth_urlpatterns)),
 

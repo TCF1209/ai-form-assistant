@@ -3,7 +3,8 @@ Django settings for the AI Office Assistant backend.
 
 Every value can be overridden through environment variables or a `backend/.env`
 file (see `.env.example`). With no configuration at all the project runs
-locally on SQLite with an in-memory cache.
+locally on SQLite with an in-memory cache. Production settings (DEBUG=False) are
+described in docs/deployment.md.
 """
 
 import os
@@ -11,6 +12,8 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
+import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -27,9 +30,14 @@ def env_list(name, default):
 
 
 # Core
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-local-development-key')
 DEBUG = env_bool('DEBUG', True)
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-local-development-key')
+if not DEBUG and SECRET_KEY.startswith('django-insecure'):
+    raise ImproperlyConfigured('Set SECRET_KEY when DEBUG is False.')
+
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver')
+if os.getenv('RENDER_EXTERNAL_HOSTNAME'):  # set by Render for web services
+    ALLOWED_HOSTS.append(os.environ['RENDER_EXTERNAL_HOSTNAME'])
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -55,6 +63,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -82,9 +91,13 @@ TEMPLATES = [
     },
 ]
 
-# Database: SQLite by default, PostgreSQL when DB_ENGINE says so
+# Database: DATABASE_URL (e.g. from Neon) if set; otherwise SQLite, or PostgreSQL via DB_* variables
 DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.sqlite3')
-if DB_ENGINE == 'django.db.backends.sqlite3':
+if os.getenv('DATABASE_URL'):
+    DATABASES = {
+        'default': dj_database_url.parse(os.environ['DATABASE_URL'], conn_max_age=60, conn_health_checks=True)
+    }
+elif DB_ENGINE == 'django.db.backends.sqlite3':
     DATABASES = {
         'default': {
             'ENGINE': DB_ENGINE,
@@ -119,18 +132,29 @@ TIME_ZONE = os.getenv('TIME_ZONE', 'Asia/Kuala_Lumpur')
 USE_I18N = True
 USE_TZ = True
 
-# Static and uploaded files
+# Static and uploaded files. In production WhiteNoise serves the collected static files.
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+# Serve uploaded files from Django itself (fine for a demo; use object storage for real use)
+SERVE_MEDIA = env_bool('SERVE_MEDIA', DEBUG)
 
 MAX_UPLOAD_SIZE = int(os.getenv('MAX_UPLOAD_SIZE', 10 * 1024 * 1024))  # 10 MB
 ALLOWED_FILE_EXTENSIONS = env_list('ALLOWED_FILE_EXTENSIONS', 'pdf,doc,docx,xls,xlsx,png,jpg,jpeg')
 
+TESTING = sys.argv[1:2] == ['test']
+
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage' if DEBUG or TESTING
+        else 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+
 # Rate limits are not what the test suite checks, and the in-memory cache that counts
 # requests is shared by every test in the run, so tests get limits they never reach.
-TESTING = sys.argv[1:2] == ['test']
 THROTTLE_DEFAULTS = {'anon': '500/hour', 'user': '5000/hour', 'login': '10/minute', 'ai': '200/hour'}
 if TESTING:
     THROTTLE_DEFAULTS = {scope: '100000/minute' for scope in THROTTLE_DEFAULTS}
@@ -182,9 +206,10 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
-# CORS: the Vite dev server
+# CORS: the frontend's origin (the Vite dev server locally)
 CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000')
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '')  # for the Django admin behind HTTPS
 
 # Frontend URL, used in password reset emails
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
@@ -214,10 +239,12 @@ CACHES = {
     }
 }
 
-# Security headers. The cookie and HTTPS flags are off by default for local development.
+# Security headers. Cookies are HTTPS-only in production; the host (e.g. Render) terminates
+# TLS and redirects HTTP itself, and tells Django about it through X-Forwarded-Proto.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', False)
-SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE', False)
-CSRF_COOKIE_SECURE = env_bool('CSRF_COOKIE_SECURE', False)
+SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE', not DEBUG)
+CSRF_COOKIE_SECURE = env_bool('CSRF_COOKIE_SECURE', not DEBUG)
 SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', 0))
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import api from '../../services/api';
 
 // Eye icons for password visibility toggle
 const EyeIcon = () => (
@@ -28,6 +29,22 @@ const Login = () => {
 
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
+  const [serverWaking, setServerWaking] = useState(false);
+
+  // The hosted demo's backend sleeps when idle and needs up to a minute to start.
+  // Wake it as soon as the login page opens, and say so if it is slow to answer.
+  useEffect(() => {
+    let done = false;
+    const notice = setTimeout(() => !done && setServerWaking(true), 2500);
+    api.get('/health/', { timeout: 90000 })
+      .catch(() => {})
+      .finally(() => {
+        done = true;
+        clearTimeout(notice);
+        setServerWaking(false);
+      });
+    return () => clearTimeout(notice);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -111,6 +128,13 @@ const Login = () => {
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {serverWaking && (
+            <div className="rounded-md bg-sky-50 border border-sky-200 p-3">
+              <p className="text-sm text-sky-700">
+                Starting the demo server. It sleeps when nobody is using it, so the first sign-in can take up to a minute.
+              </p>
+            </div>
+          )}
           {errors.general && (
             <div className="rounded-md bg-red-50 border border-red-200 p-4">
               <p className="text-sm text-red-600">{errors.general}</p>

@@ -153,6 +153,9 @@ npm ci
 npm run dev
 ```
 
+To host it, see [docs/deployment.md](docs/deployment.md): the API runs on Render's free plan
+(`render.yaml`) and the React app on Vercel.
+
 ### Demo accounts
 
 | Role | Username | Password | Try |
@@ -169,7 +172,7 @@ Other managers: `hr_manager`, `fin_manager`, `mkt_manager`, `ops_manager`. Other
 
 ```bash
 cd backend
-python manage.py test        # 111 tests
+python manage.py test        # 112 tests
 ruff check .
 
 cd ../frontend

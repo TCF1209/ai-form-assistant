@@ -4,10 +4,11 @@ const authService = {
   // Login user
   login: async (credentials) => {
     try {
+      // Generous timeout: on the hosted demo the first request may have to wake the server
       const response = await api.post('/auth/login/', {
         email_or_username: credentials.email || credentials.username,
         password: credentials.password,
-      });
+      }, { timeout: 90000 });
 
       // Backend sends tokens in a nested 'tokens' object
       const { tokens, user } = response.data;

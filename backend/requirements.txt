@@ -7,6 +7,7 @@ django-filter==25.2
 
 # Configuration
 python-dotenv==1.2.4
+dj-database-url==3.1.2
 
 # AI
 openai==2.54.0
@@ -14,5 +15,9 @@ openai==2.54.0
 # Image fields
 Pillow==12.3.0
 
-# PostgreSQL driver (only needed when DB_PASSWORD is set; SQLite is used otherwise)
+# PostgreSQL driver (used when DATABASE_URL or DB_ENGINE points at PostgreSQL)
 psycopg2-binary==2.9.13
+
+# Production server and static files
+gunicorn==24.1.1
+whitenoise==6.12.0

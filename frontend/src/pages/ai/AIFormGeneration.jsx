@@ -163,7 +163,6 @@ const AIFormGeneration = () => {
   const generateFormWithAI = async () => {
     // Idempotency protection - prevent double submit
     if (loading) {
-      console.log('Request already in progress, ignoring duplicate call');
       return;
     }
     setLoading(true);
@@ -368,7 +367,6 @@ const AIFormGeneration = () => {
   const handleSaveForm = async () => {
     // Idempotency protection - prevent double submit
     if (loading) {
-      console.log('Save already in progress, ignoring duplicate call');
       return;
     }
     setLoading(true);
@@ -397,7 +395,6 @@ const AIFormGeneration = () => {
   const handleEditInBuilder = async () => {
     // Idempotency protection - prevent double submit
     if (loading) {
-      console.log('Edit already in progress, ignoring duplicate call');
       return;
     }
     setLoading(true);

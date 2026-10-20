@@ -117,19 +117,6 @@ const authService = {
       throw error.response?.data || error.message;
     }
   },
-
-  // Change password
-  changePassword: async (oldPassword, newPassword) => {
-    try {
-      const response = await api.post('/auth/change-password/', {
-        old_password: oldPassword,
-        new_password: newPassword,
-      });
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || error.message;
-    }
-  },
 };
 
 export default authService;

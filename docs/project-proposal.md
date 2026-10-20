@@ -1,4 +1,6 @@
-# Project Description: AI-Powered Office Assistant for Intelligent Form Management
+# Project Proposal: AI-Powered Office Assistant for Intelligent Form Management
+> This is the original FYP proposal, written before development started. See the main README for what was actually built.
+
 
 ## 🎯 Project Overview
 
@@ -341,17 +343,6 @@ This FYP demonstrates:
 - If AI features delayed: Ensure manual alternatives work perfectly
 - If performance issues: Implement pagination and lazy loading
 - If scope too large: Prioritize completeness over advanced features
-
-## 📝 Notes for Claude Code
-
-When assisting with this project:
-1. **Prioritize working features** over perfect code
-2. **Keep AI prompts simple** and well-structured
-3. **Use established patterns** from Django/React best practices
-4. **Comment complex logic** especially AI integrations
-5. **Test incrementally** to catch issues early
-6. **Maintain clear separation** between frontend/backend
-7. **Version control diligently** with meaningful commits
 
 ## 🎯 Final Goal
 

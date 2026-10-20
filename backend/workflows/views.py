@@ -8,9 +8,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Q, Count
+from django.db.models import Q
 from django.utils import timezone
-from django.shortcuts import get_object_or_404
 from django.db import transaction
 
 from .models import (
@@ -24,7 +23,6 @@ from .serializers import (
 )
 from .engine import WorkflowEngine
 from forms.models import FormSubmission
-from users.permissions import IsAdmin, IsFormManager, IsOwnerOrAdmin
 from users.audit import log_create, log_update, log_delete, log_approve, log_reject
 
 
@@ -216,21 +214,6 @@ class WorkflowViewSet(viewsets.ModelViewSet):
             'status': 'success',
             'message': f'Successfully cancelled {count} active instance(s)'
         })
-
-    @action(detail=True, methods=['post'])
-    def clone(self, request, pk=None):
-        """Clone a workflow."""
-        workflow = self.get_object()
-
-        # Since we now have one workflow per form, we cannot clone to the same form
-        # User must select a different form or delete the existing workflow first
-        return Response(
-            {
-                'error': 'Cannot clone workflow. Each form can only have one workflow. '
-                         'Please create a new workflow for a different form instead.'
-            },
-            status=status.HTTP_400_BAD_REQUEST
-        )
 
 
 class WorkflowStepViewSet(viewsets.ModelViewSet):

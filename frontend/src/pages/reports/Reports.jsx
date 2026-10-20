@@ -330,11 +330,6 @@ const Reports = () => {
         return submittedDate >= startDate;
       });
 
-      // Debug: log first submission to see actual status format
-      if (filteredSubmissions.length > 0) {
-        console.log('Sample submission:', filteredSubmissions[0]);
-        console.log('All statuses:', filteredSubmissions.map(s => s.status));
-      }
 
       // Calculate summary - handle both uppercase and potential variations
       const getStatusCount = (statusValues) => {

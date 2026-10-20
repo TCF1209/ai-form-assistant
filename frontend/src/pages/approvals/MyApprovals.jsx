@@ -323,8 +323,8 @@ const MyApprovals = () => {
         try {
           const instanceResponse = await api.get(`/workflow-instances/${approval.workflow_instance}/`);
           instance = instanceResponse.data;
-        } catch (err) {
-          console.log('Could not fetch workflow instance, continuing...');
+        } catch {
+          // The instance is optional here; show the approval without it
         }
       }
 

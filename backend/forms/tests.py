@@ -3,7 +3,6 @@ Unit tests for Forms app.
 Tests form CRUD, submissions, and approval workflows.
 """
 
-from django.test import TestCase
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 
@@ -301,7 +300,7 @@ class FormSubmissionTests(APITestCase):
     def test_list_own_submissions(self):
         """Test user can list their own submissions."""
         # Create a submission
-        submission = FormSubmission.objects.create(
+        FormSubmission.objects.create(
             form=self.form,
             submitted_by=self.user,
             data={'name': 'Test User'},
@@ -317,7 +316,7 @@ class FormSubmissionTests(APITestCase):
     def test_manager_can_view_department_submissions(self):
         """Test manager can view submissions in their department."""
         # Create a submission
-        submission = FormSubmission.objects.create(
+        FormSubmission.objects.create(
             form=self.form,
             submitted_by=self.user,
             data={'name': 'Test User'},
@@ -431,21 +430,21 @@ class FormStatusTests(APITestCase):
     def test_user_sees_only_active_forms(self):
         """Test regular user only sees ACTIVE forms."""
         # Create forms with different statuses
-        active_form = Form.objects.create(
+        Form.objects.create(
             name='Active Form',
             code='ACTIVE001',
             department=self.department,
             created_by=self.manager,
             status='ACTIVE'
         )
-        draft_form = Form.objects.create(
+        Form.objects.create(
             name='Draft Form',
             code='DRAFT001',
             department=self.department,
             created_by=self.manager,
             status='DRAFT'
         )
-        archived_form = Form.objects.create(
+        Form.objects.create(
             name='Archived Form',
             code='ARCH001',
             department=self.department,

@@ -11,9 +11,7 @@ python-dotenv==1.2.4
 # AI
 openai==2.54.0
 
-# Report export (Excel / PDF) and image fields
-openpyxl==3.1.5
-reportlab==4.5.1
+# Image fields
 Pillow==12.3.0
 
 # PostgreSQL driver (only needed when DB_PASSWORD is set; SQLite is used otherwise)

@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -25,6 +25,7 @@ from users.serializers import (
 )
 from users.permissions import IsSelfOrAdmin
 from users.models import AuditLog
+from users.audit import get_client_ip
 from core.throttling import LoginRateThrottle
 
 User = get_user_model()
@@ -50,7 +51,7 @@ class RegisterView(APIView):
                 model_name='User',
                 object_id=str(user.id),
                 object_repr=str(user),
-                ip_address=self.get_client_ip(request),
+                ip_address=get_client_ip(request),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
 
@@ -68,15 +69,6 @@ class RegisterView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @staticmethod
-    def get_client_ip(request):
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
 
 
 class LoginView(APIView):
@@ -104,7 +96,7 @@ class LoginView(APIView):
                 model_name='User',
                 object_id=str(user.id),
                 object_repr=str(user),
-                ip_address=self.get_client_ip(request),
+                ip_address=get_client_ip(request),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
 
@@ -122,15 +114,6 @@ class LoginView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @staticmethod
-    def get_client_ip(request):
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
 
 
 class LogoutView(APIView):
@@ -161,7 +144,7 @@ class LogoutView(APIView):
                 model_name='User',
                 object_id=str(request.user.id),
                 object_repr=str(request.user),
-                ip_address=self.get_client_ip(request),
+                ip_address=get_client_ip(request),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
 
@@ -181,15 +164,6 @@ class LogoutView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-    @staticmethod
-    def get_client_ip(request):
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
 
 
 class UserProfileView(APIView):
@@ -225,7 +199,7 @@ class UserProfileView(APIView):
                 object_id=str(user.id),
                 object_repr=str(user),
                 changes=request.data,
-                ip_address=self.get_client_ip(request),
+                ip_address=get_client_ip(request),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
 
@@ -255,7 +229,7 @@ class UserProfileView(APIView):
                 object_id=str(user.id),
                 object_repr=str(user),
                 changes=request.data,
-                ip_address=self.get_client_ip(request),
+                ip_address=get_client_ip(request),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
 
@@ -266,15 +240,6 @@ class UserProfileView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @staticmethod
-    def get_client_ip(request):
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
 
 
 class PasswordResetRequestView(APIView):
@@ -316,7 +281,7 @@ class PasswordResetRequestView(APIView):
                     object_id=str(user.id),
                     object_repr=str(user),
                     changes={'action': 'password_reset_requested'},
-                    ip_address=self.get_client_ip(request),
+                    ip_address=get_client_ip(request),
                     user_agent=request.META.get('HTTP_USER_AGENT', '')
                 )
 
@@ -330,15 +295,6 @@ class PasswordResetRequestView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @staticmethod
-    def get_client_ip(request):
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
 
 
 class PasswordResetConfirmView(APIView):
@@ -374,7 +330,7 @@ class PasswordResetConfirmView(APIView):
                     object_id=str(user.id),
                     object_repr=str(user),
                     changes={'action': 'password_reset_confirmed'},
-                    ip_address=self.get_client_ip(request),
+                    ip_address=get_client_ip(request),
                     user_agent=request.META.get('HTTP_USER_AGENT', '')
                 )
 
@@ -390,15 +346,6 @@ class PasswordResetConfirmView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @staticmethod
-    def get_client_ip(request):
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
 
 
 class TokenRefreshView(TokenRefreshView):

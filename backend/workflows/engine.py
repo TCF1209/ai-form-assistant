@@ -10,7 +10,7 @@ import operator
 from datetime import timedelta
 
 from .models import (
-    Workflow, WorkflowStep, WorkflowStepApprover, WorkflowInstance,
+    WorkflowInstance,
     WorkflowApproval, WorkflowNotification
 )
 
@@ -42,7 +42,6 @@ class WorkflowEngine:
         Get list of approvers for a step, excluding the submitter.
         Returns list of User objects.
         """
-        from users.models import User
 
         # Get assigned users from the M2M relationship (through WorkflowStepApprover)
         step_approvers = step.step_approvers.select_related('user').order_by('order')
@@ -391,7 +390,7 @@ class WorkflowEngine:
         5. If no one found, return None (will fall back to admin)
         """
         from users.models import User
-        from django.db.models import Count, Q
+        from django.db.models import Count
 
         # Get the department from the original assigned user
         original_user = step.assigned_user
@@ -987,5 +986,5 @@ class WorkflowEngine:
                     'ESCALATION',
                     manager,
                     f"Escalated: {approval.workflow_step.name}",
-                    f"This approval has been escalated to you due to timeout."
+                    "This approval has been escalated to you due to timeout."
                 )

@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from users.models import Department
 from forms.models import Form, FormField, FormSubmission
-from workflows.models import Workflow, WorkflowStep, WorkflowStepApprover, WorkflowInstance, WorkflowApproval
+from workflows.models import Workflow, WorkflowStep
 
 User = get_user_model()
 
@@ -286,7 +286,7 @@ def create_workflows(forms, managers, admin):
         )
         if created:
             # Step 1: Department Manager
-            step1 = WorkflowStep.objects.create(
+            WorkflowStep.objects.create(
                 workflow=workflow,
                 name="Manager Approval",
                 step_type=WorkflowStep.StepType.APPROVAL,
@@ -295,7 +295,7 @@ def create_workflows(forms, managers, admin):
                 approval_mode=WorkflowStep.ApprovalMode.ANY,
             )
             # Step 2: HR Manager
-            step2 = WorkflowStep.objects.create(
+            WorkflowStep.objects.create(
                 workflow=workflow,
                 name="HR Approval",
                 step_type=WorkflowStep.StepType.APPROVAL,
@@ -321,7 +321,7 @@ def create_workflows(forms, managers, admin):
             }
         )
         if created:
-            step1 = WorkflowStep.objects.create(
+            WorkflowStep.objects.create(
                 workflow=workflow,
                 name="Manager Approval",
                 step_type=WorkflowStep.StepType.APPROVAL,
@@ -329,7 +329,7 @@ def create_workflows(forms, managers, admin):
                 assigned_role="MANAGER",
                 approval_mode=WorkflowStep.ApprovalMode.ANY,
             )
-            step2 = WorkflowStep.objects.create(
+            WorkflowStep.objects.create(
                 workflow=workflow,
                 name="Finance Approval",
                 step_type=WorkflowStep.StepType.APPROVAL,
@@ -355,7 +355,7 @@ def create_workflows(forms, managers, admin):
             }
         )
         if created:
-            step1 = WorkflowStep.objects.create(
+            WorkflowStep.objects.create(
                 workflow=workflow,
                 name="Manager Approval",
                 step_type=WorkflowStep.StepType.APPROVAL,
@@ -363,7 +363,7 @@ def create_workflows(forms, managers, admin):
                 assigned_role="MANAGER",
                 approval_mode=WorkflowStep.ApprovalMode.ANY,
             )
-            step2 = WorkflowStep.objects.create(
+            WorkflowStep.objects.create(
                 workflow=workflow,
                 name="IT Manager Approval",
                 step_type=WorkflowStep.StepType.APPROVAL,
@@ -389,7 +389,7 @@ def create_workflows(forms, managers, admin):
             }
         )
         if created:
-            step1 = WorkflowStep.objects.create(
+            WorkflowStep.objects.create(
                 workflow=workflow,
                 name="Manager Approval",
                 step_type=WorkflowStep.StepType.APPROVAL,
@@ -397,7 +397,7 @@ def create_workflows(forms, managers, admin):
                 assigned_role="MANAGER",
                 approval_mode=WorkflowStep.ApprovalMode.ANY,
             )
-            step2 = WorkflowStep.objects.create(
+            WorkflowStep.objects.create(
                 workflow=workflow,
                 name="HR Approval",
                 step_type=WorkflowStep.StepType.APPROVAL,
@@ -492,7 +492,7 @@ def create_submissions(forms, employees, managers):
         ]
 
         for sub_data in submissions_data:
-            submission = FormSubmission.objects.create(
+            FormSubmission.objects.create(
                 form=leave_form,
                 submitted_by=sub_data["user"],
                 status=sub_data["status"],
@@ -547,7 +547,7 @@ def create_submissions(forms, employees, managers):
         ]
 
         for sub_data in submissions_data:
-            submission = FormSubmission.objects.create(
+            FormSubmission.objects.create(
                 form=expense_form,
                 submitted_by=sub_data["user"],
                 status=sub_data["status"],
@@ -589,7 +589,7 @@ def create_submissions(forms, employees, managers):
         ]
 
         for sub_data in submissions_data:
-            submission = FormSubmission.objects.create(
+            FormSubmission.objects.create(
                 form=it_form,
                 submitted_by=sub_data["user"],
                 status=sub_data["status"],
@@ -601,7 +601,7 @@ def create_submissions(forms, employees, managers):
     # Training Request Submissions
     training_form = next((f for f in forms if f.code == "TRAIN-REQ"), None)
     if training_form:
-        submission = FormSubmission.objects.create(
+        FormSubmission.objects.create(
             form=training_form,
             submitted_by=employees[5],  # Diana Miller
             status=FormSubmission.SubmissionStatus.SUBMITTED,
@@ -616,7 +616,7 @@ def create_submissions(forms, employees, managers):
             },
             submitted_at=now - timedelta(days=1)
         )
-        print(f"  Created: Training request by diana_miller - SUBMITTED")
+        print("  Created: Training request by diana_miller - SUBMITTED")
 
     # WFH Submissions
     wfh_form = next((f for f in forms if f.code == "WFH-REQ"), None)
@@ -649,7 +649,7 @@ def create_submissions(forms, employees, managers):
         ]
 
         for sub_data in submissions_data:
-            submission = FormSubmission.objects.create(
+            FormSubmission.objects.create(
                 form=wfh_form,
                 submitted_by=sub_data["user"],
                 status=sub_data["status"],

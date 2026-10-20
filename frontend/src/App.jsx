@@ -1,62 +1,71 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 
-// Layouts
 import MainLayout from './components/layout/MainLayout';
 import AuthLayout from './components/layout/AuthLayout';
-
-// Route Guards
 import ProtectedRoute from './components/Auth/ProtectedRoute';
-import RoleBasedRoute from './components/Auth/RoleBasedRoute';
+import RoleBasedRoute, { Spinner } from './components/Auth/RoleBasedRoute';
 
-// Pages
-import Login from './pages/Login/Login';
-import ForgotPassword from './pages/auth/ForgotPassword';
-import ResetPassword from './pages/auth/ResetPassword';
-import Dashboard from './pages/dashboard/Dashboard';
-import UserManagement from './pages/UserManagement/UserManagement';
-import Forms from './pages/forms/Forms';
-import FormBuilder from './pages/forms/FormBuilder';
-import FormSubmission from './pages/forms/FormSubmission';
-import FormView from './pages/forms/FormView';
-import Workflows from './pages/workflows/Workflows';
-import WorkflowPreview from './pages/workflows/WorkflowPreview';
-import MyApprovals from './pages/approvals/MyApprovals';
-import MySubmissions from './pages/submissions/MySubmissions';
-import SubmissionsManagement from './pages/submissions/SubmissionsManagement';
-import Notifications from './pages/notifications/Notifications';
-import AIFormGeneration from './pages/ai/AIFormGeneration';
-import SmartAssistant from './pages/assistant/SmartAssistant';
-import NaturalLanguageAnalytics from './pages/analytics/NaturalLanguageAnalytics';
-import Reports from './pages/reports/Reports';
-import AuditLog from './pages/audit-log/AuditLog';
-import Profile from './pages/Profile/Profile';
+// Pages are loaded on demand so the first page does not download the whole app
+const Login = lazy(() => import('./pages/Login/Login'));
+const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
+const Dashboard = lazy(() => import('./pages/dashboard/Dashboard'));
+const UserManagement = lazy(() => import('./pages/UserManagement/UserManagement'));
+const Forms = lazy(() => import('./pages/forms/Forms'));
+const FormBuilder = lazy(() => import('./pages/forms/FormBuilder'));
+const FormSubmission = lazy(() => import('./pages/forms/FormSubmission'));
+const FormView = lazy(() => import('./pages/forms/FormView'));
+const Workflows = lazy(() => import('./pages/workflows/Workflows'));
+const WorkflowPreview = lazy(() => import('./pages/workflows/WorkflowPreview'));
+const MyApprovals = lazy(() => import('./pages/approvals/MyApprovals'));
+const MySubmissions = lazy(() => import('./pages/submissions/MySubmissions'));
+const SubmissionsManagement = lazy(() => import('./pages/submissions/SubmissionsManagement'));
+const Notifications = lazy(() => import('./pages/notifications/Notifications'));
+const AIFormGeneration = lazy(() => import('./pages/ai/AIFormGeneration'));
+const SmartAssistant = lazy(() => import('./pages/assistant/SmartAssistant'));
+const NaturalLanguageAnalytics = lazy(() => import('./pages/analytics/NaturalLanguageAnalytics'));
+const Reports = lazy(() => import('./pages/reports/Reports'));
+const AuditLog = lazy(() => import('./pages/audit-log/AuditLog'));
+const Profile = lazy(() => import('./pages/Profile/Profile'));
+
+const ADMIN_ONLY = ['ADMIN'];
+const STAFF = ['ADMIN', 'MANAGER'];
+const EMPLOYEES = ['USER'];
+
 const NotFoundPage = () => (
   <div className="flex items-center justify-center min-h-screen">
     <div className="text-center">
-      <h1 className="text-6xl font-bold text-gray-900">404</h1>
-      <p className="mt-4 text-xl text-gray-600">Page not found</p>
-      <a href="/dashboard" className="mt-4 inline-block text-blue-600 hover:text-blue-700">
+      <h1 className="text-6xl font-bold text-slate-900">404</h1>
+      <p className="mt-4 text-xl text-slate-600">Page not found</p>
+      <a href="/dashboard" className="mt-4 inline-block text-sky-600 hover:text-sky-700">
         Go to Dashboard
       </a>
     </div>
   </div>
 );
 
+const guarded = (Page, roles, deniedMessage) => (
+  <RoleBasedRoute allowedRoles={roles} deniedMessage={deniedMessage}>
+    <Page />
+  </RoleBasedRoute>
+);
+
 function App() {
   return (
     <AuthProvider>
       <Router>
+        <Suspense fallback={<Spinner />}>
           <Routes>
-            {/* Public Routes with Auth Layout */}
+            {/* Public pages */}
             <Route element={<AuthLayout />}>
               <Route path="/login" element={<Login />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
             </Route>
 
-            {/* Protected Routes with Main Layout */}
+            {/* Signed-in pages */}
             <Route
               element={
                 <ProtectedRoute>
@@ -65,297 +74,58 @@ function App() {
               }
             >
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route
-                path="/users"
-                element={
-                  <RoleBasedRoute
-                    allowedRoles={['ADMIN']}
-                    fallback={
-                      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                        <div className="text-center">
-                          <svg
-                            className="mx-auto h-12 w-12 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                            />
-                          </svg>
-                          <h1 className="mt-4 text-2xl font-semibold text-gray-900">
-                            Access Denied
-                          </h1>
-                          <p className="mt-2 text-gray-600">Only administrators can access User Management.</p>
-                          <a
-                            href="/dashboard"
-                            className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                          >
-                            Go to Dashboard
-                          </a>
-                        </div>
-                      </div>
-                    }
-                  >
-                    <UserManagement />
-                  </RoleBasedRoute>
-                }
-              />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/notifications" element={<Notifications />} />
+
               <Route path="/forms" element={<Forms />} />
               <Route path="/forms/:formId" element={<FormView />} />
-              <Route path="/forms/:formId/builder" element={<FormBuilder />} />
-              <Route path="/forms/:formId/submit" element={<FormSubmission />} />
               <Route
-                path="/workflows"
-                element={
-                  <RoleBasedRoute
-                    allowedRoles={['ADMIN', 'MANAGER']}
-                    fallback={
-                      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                        <div className="text-center">
-                          <h1 className="mt-4 text-2xl font-semibold text-gray-900">
-                            Access Denied
-                          </h1>
-                          <p className="mt-2 text-gray-600">Only Admins and Form Managers can access Workflow Management.</p>
-                        </div>
-                      </div>
-                    }
-                  >
-                    <Workflows />
-                  </RoleBasedRoute>
-                }
+                path="/forms/:formId/builder"
+                element={guarded(FormBuilder, STAFF, 'Only Admins and Form Managers can edit forms.')}
               />
-              <Route path="/workflows/:id/preview" element={<WorkflowPreview />} />
-              <Route path="/approvals" element={<MyApprovals />} />
+              <Route path="/forms/:formId/submit" element={<FormSubmission />} />
+
               <Route path="/submissions" element={<MySubmissions />} />
               <Route
                 path="/submissions/management"
-                element={
-                  <RoleBasedRoute
-                    allowedRoles={['ADMIN', 'MANAGER']}
-                    fallback={
-                      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                        <div className="text-center">
-                          <h1 className="mt-4 text-2xl font-semibold text-gray-900">
-                            Access Denied
-                          </h1>
-                          <p className="mt-2 text-gray-600">Only Admins and Form Managers can access Submissions Management.</p>
-                        </div>
-                      </div>
-                    }
-                  >
-                    <SubmissionsManagement />
-                  </RoleBasedRoute>
-                }
+                element={guarded(SubmissionsManagement, STAFF, 'Only Admins and Form Managers can manage submissions.')}
               />
-              <Route path="/notifications" element={<Notifications />} />
+              <Route path="/approvals" element={<MyApprovals />} />
+
+              <Route
+                path="/workflows"
+                element={guarded(Workflows, STAFF, 'Only Admins and Form Managers can manage workflows.')}
+              />
+              <Route
+                path="/workflows/:id/preview"
+                element={guarded(WorkflowPreview, STAFF, 'Only Admins and Form Managers can view workflows.')}
+              />
+
               <Route
                 path="/ai/form-generation"
-                element={
-                  <RoleBasedRoute
-                    allowedRoles={['ADMIN', 'MANAGER']}
-                    fallback={
-                      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                        <div className="text-center">
-                          <svg
-                            className="mx-auto h-12 w-12 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                            />
-                          </svg>
-                          <h1 className="mt-4 text-2xl font-semibold text-gray-900">
-                            Access Denied
-                          </h1>
-                          <p className="mt-2 text-gray-600">Only Admins and Form Managers can access AI Form Generation.</p>
-                          <a
-                            href="/dashboard"
-                            className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                          >
-                            Go to Dashboard
-                          </a>
-                        </div>
-                      </div>
-                    }
-                  >
-                    <AIFormGeneration />
-                  </RoleBasedRoute>
-                }
+                element={guarded(AIFormGeneration, STAFF, 'Only Admins and Form Managers can generate forms.')}
               />
               <Route
                 path="/assistant"
-                element={
-                  <RoleBasedRoute
-                    allowedRoles={['USER']}
-                    fallback={
-                      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                        <div className="text-center">
-                          <svg
-                            className="mx-auto h-12 w-12 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                            />
-                          </svg>
-                          <h1 className="mt-4 text-2xl font-semibold text-gray-900">
-                            Access Denied
-                          </h1>
-                          <p className="mt-2 text-gray-600">Smart Assistant is only available for regular users.</p>
-                          <a
-                            href="/dashboard"
-                            className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                          >
-                            Go to Dashboard
-                          </a>
-                        </div>
-                      </div>
-                    }
-                  >
-                    <SmartAssistant />
-                  </RoleBasedRoute>
-                }
+                element={guarded(SmartAssistant, EMPLOYEES, 'Smart Assistant is only available for regular users.')}
               />
               <Route
                 path="/analytics"
-                element={
-                  <RoleBasedRoute
-                    allowedRoles={['ADMIN', 'MANAGER']}
-                    fallback={
-                      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                        <div className="text-center">
-                          <svg
-                            className="mx-auto h-12 w-12 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                            />
-                          </svg>
-                          <h1 className="mt-4 text-2xl font-semibold text-gray-900">
-                            Access Denied
-                          </h1>
-                          <p className="mt-2 text-gray-600">Analytics Query is only available for Admins and Form Managers.</p>
-                          <a
-                            href="/dashboard"
-                            className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                          >
-                            Go to Dashboard
-                          </a>
-                        </div>
-                      </div>
-                    }
-                  >
-                    <NaturalLanguageAnalytics />
-                  </RoleBasedRoute>
-                }
+                element={guarded(NaturalLanguageAnalytics, STAFF, 'Analytics Query is only available for Admins and Form Managers.')}
               />
               <Route
                 path="/reports"
-                element={
-                  <RoleBasedRoute
-                    allowedRoles={['ADMIN', 'MANAGER']}
-                    fallback={
-                      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                        <div className="text-center">
-                          <svg
-                            className="mx-auto h-12 w-12 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                            />
-                          </svg>
-                          <h1 className="mt-4 text-2xl font-semibold text-gray-900">
-                            Access Denied
-                          </h1>
-                          <p className="mt-2 text-gray-600">Reports is only available for Admins and Form Managers.</p>
-                          <a
-                            href="/dashboard"
-                            className="mt-4 inline-block px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600"
-                          >
-                            Go to Dashboard
-                          </a>
-                        </div>
-                      </div>
-                    }
-                  >
-                    <Reports />
-                  </RoleBasedRoute>
-                }
+                element={guarded(Reports, STAFF, 'Reports are only available for Admins and Form Managers.')}
               />
-              <Route
-                path="/audit-log"
-                element={
-                  <RoleBasedRoute
-                    allowedRoles={['ADMIN']}
-                    fallback={
-                      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                        <div className="text-center">
-                          <svg
-                            className="mx-auto h-12 w-12 text-gray-400"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                            />
-                          </svg>
-                          <h1 className="mt-4 text-2xl font-semibold text-gray-900">
-                            Access Denied
-                          </h1>
-                          <p className="mt-2 text-gray-600">Only Administrators can access Audit Log.</p>
-                          <a
-                            href="/dashboard"
-                            className="mt-4 inline-block px-4 py-2 bg-sky-500 text-white rounded-lg hover:bg-sky-600"
-                          >
-                            Go to Dashboard
-                          </a>
-                        </div>
-                      </div>
-                    }
-                  >
-                    <AuditLog />
-                  </RoleBasedRoute>
-                }
-              />
-              <Route path="/profile" element={<Profile />} />
+
+              <Route path="/users" element={guarded(UserManagement, ADMIN_ONLY, 'Only administrators can manage users.')} />
+              <Route path="/audit-log" element={guarded(AuditLog, ADMIN_ONLY, 'Only administrators can view the audit log.')} />
             </Route>
 
-            {/* Default redirect */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
-            {/* 404 Not Found */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
+        </Suspense>
       </Router>
     </AuthProvider>
   );

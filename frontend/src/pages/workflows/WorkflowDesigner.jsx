@@ -5,7 +5,6 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import api from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
-import ConditionBuilder from './ConditionBuilder';
 import WorkflowDiagram from './WorkflowDiagram';
 
 // Icons

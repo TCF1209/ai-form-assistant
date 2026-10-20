@@ -154,7 +154,6 @@ const assistantService = {
       const response = await api.post('/ai/assistant/search_forms/', { query }, {
         timeout: AI_TIMEOUT  // 60 seconds for AI calls
       });
-      console.log('AI Search Response:', response.data); // Debug logging
       return {
         success: true,
         forms: response.data.forms || [],

@@ -5,8 +5,8 @@ Form serializers for REST API.
 import random
 from rest_framework import serializers
 from .models import Form, FormField, FormSubmission, FormFile
-from users.models import User, Department
 from django.utils import timezone
+from users.audit import get_client_ip
 
 
 def generate_form_code(name, department):
@@ -217,7 +217,7 @@ class FormSubmissionDetailSerializer(serializers.ModelSerializer):
 
         # Capture IP and user agent from request
         request = self.context['request']
-        validated_data['ip_address'] = self.get_client_ip(request)
+        validated_data['ip_address'] = get_client_ip(request)
         validated_data['user_agent'] = request.META.get('HTTP_USER_AGENT', '')
 
         # Set submitted_at if status is SUBMITTED
@@ -237,14 +237,6 @@ class FormSubmissionDetailSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
 
-    def get_client_ip(self, request):
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
 
 
 class FormFileSerializer(serializers.ModelSerializer):

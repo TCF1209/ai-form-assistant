@@ -7,26 +7,21 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from .models import User, Department, AuditLog
+from .audit import get_client_ip
 from .serializers import (
     UserSerializer,
-    UserRegistrationSerializer,
     UserProfileSerializer,
     DepartmentSerializer,
     AuditLogSerializer
 )
 from django_filters.rest_framework import DjangoFilterBackend
 from .permissions import (
-    IsAdmin,
-    IsManager,
-    IsSelfOrAdmin,
-    CanManageDepartment
+    IsAdmin
 )
 
-User = get_user_model()
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -110,7 +105,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 object_id=str(user.id),
                 object_repr=str(user),
                 changes=request.data,
-                ip_address=self.get_client_ip(request),
+                ip_address=get_client_ip(request),
                 user_agent=request.META.get('HTTP_USER_AGENT', '')
             )
 
@@ -121,15 +116,6 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @staticmethod
-    def get_client_ip(request):
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
 
     @action(detail=True, methods=['post'])
     def activate(self, request, pk=None):
@@ -149,7 +135,7 @@ class UserViewSet(viewsets.ModelViewSet):
             object_id=str(user.id),
             object_repr=str(user),
             changes={'is_active': True},
-            ip_address=self.get_client_ip(request),
+            ip_address=get_client_ip(request),
             user_agent=request.META.get('HTTP_USER_AGENT', '')
         )
 
@@ -176,7 +162,7 @@ class UserViewSet(viewsets.ModelViewSet):
             object_id=str(user.id),
             object_repr=str(user),
             changes={'is_active': False},
-            ip_address=self.get_client_ip(request),
+            ip_address=get_client_ip(request),
             user_agent=request.META.get('HTTP_USER_AGENT', '')
         )
 
@@ -212,7 +198,7 @@ class UserViewSet(viewsets.ModelViewSet):
             object_id=str(user.id),
             object_repr=str(user),
             changes={'role': {'from': old_role, 'to': role}},
-            ip_address=self.get_client_ip(request),
+            ip_address=get_client_ip(request),
             user_agent=request.META.get('HTTP_USER_AGENT', '')
         )
 
@@ -253,7 +239,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 'from': str(old_department) if old_department else None,
                 'to': str(department) if department else None
             }},
-            ip_address=self.get_client_ip(request),
+            ip_address=get_client_ip(request),
             user_agent=request.META.get('HTTP_USER_AGENT', '')
         )
 
@@ -350,15 +336,6 @@ class UserViewSet(viewsets.ModelViewSet):
             'sequence': new_seq
         })
 
-    @staticmethod
-    def get_client_ip(request):
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = request.META.get('REMOTE_ADDR')
-        return ip
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):

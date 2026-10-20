@@ -1152,7 +1152,6 @@ const SmartAssistant = () => {
         setCurrentRecommendation(response.recommendedForm);
         setAlternatives(response.alternatives || []);
         setExtractedFields(response.extractedFields || {});  // Store extracted fields from query
-        console.log('Extracted fields from query:', response.extractedFields);
       } else if (response.type === 'form_list') {
         setShowFormList(true);
         setFormListData(response.forms);

@@ -228,7 +228,6 @@ const Workflows = () => {
       case 'SEQUENTIAL': return 'bg-sky-100 text-sky-700';
       case 'PARALLEL': return 'bg-emerald-100 text-emerald-700';
       case 'CONDITIONAL': return 'bg-amber-100 text-amber-700';
-      case 'HYBRID': return 'bg-purple-100 text-purple-700';
       default: return 'bg-slate-100 text-slate-700';
     }
   };
@@ -238,8 +237,7 @@ const Workflows = () => {
     const labels = {
       'SEQUENTIAL': 'Sequential',
       'PARALLEL': 'Parallel',
-      'CONDITIONAL': 'Conditional',
-      'HYBRID': 'Hybrid'
+      'CONDITIONAL': 'Conditional'
     };
     return labels[type] || type;
   };
@@ -404,7 +402,6 @@ const Workflows = () => {
           <option value="SEQUENTIAL">Sequential</option>
           <option value="PARALLEL">Parallel</option>
           <option value="CONDITIONAL">Conditional</option>
-          <option value="HYBRID">Hybrid</option>
         </select>
       </div>
 

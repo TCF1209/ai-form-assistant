@@ -341,8 +341,7 @@ const WorkflowDiagram = ({
         });
       }
     } else {
-      // HYBRID or CONDITIONAL - for now, show as sequential
-      // This can be enhanced later for more complex visualizations
+      // CONDITIONAL workflows are drawn like sequential ones
       nodes.push({
         id: 'start',
         type: 'start',

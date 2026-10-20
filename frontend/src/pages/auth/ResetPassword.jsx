@@ -37,6 +37,7 @@ const ExclamationIcon = () => (
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const uid = searchParams.get('uid');
   const token = searchParams.get('token');
 
   const [formData, setFormData] = useState({
@@ -49,8 +50,8 @@ const ResetPassword = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // If no token, show error state
-  if (!token) {
+  // The emailed link carries both the user id and the one-time token
+  if (!uid || !token) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
@@ -120,6 +121,7 @@ const ResetPassword = () => {
 
     try {
       await api.post('/auth/password-reset/confirm/', {
+        uid,
         token,
         new_password: formData.newPassword,
         new_password_confirm: formData.confirmPassword,

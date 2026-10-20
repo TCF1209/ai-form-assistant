@@ -22,6 +22,16 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def parse_json_response(text):
+    """Parse a JSON reply from the model, tolerating a ```json ... ``` fence around it."""
+    cleaned = text.strip()
+    if cleaned.startswith('```'):
+        cleaned = cleaned.split('\n', 1)[1] if '\n' in cleaned else cleaned[3:]
+        if cleaned.rstrip().endswith('```'):
+            cleaned = cleaned.rstrip()[:-3]
+    return json.loads(cleaned.strip())
+
+
 class OpenAIService:
     """Service for handling OpenAI API interactions"""
 
@@ -173,13 +183,12 @@ FIELD TYPE GUIDELINES:
             {"role": "user", "content": user_prompt}
         ]
 
-        response = self._make_api_call(messages, temperature=0.3)
+        response = self._make_api_call(messages, temperature=0.3, response_format={"type": "json_object"})
         if not response:
             return None
 
         try:
-            # Parse JSON from response
-            form_structure = json.loads(response)
+            form_structure = parse_json_response(response)
             # Cache for 1 hour
             cache.set(cache_key, form_structure, 3600)
             return form_structure
@@ -368,7 +377,7 @@ Parse this query and return the structured intent as JSON."""
             {"role": "user", "content": user_prompt}
         ]
 
-        response = self._make_api_call(messages, temperature=0.1)
+        response = self._make_api_call(messages, temperature=0.1, response_format={"type": "json_object"})
 
         if not response:
             return {
@@ -382,17 +391,7 @@ Parse this query and return the structured intent as JSON."""
             }
 
         try:
-            # Clean up response - remove markdown code blocks if present
-            clean_response = response.strip()
-            if clean_response.startswith('```json'):
-                clean_response = clean_response[7:]
-            if clean_response.startswith('```'):
-                clean_response = clean_response[3:]
-            if clean_response.endswith('```'):
-                clean_response = clean_response[:-3]
-            clean_response = clean_response.strip()
-
-            return json.loads(clean_response)
+            return parse_json_response(response)
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse analytics intent: {e}, response: {response}")
             return {

@@ -1,990 +1,395 @@
 """
-Workflow execution engine for processing approval flows.
+Workflow engine: turns a submitted form into approval tasks and moves it through its workflow.
+
+Workflow types
+- SEQUENTIAL:  steps run one at a time, in `order`.
+- CONDITIONAL: like SEQUENTIAL, but a step only runs when its `conditions` match the submission.
+- PARALLEL:    every step whose conditions match starts at once. The workflow is approved once
+               `approval_threshold` percent of the required steps approve, and rejected as soon
+               as that threshold can no longer be reached.
+
+Each step has one or more approvers and an approval mode:
+- ALL:      everyone must approve; a single rejection rejects the step.
+- MAJORITY: more than half must approve; half or more rejecting rejects the step.
+- ANY:      one approval passes the step; it is rejected only when everyone rejects.
+
+Rules that keep the state consistent
+- The submitter is never an approver of their own request. If a step has no one else, the task
+  goes to an administrator and the instance is flagged NEEDS_ADMIN_ACTION.
+- As soon as a step is decided, its remaining pending tasks are closed (SKIPPED), and when the
+  workflow finishes every pending task is closed, so late votes cannot change the outcome.
+- Every decision runs in a transaction that locks the workflow instance row, so two approvers
+  acting at the same moment are processed one after the other.
 """
 
-from django.db import transaction
-from django.utils import timezone
-from django.db.models import Q
-import json
+import logging
 import operator
 from datetime import timedelta
 
-from .models import (
-    WorkflowInstance,
-    WorkflowApproval, WorkflowNotification
-)
+from django.db import transaction
+from django.utils import timezone
+
+from users.models import User
+from .models import ACTIVE_INSTANCE_STATUSES, WorkflowApproval, WorkflowInstance, WorkflowNotification
+
+logger = logging.getLogger(__name__)
+
+PENDING, APPROVED, REJECTED = 'PENDING', 'APPROVED', 'REJECTED'
+# Delegated, skipped and cancelled records are not votes.
+VOTE_STATUSES = (PENDING, APPROVED, REJECTED)
+
+
+def _as_number(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _compare(op):
+    """Wrap an ordering operator so '1500' > 1000 compares as numbers."""
+    def compare(a, b):
+        x, y = _as_number(a), _as_number(b)
+        if x is not None and y is not None:
+            return op(x, y)
+        return op(a, b)
+    return compare
+
+
+OPERATORS = {
+    'eq': _compare(operator.eq),
+    'ne': _compare(operator.ne),
+    'gt': _compare(operator.gt),
+    'lt': _compare(operator.lt),
+    'gte': _compare(operator.ge),
+    'lte': _compare(operator.le),
+    'in': lambda a, b: b is not None and a in b,
+    'not_in': lambda a, b: b is None or a not in b,
+    'contains': lambda a, b: a is not None and b is not None and str(b) in str(a),
+    'starts_with': lambda a, b: a is not None and b is not None and str(a).startswith(str(b)),
+    'ends_with': lambda a, b: a is not None and b is not None and str(a).endswith(str(b)),
+}
+
+
+class WorkflowError(Exception):
+    """A decision that is not allowed, e.g. on a task that was already decided."""
 
 
 class WorkflowEngine:
-    """Engine for executing workflow logic."""
 
-    def __init__(self):
-        self.operators = {
-            'eq': operator.eq,
-            'ne': operator.ne,
-            'gt': operator.gt,
-            'lt': operator.lt,
-            'gte': operator.ge,
-            'lte': operator.le,
-            'in': lambda a, b: a in b if b is not None else False,
-            'not_in': lambda a, b: a not in b if b is not None else True,
-            'contains': lambda a, b: str(b) in str(a) if a is not None and b is not None else False,
-            'starts_with': lambda a, b: str(a).startswith(str(b)) if a is not None and b is not None else False,
-            'ends_with': lambda a, b: str(a).endswith(str(b)) if a is not None and b is not None else False,
-        }
-
-    # =====================================================
-    # Multi-Approver Support Methods
-    # =====================================================
-
-    def _get_approvers_for_step(self, step, submitter):
-        """
-        Get list of approvers for a step, excluding the submitter.
-        Returns list of User objects.
-        """
-
-        # Get assigned users from the M2M relationship (through WorkflowStepApprover)
-        step_approvers = step.step_approvers.select_related('user').order_by('order')
-        approvers = [sa.user for sa in step_approvers
-                     if sa.user.is_active and sa.user.id != submitter.id]
-
-        # If no multi-approvers defined, fall back to single assigned_user
-        if not approvers and step.assigned_user:
-            if step.assigned_user.is_active and step.assigned_user.id != submitter.id:
-                approvers = [step.assigned_user]
-
-        return approvers
-
-    def _create_approvals_for_multi_step(self, instance, step, submitter):
-        """
-        Create approval records for ALL assigned approvers in a step.
-        Returns list of created approvals and info about any exclusions.
-        """
-        approvers = self._get_approvers_for_step(step, submitter)
-        approvals = []
-        exclusions = []
-
-        # Check if submitter was excluded
-        step_approver_ids = [sa.user.id for sa in step.step_approvers.all()]
-        if submitter.id in step_approver_ids:
-            exclusions.append({
-                'step': step.name,
-                'excluded_user': submitter.username,
-                'reason': 'self_approval'
-            })
-
-        if not approvers:
-            # No approvers left after excluding submitter - need admin fallback
-            # Pass submitter to prefer a different admin if available
-            admin = self._get_admin_fallback(exclude_user=submitter)
-            if admin:
-                approvers = [admin]
-                exclusions.append({
-                    'step': step.name,
-                    'fallback_to': admin.username,
-                    'reason': 'no_eligible_approvers'
-                })
-                # Set instance status to NEEDS_ADMIN_ACTION so admin can use admin_approve/admin_reject
-                instance.status = 'NEEDS_ADMIN_ACTION'
-                instance.context_data['admin_fallback'] = True
-                instance.context_data['admin_fallback_step'] = step.name
-                instance.save()
-            else:
-                # Mark instance as needing admin action (no admin available)
-                instance.status = 'NEEDS_ADMIN_ACTION'
-                instance.context_data['no_approvers_step'] = step.name
-                instance.save()
-                return [], exclusions
-        else:
-            # Valid approvers exist - reset status to IN_PROGRESS if it was NEEDS_ADMIN_ACTION
-            # This handles the case where previous step had admin fallback but this step has valid approvers
-            if instance.status == 'NEEDS_ADMIN_ACTION':
-                instance.status = 'IN_PROGRESS'
-                # Clear admin fallback flags since this step has valid approvers
-                instance.context_data.pop('admin_fallback', None)
-                instance.context_data.pop('admin_fallback_step', None)
-                instance.save()
-
-        # Create approvals for all approvers
-        due_date = None
-        if step.time_limit_hours:
-            due_date = timezone.now() + timedelta(hours=step.time_limit_hours)
-
-        for approver in approvers:
-            approval = WorkflowApproval.objects.create(
-                workflow_instance=instance,
-                workflow_step=step,
-                status='PENDING',
-                assigned_to=approver,
-                due_date=due_date
-            )
-            approvals.append(approval)
-
-            # Create notification
-            self._create_notification(
-                approval,
-                'ASSIGNED',
-                approver,
-                f"New approval task: {step.name}",
-                f"You have been assigned to {step.name} for {instance.submission.form.name}"
-            )
-
-        return approvals, exclusions
-
-    def _check_step_completion(self, instance, step):
-        """
-        Check if a step is complete based on its approval_mode.
-
-        Returns: tuple (is_complete: bool, is_rejected: bool)
-            - is_complete: True if the step has reached a final decision
-            - is_rejected: True if the step was rejected (only valid if is_complete is True)
-        """
-        approvals = instance.approvals.filter(workflow_step=step)
-        total_approvers = approvals.count()
-
-        if total_approvers == 0:
-            return False, False
-
-        approved_count = approvals.filter(status='APPROVED').count()
-        rejected_count = approvals.filter(status='REJECTED').count()
-        pending_count = approvals.filter(status='PENDING').count()
-
-        approval_mode = step.approval_mode
-
-        if approval_mode == 'ALL':
-            # ALL mode: All must approve, one reject = failed
-            if rejected_count > 0:
-                return True, True  # Complete and rejected
-            if approved_count == total_approvers:
-                return True, False  # Complete and approved
-            return False, False  # Still pending
-
-        elif approval_mode == 'MAJORITY':
-            # MAJORITY mode: >50% must approve, >50% reject = failed
-            majority_threshold = total_approvers / 2
-            if approved_count > majority_threshold:
-                return True, False  # Majority approved
-            if rejected_count > majority_threshold:
-                return True, True  # Majority rejected
-            if pending_count == 0:
-                # All votes in but no majority - treat as rejected
-                return True, rejected_count >= approved_count
-            return False, False  # Still pending
-
-        elif approval_mode == 'ANY':
-            # ANY mode: One approval = pass, all reject = fail
-            if approved_count >= 1:
-                return True, False  # At least one approved
-            if rejected_count == total_approvers:
-                return True, True  # All rejected
-            return False, False  # Still pending
-
-        return False, False
-
-    def _handle_step_approval(self, instance, step):
-        """Handle when a step is successfully approved."""
-        workflow = instance.workflow
-
-        if self._check_workflow_completion(instance):
-            instance.status = 'COMPLETED'
-            instance.completed_at = timezone.now()
-            instance.save()
-            instance.submission.status = 'APPROVED'
-            instance.submission.save()
-            self._send_notifications(instance, 'COMPLETED')
-        else:
-            # Move to next step based on workflow type
-            submitter = instance.submission.submitted_by
-            if workflow.workflow_type == 'SEQUENTIAL':
-                self._handle_sequential_progression_multi(instance, step, submitter)
-            elif workflow.workflow_type == 'PARALLEL':
-                self._handle_parallel_progression(instance)
-            elif workflow.workflow_type == 'CONDITIONAL':
-                self._handle_conditional_progression_multi(instance, step, submitter)
-            elif workflow.workflow_type == 'HYBRID':
-                self._handle_hybrid_progression_multi(instance, step, submitter)
-
-    def _handle_step_rejection(self, instance, step):
-        """Handle when a step is rejected."""
-        if not step.can_skip:
-            instance.status = 'FAILED'
-            instance.completed_at = timezone.now()
-            instance.save()
-            instance.submission.status = 'REJECTED'
-            instance.submission.save()
-            self._send_notifications(instance, 'REJECTED')
-
-    def _handle_sequential_progression_multi(self, instance, current_step, submitter):
-        """Handle progression for sequential workflows with multi-approver."""
-        next_step = instance.workflow.steps.filter(
-            order__gt=current_step.order
-        ).order_by('order').first()
-
-        if next_step:
-            instance.current_step = next_step
-            instance.save()
-
-            approvals, exclusions = self._create_approvals_for_multi_step(instance, next_step, submitter)
-
-            # Track exclusions in context
-            if exclusions:
-                existing_exclusions = instance.context_data.get('exclusions', [])
-                existing_exclusions.extend(exclusions)
-                instance.context_data['exclusions'] = existing_exclusions
-                instance.save()
-
-    def _handle_conditional_progression_multi(self, instance, current_step, submitter):
-        """Handle progression for conditional workflows with multi-approver."""
-        next_step = self._get_next_conditional_step(instance.workflow, instance, current_step)
-
-        if next_step:
-            instance.current_step = next_step
-            instance.save()
-
-            approvals, exclusions = self._create_approvals_for_multi_step(instance, next_step, submitter)
-
-            if exclusions:
-                existing_exclusions = instance.context_data.get('exclusions', [])
-                existing_exclusions.extend(exclusions)
-                instance.context_data['exclusions'] = existing_exclusions
-                instance.save()
-
-    def _handle_hybrid_progression_multi(self, instance, current_step, submitter):
-        """Handle progression for hybrid workflows with multi-approver."""
-        current_order = current_step.order
-
-        # Check if all steps at current order level are complete
-        steps_at_level = instance.workflow.steps.filter(order=current_order)
-
-        for step in steps_at_level:
-            is_complete, _ = self._check_step_completion(instance, step)
-            if not is_complete:
-                # Still waiting for other approvals at this level
-                return
-
-        # Move to next order level
-        next_steps = instance.workflow.steps.filter(
-            order__gt=current_order
-        ).order_by('order')
-
-        if next_steps.exists():
-            next_order = next_steps.first().order
-            steps_at_next_level = next_steps.filter(order=next_order)
-
-            all_exclusions = []
-            for step in steps_at_next_level:
-                if self._check_step_conditions(step, instance):
-                    approvals, exclusions = self._create_approvals_for_multi_step(instance, step, submitter)
-                    all_exclusions.extend(exclusions)
-
-            if all_exclusions:
-                existing_exclusions = instance.context_data.get('exclusions', [])
-                existing_exclusions.extend(all_exclusions)
-                instance.context_data['exclusions'] = existing_exclusions
-
-            instance.current_step = steps_at_next_level.first()
-            instance.save()
-
-    # =====================================================
-    # Original Methods (Updated for Multi-Approver)
-    # =====================================================
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     @transaction.atomic
     def start_workflow(self, submission, workflow):
-        """Start a new workflow instance for a submission."""
-
-        submitter = submission.submitted_by
-
-        # Create workflow instance
+        """Create the workflow instance for a submission and open its first task(s)."""
         instance = WorkflowInstance.objects.create(
             workflow=workflow,
             submission=submission,
             status='IN_PROGRESS',
             context_data={
                 'submission_id': str(submission.id),
-                'form_id': str(submission.form.id),
+                'form_id': str(submission.form_id),
                 'submitted_by': submission.submitted_by.username,
-                'submitted_by_id': str(submission.submitted_by.id),
-                'submission_data': submission.data
-            }
+                'submitted_by_id': str(submission.submitted_by_id),
+                'submission_data': submission.data,
+            },
         )
 
-        # Track exclusions (submitter excluded from approvers) for context data
-        all_exclusions = []
-
-        # Get the first active step(s) based on workflow type
-        if workflow.workflow_type == 'SEQUENTIAL':
-            # For sequential, process step by step
-            first_step = workflow.steps.order_by('order').first()
-            if first_step:
-                # Use multi-approver method - handles self-approval exclusion automatically
-                approvals, exclusions = self._create_approvals_for_multi_step(instance, first_step, submitter)
-                all_exclusions.extend(exclusions)
-
-                instance.current_step = first_step
-                instance.save()
-
-        elif workflow.workflow_type == 'PARALLEL':
-            # Create approvals for all steps
-            steps = workflow.steps.all()
+        if workflow.workflow_type == 'PARALLEL':
+            steps = [s for s in workflow.steps.order_by('order') if self._conditions_met(s, instance)]
             for step in steps:
-                if self._check_step_conditions(step, instance):
-                    approvals, exclusions = self._create_approvals_for_multi_step(instance, step, submitter)
-                    all_exclusions.extend(exclusions)
+                self._activate_step(instance, step)
+            started = bool(steps)
+        else:
+            started = self._activate_next_step(instance, after=None)
 
-        elif workflow.workflow_type == 'CONDITIONAL':
-            # Evaluate conditions to determine first step
-            first_step = self._get_next_conditional_step(workflow, instance, None)
-            if first_step:
-                approvals, exclusions = self._create_approvals_for_multi_step(instance, first_step, submitter)
-                all_exclusions.extend(exclusions)
-
-                instance.current_step = first_step
-                instance.save()
-
-        elif workflow.workflow_type == 'HYBRID':
-            # Hybrid combines sequential and parallel
-            # Start with first sequential group (all steps at order=0)
-            first_steps = workflow.steps.filter(order=0)
-            for step in first_steps:
-                if self._check_step_conditions(step, instance):
-                    approvals, exclusions = self._create_approvals_for_multi_step(instance, step, submitter)
-                    all_exclusions.extend(exclusions)
-            if first_steps.exists():
-                instance.current_step = first_steps.first()
-                instance.save()
-
-        # Store exclusion info in context (when submitter was excluded from approvers)
-        if all_exclusions:
-            instance.context_data['exclusions'] = all_exclusions
-            instance.save()
-
-        # Check if workflow is complete (no pending approvals)
-        if self._check_workflow_completion(instance):
-            instance.status = 'COMPLETED'
-            instance.completed_at = timezone.now()
-            instance.save()
-            submission.status = 'APPROVED'
-            submission.save()
-
-        # Send initial notifications
-        self._send_notifications(instance, 'ASSIGNED')
+        if not started:
+            # Nothing to approve (no steps, or no step's conditions matched)
+            self._finish(instance, approved=True, deciding_approval=None)
 
         return instance
 
-    def _is_self_approval(self, step, submitter):
-        """Check if the step's approver is the same as the submitter."""
-        if step.assigned_user and step.assigned_user.id == submitter.id:
+    def approve_step(self, approval, user, comments=''):
+        return self._decide(approval, user, APPROVED, comments)
+
+    def reject_step(self, approval, user, comments=''):
+        return self._decide(approval, user, REJECTED, comments)
+
+    @transaction.atomic
+    def decide_as_admin(self, instance, admin, approve, comments=''):
+        """Approve or reject every open task of the current step on behalf of an administrator."""
+        instance = WorkflowInstance.objects.select_for_update().get(pk=instance.pk)
+        if instance.status not in ACTIVE_INSTANCE_STATUSES:
+            raise WorkflowError('This workflow is already closed.')
+
+        pending = instance.approvals.filter(status=PENDING)
+        if instance.workflow.workflow_type != 'PARALLEL' and instance.current_step_id:
+            pending = pending.filter(workflow_step_id=instance.current_step_id)
+        pending = list(pending)
+        if not pending:
+            raise WorkflowError('There are no pending approvals for the current step.')
+
+        decision = APPROVED if approve else REJECTED
+        for approval in pending:
+            approval.refresh_from_db()
+            instance.refresh_from_db()
+            if approval.status != PENDING or instance.status not in ACTIVE_INSTANCE_STATUSES:
+                continue  # closed by an earlier decision in this loop
+            self._decide(approval, admin, decision, comments)
+
+        instance.refresh_from_db()
+        return instance
+
+    @transaction.atomic
+    def cancel(self, instance, user, reason='', submission_status='CANCELLED'):
+        """Stop a running workflow, cancel its open tasks and set the submission's final status."""
+        instance = WorkflowInstance.objects.select_for_update().get(pk=instance.pk)
+        if instance.status not in ACTIVE_INSTANCE_STATUSES:
+            raise WorkflowError('This workflow is already closed.')
+
+        now = timezone.now()
+        instance.status = 'CANCELLED'
+        instance.cancelled_at = now
+        instance.cancelled_by = user
+        instance.cancellation_reason = reason
+        instance.save(update_fields=['status', 'cancelled_at', 'cancelled_by', 'cancellation_reason'])
+        instance.approvals.filter(status=PENDING).update(status='CANCELLED', completed_at=now)
+
+        submission = instance.submission
+        submission.status = submission_status
+        submission.save(update_fields=['status', 'updated_at'])
+        return instance
+
+    def step_outcome(self, instance, step):
+        """PENDING, APPROVED or REJECTED for one step of one workflow instance."""
+        votes = list(
+            instance.approvals.filter(workflow_step=step, status__in=VOTE_STATUSES)
+            .values_list('status', flat=True)
+        )
+        total = len(votes)
+        if total == 0:
+            return PENDING
+        approved, rejected = votes.count(APPROVED), votes.count(REJECTED)
+
+        if step.approval_mode == 'ANY':
+            if approved:
+                return APPROVED
+            if rejected == total:
+                return REJECTED
+        elif step.approval_mode == 'MAJORITY':
+            if approved * 2 > total:
+                return APPROVED
+            if rejected * 2 >= total:  # a majority can no longer be reached
+                return REJECTED
+        else:  # ALL
+            if rejected:
+                return REJECTED
+            if approved == total:
+                return APPROVED
+        return PENDING
+
+    # ------------------------------------------------------------------
+    # Decisions
+    # ------------------------------------------------------------------
+
+    @transaction.atomic
+    def _decide(self, approval, user, decision, comments):
+        instance = WorkflowInstance.objects.select_for_update().get(pk=approval.workflow_instance_id)
+        approval = WorkflowApproval.objects.select_for_update().get(pk=approval.pk)
+
+        if instance.status not in ACTIVE_INSTANCE_STATUSES:
+            raise WorkflowError('This workflow is already closed.')
+        if approval.status != PENDING:
+            raise WorkflowError('This approval has already been processed.')
+
+        if decision == APPROVED:
+            approval.approve(user, comments)
+        else:
+            approval.reject(user, comments)
+
+        step = approval.workflow_step
+        outcome = self.step_outcome(instance, step)
+        if outcome == PENDING:
+            return instance
+
+        self._close_pending(instance, step=step)
+
+        if instance.workflow.workflow_type == 'PARALLEL':
+            self._evaluate_parallel(instance, approval)
+        elif outcome == REJECTED and step.is_required and not step.can_skip:
+            self._finish(instance, approved=False, deciding_approval=approval)
+        elif not self._activate_next_step(instance, after=step):
+            self._finish(instance, approved=True, deciding_approval=approval)
+
+        return instance
+
+    def _evaluate_parallel(self, instance, deciding_approval):
+        started = list(instance.workflow.steps.filter(approvals__workflow_instance=instance).distinct())
+        counted = [s for s in started if s.is_required] or started
+        outcomes = [self.step_outcome(instance, s) for s in counted]
+
+        total = len(outcomes)
+        approved = outcomes.count(APPROVED)
+        undecided = outcomes.count(PENDING)
+        threshold = instance.workflow.approval_threshold
+
+        if approved * 100 >= threshold * total:
+            self._finish(instance, approved=True, deciding_approval=deciding_approval)
+        elif (approved + undecided) * 100 < threshold * total:
+            self._finish(instance, approved=False, deciding_approval=deciding_approval)
+
+    def _finish(self, instance, approved, deciding_approval):
+        instance.status = 'COMPLETED' if approved else 'FAILED'
+        instance.completed_at = timezone.now()
+        instance.save(update_fields=['status', 'completed_at'])
+
+        submission = instance.submission
+        submission.status = 'APPROVED' if approved else 'REJECTED'
+        submission.save(update_fields=['status', 'updated_at'])
+
+        self._close_pending(instance)
+
+        if deciding_approval is not None:
+            verdict = 'approved' if approved else 'rejected'
+            self._notify(
+                deciding_approval,
+                'COMPLETED' if approved else 'REJECTED',
+                submission.submitted_by,
+                f"Your {submission.form.name} request was {verdict}",
+                f"Submission {submission.submission_number} was {verdict}.",
+            )
+
+    def _close_pending(self, instance, step=None):
+        pending = instance.approvals.filter(status=PENDING)
+        if step is not None:
+            pending = pending.filter(workflow_step=step)
+        pending.update(status='SKIPPED', completed_at=timezone.now())
+
+    # ------------------------------------------------------------------
+    # Starting steps
+    # ------------------------------------------------------------------
+
+    def _activate_next_step(self, instance, after):
+        """Open the next step after `after` (or the first step). Returns False when none is left."""
+        steps = instance.workflow.steps.order_by('order')
+        if after is not None:
+            steps = steps.filter(order__gt=after.order)
+
+        for step in steps:
+            if instance.workflow.workflow_type == 'CONDITIONAL' and not self._conditions_met(step, instance):
+                continue
+            instance.current_step = step
+            instance.save(update_fields=['current_step'])
+            self._activate_step(instance, step)
             return True
         return False
 
-    def _find_eligible_reassignment_user(self, step, submitter):
-        """
-        Find an eligible user to reassign approval when self-approval is detected.
+    def _activate_step(self, instance, step):
+        """Create one pending task per approver of `step`, never assigning the submitter."""
+        submitter = instance.submission.submitted_by
 
-        Logic:
-        1. Find users in SAME DEPARTMENT as the original approver
-        2. Exclude the submitter
-        3. Exclude admins and form managers (only regular users can be approvers)
-        4. Select the one with LEAST pending approvals (workload)
-        5. If no one found, return None (will fall back to admin)
-        """
-        from users.models import User
-        from django.db.models import Count
+        approvers = [
+            link.user for link in step.step_approvers.select_related('user').order_by('order')
+            if link.user.is_active and link.user_id != submitter.id
+        ]
+        if not approvers and step.assigned_user and step.assigned_user.is_active \
+                and step.assigned_user_id != submitter.id:
+            approvers = [step.assigned_user]
 
-        # Get the department from the original assigned user
-        original_user = step.assigned_user
-        if not original_user or not original_user.department:
-            return None
+        if step.step_approvers.filter(user_id=submitter.id).exists() or step.assigned_user_id == submitter.id:
+            self._record(instance, 'exclusions', {
+                'step': step.name, 'excluded_user': submitter.username, 'reason': 'self_approval',
+            })
 
-        department = original_user.department
-
-        # Find eligible users in same department
-        eligible_users = User.objects.filter(
-            department=department,
-            role='USER',  # Only regular users can be approvers
-            is_active=True
-        ).exclude(
-            id=submitter.id  # Exclude the submitter
-        )
-
-        if not eligible_users.exists():
-            return None
-
-        # Annotate with pending approval count (workload)
-        eligible_users = eligible_users.annotate(
-            pending_count=Count(
-                'assigned_approvals',
-                filter=Q(assigned_approvals__status='PENDING')
-            )
-        ).order_by('pending_count')  # Least workload first
-
-        return eligible_users.first()
-
-    def _get_admin_fallback(self, exclude_user=None):
-        """
-        Get an admin user as fallback when no eligible users found.
-
-        Args:
-            exclude_user: Optional user to exclude (usually the submitter)
-                         Tries to find a different admin first, but if submitter
-                         is the only admin, returns them as last resort.
-        """
-        from users.models import User
-
-        # First, try to find an admin who is NOT the excluded user
-        admins = User.objects.filter(
-            role='ADMIN',
-            is_active=True
-        )
-
-        if exclude_user:
-            # Prefer a different admin
-            other_admin = admins.exclude(id=exclude_user.id).first()
-            if other_admin:
-                return other_admin
-
-        # If no other admin available, return any admin (including submitter as last resort)
-        # This allows admin_approve to be used for self-approval override
-        return admins.first()
-
-    def _get_next_non_self_step(self, workflow, instance, current_step, submitter):
-        """Get the next step where the approver is not the submitter (deprecated - kept for compatibility)."""
-        if current_step:
-            next_steps = workflow.steps.filter(order__gt=current_step.order).order_by('order')
+        if approvers:
+            if instance.status == 'NEEDS_ADMIN_ACTION':
+                instance.status = 'IN_PROGRESS'
+                instance.context_data.pop('admin_fallback', None)
+                instance.context_data.pop('admin_fallback_step', None)
         else:
-            next_steps = workflow.steps.all().order_by('order')
-
-        for step in next_steps:
-            if not self._is_self_approval(step, submitter):
-                return step
-
-        return None
-
-    def _handle_self_approval_reassignment(self, instance, step, submitter):
-        """
-        Handle self-approval by reassigning to another user.
-
-        Returns:
-            tuple: (approval, reassigned_to_user) - always returns a valid approval
-        """
-        # Try to find eligible user in same department
-        eligible_user = self._find_eligible_reassignment_user(step, submitter)
-
-        if eligible_user:
-            # Reassign to eligible user
-            approval = self._create_reassigned_approval(instance, step, eligible_user, submitter)
-            return approval, eligible_user
-
-        # Fallback to admin (prefer a different admin if submitter is also admin)
-        admin = self._get_admin_fallback(exclude_user=submitter)
-        if admin:
-            approval = self._create_reassigned_approval(instance, step, admin, submitter, is_admin_fallback=True)
-            # Set instance status to NEEDS_ADMIN_ACTION so admin can use admin_approve/admin_reject endpoints
+            admin = (User.objects.filter(role='ADMIN', is_active=True).exclude(id=submitter.id).first()
+                     or User.objects.filter(role='ADMIN', is_active=True).first())
             instance.status = 'NEEDS_ADMIN_ACTION'
+            if admin is None:
+                instance.context_data['no_approvers_step'] = step.name
+                instance.save(update_fields=['status', 'context_data'])
+                logger.warning('Workflow %s: no approver and no administrator for step %s', instance.id, step.name)
+                return
+            approvers = [admin]
             instance.context_data['admin_fallback'] = True
             instance.context_data['admin_fallback_step'] = step.name
-            instance.save()
-            return approval, admin
+            self._record(instance, 'exclusions', {
+                'step': step.name, 'fallback_to': admin.username, 'reason': 'no_eligible_approvers',
+            })
+        instance.save(update_fields=['status', 'context_data'])
 
-        # Last resort: If no department users and no admin available,
-        # create a regular approval (workflow will need manual intervention)
-        # This should rarely happen in a properly configured system
-        approval = self._create_approval_for_step(instance, step)
-        # Mark instance as needing attention
-        instance.status = 'NEEDS_ADMIN_ACTION'
-        instance.context_data['reassignment_failed'] = True
-        instance.context_data['reassignment_failed_step'] = step.name
-        instance.save()
-        return approval, step.assigned_user
-
-    def _create_reassigned_approval(self, instance, step, new_assignee, original_submitter, is_admin_fallback=False):
-        """Create an approval that was reassigned due to self-approval conflict."""
-        # Calculate due date if time limit is set
-        due_date = None
-        if step.time_limit_hours:
-            due_date = timezone.now() + timedelta(hours=step.time_limit_hours)
-
-        if is_admin_fallback:
-            comments = f'Auto-reassigned to admin: Original approver ({original_submitter.username}) is the submitter, no other users available in department'
-        else:
-            comments = f'Auto-reassigned: Original approver ({original_submitter.username}) is the submitter'
-
-        approval = WorkflowApproval.objects.create(
-            workflow_instance=instance,
-            workflow_step=step,
-            status='PENDING',
-            assigned_to=new_assignee,
-            due_date=due_date,
-            comments=comments
-        )
-
-        # Create notification for new assignee
-        self._create_notification(
-            approval,
-            'ASSIGNED',
-            new_assignee,
-            f"Reassigned approval task: {step.name}",
-            f"You have been assigned to {step.name} for {instance.submission.form.name} (auto-reassigned due to conflict)"
-        )
-
-        return approval
-
-    def _create_approval_for_step(self, instance, step):
-        """Create an approval record for a workflow step."""
-
-        # Determine who should be assigned
-        assigned_to = self._get_assignee_for_step(step, instance)
-
-        if not assigned_to:
-            # If no specific user, create pending approval without assignee
-            # This might be handled by role-based assignment later
-            pass
-
-        # Calculate due date if time limit is set
-        due_date = None
-        if step.time_limit_hours:
-            due_date = timezone.now() + timedelta(hours=step.time_limit_hours)
-
-        approval = WorkflowApproval.objects.create(
-            workflow_instance=instance,
-            workflow_step=step,
-            status='PENDING',
-            assigned_to=assigned_to,
-            due_date=due_date
-        )
-
-        # Create notification for assignee
-        if assigned_to:
-            self._create_notification(
+        due_date = timezone.now() + timedelta(hours=step.time_limit_hours) if step.time_limit_hours else None
+        for approver in approvers:
+            approval = WorkflowApproval.objects.create(
+                workflow_instance=instance,
+                workflow_step=step,
+                status=PENDING,
+                assigned_to=approver,
+                due_date=due_date,
+            )
+            self._notify(
                 approval,
                 'ASSIGNED',
-                assigned_to,
+                approver,
                 f"New approval task: {step.name}",
-                f"You have been assigned to {step.name} for {instance.submission.form.name}"
+                f"You have been assigned to {step.name} for {instance.submission.form.name}",
             )
 
-        return approval
+    # ------------------------------------------------------------------
+    # Conditions
+    # ------------------------------------------------------------------
 
-    def _get_assignee_for_step(self, step, instance):
-        """Determine who should be assigned to a step."""
-
-        # Priority: specific user > role > department
-        if step.assigned_user:
-            # Check if user is not admin or form manager
-            if step.assigned_user.role not in ['ADMIN', 'MANAGER']:
-                return step.assigned_user
-
-        if step.assigned_role:
-            # Find a user with this role (excluding admin and form manager)
-            from users.models import User
-            users = User.objects.filter(
-                role=step.assigned_role,
-                is_active=True
-            ).exclude(role__in=['ADMIN', 'MANAGER'])
-
-            if step.assigned_department:
-                users = users.filter(department=step.assigned_department)
-
-            return users.first()
-
-        if step.assigned_department:
-            # Find any regular user in this department
-            from users.models import User
-            return User.objects.filter(
-                department=step.assigned_department,
-                role='USER',
-                is_active=True
-            ).first()
-
-        return None
-
-    def _check_step_conditions(self, step, instance):
-        """Check if a step's conditions are met."""
-
-        if not step.conditions:
-            return True
-
-        conditions = step.conditions
-        if isinstance(conditions, str):
-            conditions = json.loads(conditions)
-
-        # Evaluate conditions
-        return self._evaluate_conditions(conditions, instance.context_data)
-
-    def _evaluate_conditions(self, conditions, context):
-        """Evaluate a set of conditions against context data."""
-
-        if not conditions:
-            return True
-
-        logic = conditions.get('logic', 'AND')
-        rules = conditions.get('rules', [])
-
+    def _conditions_met(self, step, instance):
+        """Evaluate {"logic": "AND"|"OR", "rules": [{"field", "operator", "value"}]} against the submission."""
+        conditions = step.conditions or {}
+        rules = conditions.get('rules') or []
         if not rules:
             return True
 
         results = []
         for rule in rules:
-            field = rule.get('field')
-            operator_key = rule.get('operator', 'eq')
-            value = rule.get('value')
-
-            # Get field value from context
-            field_value = self._get_nested_value(context, field)
-
-            # Apply operator
-            op_func = self.operators.get(operator_key, operator.eq)
+            compare = OPERATORS.get(rule.get('operator', 'eq'), OPERATORS['eq'])
+            actual = self._field_value(instance, rule.get('field', ''))
             try:
-                result = op_func(field_value, value)
-                results.append(result)
-            except (TypeError, ValueError, AttributeError) as e:
-                # Log the error for debugging but don't crash the workflow
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Condition evaluation failed for field '{field}': {e}")
+                results.append(bool(compare(actual, rule.get('value'))))
+            except (TypeError, ValueError):
                 results.append(False)
 
-        # Apply logic
-        if logic == 'AND':
-            return all(results)
-        elif logic == 'OR':
-            return any(results)
-        else:
-            return True
+        return any(results) if conditions.get('logic') == 'OR' else all(results)
 
-    def _get_nested_value(self, data, path):
-        """Get a value from nested dictionary using dot notation."""
-        keys = path.split('.')
-        value = data
-
-        for key in keys:
-            if isinstance(value, dict):
-                value = value.get(key)
-            else:
-                return None
-
-        return value
-
-    def _get_next_conditional_step(self, workflow, instance, current_step):
-        """Get the next step based on conditions."""
-
-        if current_step:
-            # Get steps after current step
-            next_steps = workflow.steps.filter(order__gt=current_step.order).order_by('order')
-        else:
-            # Get first step
-            next_steps = workflow.steps.all().order_by('order')
-
-        for step in next_steps:
-            if self._check_step_conditions(step, instance):
-                return step
-
+    @staticmethod
+    def _field_value(instance, path):
+        """Look a dotted path up in the submission data first, then in the instance context."""
+        submission_data = instance.context_data.get('submission_data') or {}
+        for source in (submission_data, instance.context_data):
+            value = source
+            for key in path.split('.'):
+                value = value.get(key) if isinstance(value, dict) else None
+            if value is not None:
+                return value
         return None
 
-    @transaction.atomic
-    def approve_step(self, approval, user, comments=''):
-        """Process an approval for a workflow step."""
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
 
-        # Update approval
-        approval.approve(user, comments)
+    @staticmethod
+    def _record(instance, key, entry):
+        instance.context_data.setdefault(key, []).append(entry)
 
-        instance = approval.workflow_instance
-        step = approval.workflow_step
-
-        # Check if the STEP is complete based on approval_mode (ALL/MAJORITY/ANY)
-        is_step_complete, is_step_rejected = self._check_step_completion(instance, step)
-
-        if is_step_complete:
-            if is_step_rejected:
-                # Step was rejected (shouldn't happen in approve_step, but handle it)
-                self._handle_step_rejection(instance, step)
-            else:
-                # Step is approved - handle progression
-                self._handle_step_approval(instance, step)
-
-    @transaction.atomic
-    def reject_step(self, approval, user, comments=''):
-        """Process a rejection for a workflow step."""
-
-        # Update approval
-        approval.reject(user, comments)
-
-        instance = approval.workflow_instance
-        step = approval.workflow_step
-
-        # Check if the STEP is complete based on approval_mode (ALL/MAJORITY/ANY)
-        is_step_complete, is_step_rejected = self._check_step_completion(instance, step)
-
-        if is_step_complete:
-            if is_step_rejected:
-                # Step was rejected - handle rejection
-                self._handle_step_rejection(instance, step)
-            else:
-                # Step passed despite this rejection (MAJORITY/ANY mode)
-                self._handle_step_approval(instance, step)
-
-    def _handle_sequential_progression(self, instance, completed_approval):
-        """Handle progression for sequential workflows."""
-
-        current_step = completed_approval.workflow_step
-        next_step = instance.workflow.steps.filter(
-            order__gt=current_step.order
-        ).order_by('order').first()
-
-        if next_step:
-            instance.current_step = next_step
-            instance.save()
-
-            # Get submitter to check for self-approval
-            submitter = instance.submission.submitted_by
-
-            if self._is_self_approval(next_step, submitter):
-                # Reassign to another user
-                approval, new_assignee = self._handle_self_approval_reassignment(instance, next_step, submitter)
-                if approval:
-                    # Track reassignment in context
-                    reassignments = instance.context_data.get('reassignments', [])
-                    reassignments.append({
-                        'step': next_step.name,
-                        'original': submitter.username,
-                        'reassigned_to': new_assignee.username,
-                        'is_admin': new_assignee.role == 'ADMIN'
-                    })
-                    instance.context_data['reassignments'] = reassignments
-                    instance.save()
-            else:
-                self._create_approval_for_step(instance, next_step)
-
-    def _handle_parallel_progression(self, instance):
-        """Handle progression for parallel workflows."""
-
-        # Check if enough STEPS are complete (not individual approvals)
-        # With multi-approver support, we count unique steps, not approval records
-        required_steps = instance.workflow.steps.filter(is_required=True)
-        total_steps = required_steps.count()
-
-        if total_steps == 0:
-            return
-
-        # Count how many unique steps are complete (approved, not rejected)
-        completed_step_count = 0
-        for step in required_steps:
-            is_complete, is_rejected = self._check_step_completion(instance, step)
-            if is_complete and not is_rejected:
-                completed_step_count += 1
-
-        threshold = instance.workflow.approval_threshold
-        approval_percentage = (completed_step_count / total_steps) * 100
-
-        if approval_percentage >= threshold:
-            instance.status = 'COMPLETED'
-            instance.completed_at = timezone.now()
-            instance.save()
-            # Also update submission status
-            instance.submission.status = 'APPROVED'
-            instance.submission.save()
-
-    def _handle_conditional_progression(self, instance, completed_approval):
-        """Handle progression for conditional workflows."""
-
-        current_step = completed_approval.workflow_step
-        next_step = self._get_next_conditional_step(
-            instance.workflow, instance, current_step
-        )
-
-        if next_step:
-            instance.current_step = next_step
-            instance.save()
-
-            # Get submitter to check for self-approval
-            submitter = instance.submission.submitted_by
-
-            if self._is_self_approval(next_step, submitter):
-                # Reassign to another user
-                approval, new_assignee = self._handle_self_approval_reassignment(instance, next_step, submitter)
-                if approval:
-                    # Track reassignment in context
-                    reassignments = instance.context_data.get('reassignments', [])
-                    reassignments.append({
-                        'step': next_step.name,
-                        'original': submitter.username,
-                        'reassigned_to': new_assignee.username,
-                        'is_admin': new_assignee.role == 'ADMIN'
-                    })
-                    instance.context_data['reassignments'] = reassignments
-                    instance.save()
-            else:
-                self._create_approval_for_step(instance, next_step)
-
-    def _handle_hybrid_progression(self, instance, completed_approval):
-        """Handle progression for hybrid workflows."""
-
-        current_order = completed_approval.workflow_step.order
-
-        # Check if all steps at current order level are complete
-        steps_at_level = instance.workflow.steps.filter(order=current_order)
-        approvals_at_level = instance.approvals.filter(
-            workflow_step__in=steps_at_level
-        )
-
-        if approvals_at_level.filter(status='PENDING').exists():
-            # Still waiting for other parallel approvals at this level
-            return
-
-        # Move to next order level
-        next_steps = instance.workflow.steps.filter(
-            order__gt=current_order
-        ).order_by('order')
-
-        if next_steps.exists():
-            next_order = next_steps.first().order
-            steps_at_next_level = next_steps.filter(order=next_order)
-
-            # Get submitter to check for self-approval
-            submitter = instance.submission.submitted_by
-
-            for step in steps_at_next_level:
-                if self._check_step_conditions(step, instance):
-                    if self._is_self_approval(step, submitter):
-                        # Reassign to another user
-                        approval, new_assignee = self._handle_self_approval_reassignment(instance, step, submitter)
-                        if approval:
-                            # Track reassignment in context
-                            reassignments = instance.context_data.get('reassignments', [])
-                            reassignments.append({
-                                'step': step.name,
-                                'original': submitter.username,
-                                'reassigned_to': new_assignee.username,
-                                'is_admin': new_assignee.role == 'ADMIN'
-                            })
-                            instance.context_data['reassignments'] = reassignments
-                    else:
-                        self._create_approval_for_step(instance, step)
-
-            instance.current_step = steps_at_next_level.first()
-            instance.save()
-
-    def _check_workflow_completion(self, instance):
-        """Check if a workflow instance is complete."""
-
-        workflow = instance.workflow
-
-        if workflow.workflow_type == 'SEQUENTIAL':
-            # For sequential workflows, check if ALL required steps have been approved
-            # With multi-approver support, we need to count UNIQUE STEPS that are complete
-            # (not individual approval records)
-            required_steps = workflow.steps.filter(is_required=True)
-            total_required_steps = required_steps.count()
-
-            # Count how many unique steps are complete (approved, not rejected)
-            completed_step_count = 0
-            for step in required_steps:
-                is_complete, is_rejected = self._check_step_completion(instance, step)
-                if is_complete and not is_rejected:
-                    completed_step_count += 1
-
-            return completed_step_count >= total_required_steps
-
-        elif workflow.workflow_type == 'PARALLEL':
-            # Complete based on threshold - count unique steps, not individual approvals
-            required_steps = workflow.steps.filter(is_required=True)
-            total_steps = required_steps.count()
-
-            if total_steps == 0:
-                return True
-
-            # Count how many unique steps are complete (approved, not rejected)
-            completed_step_count = 0
-            for step in required_steps:
-                is_complete, is_rejected = self._check_step_completion(instance, step)
-                if is_complete and not is_rejected:
-                    completed_step_count += 1
-
-            approval_percentage = (completed_step_count / total_steps) * 100
-            return approval_percentage >= workflow.approval_threshold
-
-        elif workflow.workflow_type in ['CONDITIONAL', 'HYBRID']:
-            # Complete if all required steps are complete (using step-level completion check)
-            # With multi-approver support, we check each step's completion status
-            required_steps = workflow.steps.filter(is_required=True)
-
-            if required_steps.count() == 0:
-                return True
-
-            # Check each required step - all must be complete and not rejected
-            for step in required_steps:
-                # Check if this step has any approvals for this instance
-                step_approvals = instance.approvals.filter(workflow_step=step)
-                if not step_approvals.exists():
-                    # Step hasn't been reached yet
-                    return False
-
-                is_complete, is_rejected = self._check_step_completion(instance, step)
-                if is_rejected:
-                    # Step was rejected - workflow is failed, not complete
-                    return False
-                if not is_complete:
-                    # Step still pending
-                    return False
-
-            return True
-
-        return False
-
-    def _create_notification(self, approval, notification_type, recipient, subject, message):
-        """Create a workflow notification."""
-
+    @staticmethod
+    def _notify(approval, notification_type, recipient, subject, message):
         WorkflowNotification.objects.create(
             workflow_approval=approval,
             notification_type=notification_type,
             recipient=recipient,
             subject=subject,
-            message=message
+            message=message,
         )
-
-    def _send_notifications(self, instance, event_type):
-        """Send notifications for workflow events."""
-
-        # This is a placeholder for actual notification sending
-        # In production, this would integrate with email, SMS, or push notifications
-        pass
-
-    def check_escalations(self):
-        """Check for approvals that need escalation."""
-
-        # Find overdue approvals
-        overdue_approvals = WorkflowApproval.objects.filter(
-            status='PENDING',
-            due_date__lt=timezone.now(),
-            workflow_instance__workflow__auto_escalate=True
-        )
-
-        for approval in overdue_approvals:
-            self._escalate_approval(approval)
-
-    def _escalate_approval(self, approval):
-        """Escalate an overdue approval."""
-
-        # Find escalation target (e.g., manager of assigned user)
-        # This is a simplified implementation
-        if approval.assigned_to and approval.assigned_to.department:
-            from users.models import User
-            manager = User.objects.filter(
-                department=approval.assigned_to.department,
-                role='MANAGER'
-            ).first()
-
-            if manager:
-                # Reassign to manager
-                approval.assigned_to = manager
-                approval.save()
-
-                # Create escalation notification
-                self._create_notification(
-                    approval,
-                    'ESCALATION',
-                    manager,
-                    f"Escalated: {approval.workflow_step.name}",
-                    "This approval has been escalated to you due to timeout."
-                )

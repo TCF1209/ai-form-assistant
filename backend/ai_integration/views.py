@@ -2,6 +2,9 @@
 Views for AI Integration endpoints
 """
 import logging
+from datetime import timedelta
+
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -22,11 +25,41 @@ from .serializers import (
 )
 from .models import ChatSession, ChatMessage
 from .services import (
+    parse_json_response,
     get_openai_service,
     get_form_generation_service
 )
 
 logger = logging.getLogger(__name__)
+
+
+def time_range_bounds(time_range, now):
+    """
+    (start, end) for a named range, using calendar days in the project's TIME_ZONE.
+    Weeks start on Monday. A missing bound is None.
+    """
+    local_now = timezone.localtime(now)
+    today = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+
+    if time_range == 'today':
+        return today, None
+    if time_range == 'yesterday':
+        return today - timedelta(days=1), today
+    if time_range == 'this_week':
+        return week_start, None
+    if time_range == 'last_week':
+        return week_start - timedelta(days=7), week_start
+    if time_range == 'this_month':
+        return month_start, None
+    if time_range == 'last_month':
+        return (month_start - timedelta(days=1)).replace(day=1), month_start
+    if time_range == 'this_year':
+        return today.replace(month=1, day=1), None
+    if time_range == 'last_6_months':
+        return local_now - timedelta(days=180), None
+    return None, None
 
 
 class AIFormGenerationViewSet(viewsets.ViewSet):
@@ -38,7 +71,7 @@ class AIFormGenerationViewSet(viewsets.ViewSet):
     def generate(self, request):
         """Generate a form from natural language description"""
         # Check if user has permission to create forms
-        if not request.user.role in ['ADMIN', 'MANAGER', 'FORM_MANAGER']:
+        if request.user.role not in ['ADMIN', 'MANAGER']:
             return Response(
                 {"error": "Only administrators and form managers can generate forms"},
                 status=status.HTTP_403_FORBIDDEN
@@ -48,12 +81,10 @@ class AIFormGenerationViewSet(viewsets.ViewSet):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Get department from user if form manager
-        department = None
-        if request.user.role == 'FORM_MANAGER' and request.user.department:
+        # A Form Manager always generates forms for their own department
+        department = serializer.validated_data.get('department')
+        if request.user.role == 'MANAGER' and request.user.department:
             department = request.user.department.name
-        elif serializer.validated_data.get('department'):
-            department = serializer.validated_data['department']
 
         # Generate form using AI
         form_service = get_form_generation_service()
@@ -185,16 +216,15 @@ Available forms:
 User's department: {user_department.name if user_department else 'Not specified'}"""
 
             try:
-                import json
                 messages = [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ]
 
-                response = ai_service._make_api_call(messages, temperature=0.3)
+                response = ai_service._make_api_call(messages, temperature=0.3, response_format={"type": "json_object"})
 
                 if response:
-                    ai_result = json.loads(response)
+                    ai_result = parse_json_response(response)
 
                     # Build response with actual form data
                     result_forms = []
@@ -583,46 +613,11 @@ class NaturalLanguageQueryView(APIView):
             return self._execute_overview_query(base_qs, forms_qs, dept_note)
 
     def _apply_time_filter(self, queryset, time_range, now):
-        """Apply time range filter to queryset"""
-        from datetime import timedelta
-
-        if time_range == 'today':
-            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            return queryset.filter(submitted_at__gte=start)
-
-        elif time_range == 'yesterday':
-            yesterday = now - timedelta(days=1)
-            start = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
-            end = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            return queryset.filter(submitted_at__gte=start, submitted_at__lt=end)
-
-        elif time_range == 'this_week':
-            start = now - timedelta(days=now.weekday())
-            start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-            return queryset.filter(submitted_at__gte=start)
-
-        elif time_range == 'last_week':
-            end = now - timedelta(days=now.weekday())
-            start = end - timedelta(days=7)
-            return queryset.filter(submitted_at__gte=start, submitted_at__lt=end)
-
-        elif time_range == 'this_month':
-            start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            return queryset.filter(submitted_at__gte=start)
-
-        elif time_range == 'last_month':
-            end = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-            start = (end - timedelta(days=1)).replace(day=1)
-            return queryset.filter(submitted_at__gte=start, submitted_at__lt=end)
-
-        elif time_range == 'this_year':
-            start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-            return queryset.filter(submitted_at__gte=start)
-
-        elif time_range == 'last_6_months':
-            start = now - timedelta(days=180)
-            return queryset.filter(submitted_at__gte=start)
-
+        start, end = time_range_bounds(time_range, now)
+        if start is not None:
+            queryset = queryset.filter(submitted_at__gte=start)
+        if end is not None:
+            queryset = queryset.filter(submitted_at__lt=end)
         return queryset
 
     def _execute_count_query(self, queryset, intent, dept_note):

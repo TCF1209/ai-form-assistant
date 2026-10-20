@@ -94,29 +94,6 @@ const authService = {
       return false;
     }
   },
-
-  // Request password reset
-  requestPasswordReset: async (email) => {
-    try {
-      const response = await api.post('/auth/password-reset/', { email });
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || error.message;
-    }
-  },
-
-  // Confirm password reset
-  confirmPasswordReset: async (token, newPassword) => {
-    try {
-      const response = await api.post('/auth/password-reset/confirm/', {
-        token,
-        password: newPassword,
-      });
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || error.message;
-    }
-  },
 };
 
 export default authService;

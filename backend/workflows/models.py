@@ -11,6 +11,10 @@ import uuid
 User = get_user_model()
 
 
+# Instances in these states still have open approval tasks
+ACTIVE_INSTANCE_STATUSES = ('PENDING', 'IN_PROGRESS', 'NEEDS_ADMIN_ACTION')
+
+
 class Workflow(models.Model):
     """
     Main workflow model defining approval processes.
@@ -20,7 +24,6 @@ class Workflow(models.Model):
         SEQUENTIAL = 'SEQUENTIAL', _('Sequential Approval')
         PARALLEL = 'PARALLEL', _('Parallel Approval')
         CONDITIONAL = 'CONDITIONAL', _('Conditional Routing')
-        HYBRID = 'HYBRID', _('Hybrid Workflow')
 
     class WorkflowStatus(models.TextChoices):
         DRAFT = 'DRAFT', _('Draft')
@@ -321,6 +324,7 @@ class WorkflowApproval(models.Model):
         SKIPPED = 'SKIPPED', _('Skipped')
         DELEGATED = 'DELEGATED', _('Delegated')
         EXPIRED = 'EXPIRED', _('Expired')
+        CANCELLED = 'CANCELLED', _('Cancelled')
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     workflow_instance = models.ForeignKey(

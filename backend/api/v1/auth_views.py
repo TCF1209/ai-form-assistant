@@ -9,11 +9,16 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
-from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+from rest_framework_simplejwt.exceptions import TokenError
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
+from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 
 from users.serializers import (
     UserSerializer,
@@ -246,106 +251,97 @@ class PasswordResetRequestView(APIView):
     """
     API endpoint for requesting password reset.
     POST /api/v1/auth/password-reset/
+
+    Emails a link with a one-time token (Django's PasswordResetTokenGenerator). The token
+    stops working once the password changes or after PASSWORD_RESET_TIMEOUT.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if serializer.is_valid():
-            email = serializer.validated_data['email']
+        user = User.objects.filter(email=serializer.validated_data['email'], is_active=True).first()
+        if user is not None:
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            reset_url = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
+            minutes = settings.PASSWORD_RESET_TIMEOUT // 60
 
-            try:
-                user = User.objects.get(email=email)
+            send_mail(
+                subject='Password Reset Request',
+                message=(
+                    f'Click the link below to reset your password:\n\n{reset_url}\n\n'
+                    f'This link will expire in {minutes} minutes and can only be used once.'
+                ),
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
 
-                # Generate password reset token
-                refresh = RefreshToken.for_user(user)
-                reset_token = str(refresh.access_token)
+            AuditLog.objects.create(
+                user=user,
+                action=AuditLog.ActionType.UPDATE,
+                model_name='User',
+                object_id=str(user.id),
+                object_repr=str(user),
+                changes={'action': 'password_reset_requested'},
+                ip_address=get_client_ip(request),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')
+            )
 
-                # Send password reset email
-                reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
-
-                send_mail(
-                    subject='Password Reset Request',
-                    message=f'Click the link below to reset your password:\n\n{reset_url}\n\nThis link will expire in 60 minutes.',
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[user.email],
-                    fail_silently=False,
-                )
-
-                # Log the password reset request
-                AuditLog.objects.create(
-                    user=user,
-                    action=AuditLog.ActionType.UPDATE,
-                    model_name='User',
-                    object_id=str(user.id),
-                    object_repr=str(user),
-                    changes={'action': 'password_reset_requested'},
-                    ip_address=get_client_ip(request),
-                    user_agent=request.META.get('HTTP_USER_AGENT', '')
-                )
-
-            except User.DoesNotExist:
-                # Don't reveal if email exists or not for security
-                pass
-
-            return Response({
-                'message': 'If an account with that email exists, a password reset link has been sent.'
-            }, status=status.HTTP_200_OK)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+        # Same answer whether or not the email exists, so accounts cannot be discovered
+        return Response({
+            'message': 'If an account with that email exists, a password reset link has been sent.'
+        }, status=status.HTTP_200_OK)
 
 
 class PasswordResetConfirmView(APIView):
     """
     API endpoint for confirming password reset with token.
-    POST /api/v1/auth/password-reset/confirm/
+    POST /api/v1/auth/password-reset/confirm/  {uid, token, new_password, new_password_confirm}
     """
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        if serializer.is_valid():
-            token = serializer.validated_data['token']
-            new_password = serializer.validated_data['new_password']
+        try:
+            user_id = force_str(urlsafe_base64_decode(serializer.validated_data['uid']))
+            user = User.objects.get(pk=user_id, is_active=True)
+        except (TypeError, ValueError, OverflowError, DjangoValidationError, User.DoesNotExist):
+            user = None
 
-            try:
-                # Verify token and get user
-                from rest_framework_simplejwt.tokens import AccessToken
-                access_token = AccessToken(token)
-                user_id = access_token['user_id']
-                user = User.objects.get(id=user_id)
+        if user is None or not default_token_generator.check_token(user, serializer.validated_data['token']):
+            return Response(
+                {'error': 'This reset link is invalid or has expired. Please request a new one.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-                # Update password
-                user.set_password(new_password)
-                user.save()
+        user.set_password(serializer.validated_data['new_password'])
+        user.save()
 
-                # Log the password reset
-                AuditLog.objects.create(
-                    user=user,
-                    action=AuditLog.ActionType.UPDATE,
-                    model_name='User',
-                    object_id=str(user.id),
-                    object_repr=str(user),
-                    changes={'action': 'password_reset_confirmed'},
-                    ip_address=get_client_ip(request),
-                    user_agent=request.META.get('HTTP_USER_AGENT', '')
-                )
+        # Sign the account out everywhere: refresh tokens issued before the reset stop working
+        for outstanding in OutstandingToken.objects.filter(user=user):
+            BlacklistedToken.objects.get_or_create(token=outstanding)
 
-                return Response({
-                    'message': 'Password has been reset successfully'
-                }, status=status.HTTP_200_OK)
+        AuditLog.objects.create(
+            user=user,
+            action=AuditLog.ActionType.UPDATE,
+            model_name='User',
+            object_id=str(user.id),
+            object_repr=str(user),
+            changes={'action': 'password_reset_confirmed'},
+            ip_address=get_client_ip(request),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')
+        )
 
-            except (TokenError, InvalidToken, User.DoesNotExist):
-                return Response(
-                    {'error': 'Invalid or expired token'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+        return Response({'message': 'Password has been reset successfully'}, status=status.HTTP_200_OK)
 
 
 class TokenRefreshView(TokenRefreshView):

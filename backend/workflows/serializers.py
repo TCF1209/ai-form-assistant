@@ -6,6 +6,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from .models import (
+    ACTIVE_INSTANCE_STATUSES,
     Workflow, WorkflowStep, WorkflowStepApprover, WorkflowInstance,
     WorkflowApproval, WorkflowNotification
 )
@@ -70,7 +71,7 @@ class WorkflowStepSerializer(serializers.ModelSerializer):
 
     def validate_assigned_user(self, value):
         """Ensure only regular users can be approvers."""
-        if value and value.role in ['ADMIN', 'FORM_MANAGER']:
+        if value and value.role in ['ADMIN', 'MANAGER']:
             raise serializers.ValidationError(
                 "Admins and Form Managers cannot be approvers. Only regular users can approve."
             )
@@ -84,7 +85,7 @@ class WorkflowStepSerializer(serializers.ModelSerializer):
         for user_id in approvers:
             try:
                 user = User.objects.get(id=user_id)
-                if user.role in ['ADMIN', 'FORM_MANAGER']:
+                if user.role in ['ADMIN', 'MANAGER']:
                     raise serializers.ValidationError(
                         f"User {user.username} cannot be an approver (role: {user.role}). "
                         "Only regular users can be approvers."
@@ -145,7 +146,7 @@ class WorkflowSerializer(serializers.ModelSerializer):
         if user.role == 'ADMIN':
             return True
         # Form Manager can edit workflows in their department
-        if user.role == 'FORM_MANAGER' and obj.form.department == user.department:
+        if user.role == 'MANAGER' and obj.form.department == user.department:
             return True
         return False
 
@@ -203,71 +204,60 @@ class WorkflowSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def create(self, validated_data):
         steps_data = validated_data.pop('steps', [])
-
-        # Auto-generate workflow code from name
         validated_data['code'] = self._generate_workflow_code(validated_data.get('name', 'WORKFLOW'))
-
         workflow = Workflow.objects.create(**validated_data)
-
-        # Create workflow steps with approvers
-        for step_data in steps_data:
-            approvers = step_data.pop('approvers', [])
-            step = WorkflowStep.objects.create(workflow=workflow, **step_data)
-
-            # Create WorkflowStepApprover records for multi-approver support
-            for order, user_id in enumerate(approvers):
-                WorkflowStepApprover.objects.create(
-                    workflow_step=step,
-                    user_id=user_id,
-                    order=order
-                )
-
-            # Backward compatibility: If no approvers but has assigned_user, create approver record
-            if not approvers and step.assigned_user:
-                WorkflowStepApprover.objects.create(
-                    workflow_step=step,
-                    user=step.assigned_user,
-                    order=0
-                )
-
+        self._save_steps(workflow, steps_data)
         return workflow
 
     @transaction.atomic
     def update(self, instance, validated_data):
         steps_data = validated_data.pop('steps', None)
 
-        # Update workflow fields
+        if steps_data is not None:
+            running = instance.instances.filter(status__in=ACTIVE_INSTANCE_STATUSES).count()
+            if running:
+                raise serializers.ValidationError({
+                    'steps': f"{running} request(s) are still being approved with this workflow. "
+                             "Finish or cancel them before changing its steps."
+                })
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        # Update steps if provided
         if steps_data is not None:
-            # Delete existing steps (cascade deletes WorkflowStepApprover records)
-            instance.steps.all().delete()
-
-            # Create new steps with approvers
-            for step_data in steps_data:
-                approvers = step_data.pop('approvers', [])
-                step = WorkflowStep.objects.create(workflow=instance, **step_data)
-
-                # Create WorkflowStepApprover records
-                for order, user_id in enumerate(approvers):
-                    WorkflowStepApprover.objects.create(
-                        workflow_step=step,
-                        user_id=user_id,
-                        order=order
-                    )
-
-                # Backward compatibility: If no approvers but has assigned_user
-                if not approvers and step.assigned_user:
-                    WorkflowStepApprover.objects.create(
-                        workflow_step=step,
-                        user=step.assigned_user,
-                        order=0
-                    )
-
+            self._save_steps(instance, steps_data)
         return instance
+
+    def _save_steps(self, workflow, steps_data):
+        """
+        Update steps in place, by position, so approval records of earlier requests keep
+        pointing at their step. A step that already has approval history cannot be removed.
+        """
+        existing = list(workflow.steps.order_by('order'))
+
+        for index, step_data in enumerate(steps_data):
+            approvers = step_data.pop('approvers', [])
+            step_data['order'] = index
+            if index < len(existing):
+                step = existing[index]
+                for attr, value in step_data.items():
+                    setattr(step, attr, value)
+                step.save()
+                step.step_approvers.all().delete()
+            else:
+                step = WorkflowStep.objects.create(workflow=workflow, **step_data)
+
+            approver_ids = approvers or ([step.assigned_user_id] if step.assigned_user_id else [])
+            for order, user_id in enumerate(approver_ids):
+                WorkflowStepApprover.objects.create(workflow_step=step, user_id=user_id, order=order)
+
+        for step in existing[len(steps_data):]:
+            if step.approvals.exists():
+                raise serializers.ValidationError({
+                    'steps': f"Step '{step.name}' has approval history and cannot be removed."
+                })
+            step.delete()
 
 
 class WorkflowListSerializer(serializers.ModelSerializer):
@@ -426,7 +416,7 @@ class ApprovalActionSerializer(serializers.Serializer):
         if data.get('delegate_to'):
             try:
                 user = User.objects.get(id=data['delegate_to'])
-                if user.role in ['ADMIN', 'FORM_MANAGER']:
+                if user.role in ['ADMIN', 'MANAGER']:
                     raise serializers.ValidationError(
                         "Cannot delegate to Admin or Form Manager. Only regular users can be approvers."
                     )

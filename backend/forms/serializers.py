@@ -178,8 +178,22 @@ class FormSubmissionDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id', 'submission_number', 'submitted_by',
-            'ip_address', 'user_agent', 'created_at', 'updated_at'
+            'ip_address', 'user_agent', 'created_at', 'submitted_at', 'updated_at'
         ]
+
+    def validate_status(self, value):
+        # Approval, rejection and withdrawal happen through their own endpoints and the
+        # workflow engine; a client may only save a draft or submit it.
+        if value not in (FormSubmission.SubmissionStatus.DRAFT, FormSubmission.SubmissionStatus.SUBMITTED):
+            raise serializers.ValidationError('A submission can only be saved as a draft or submitted.')
+        return value
+
+    def validate_form(self, form):
+        if form.status != Form.FormStatus.ACTIVE:
+            raise serializers.ValidationError('This form is not accepting submissions.')
+        if self.instance is not None and form != self.instance.form:
+            raise serializers.ValidationError('A submission cannot be moved to another form.')
+        return form
 
     def get_form_detail(self, obj):
         if obj.form:
@@ -202,14 +216,14 @@ class FormSubmissionDetailSerializer(serializers.ModelSerializer):
         return None
 
     def get_files(self, obj):
-        # Get associated files for this submission
-        files = obj.files.all()
         return [{
             'id': str(file.id),
-            'file_name': file.file_name,
+            'field_name': file.field.name,
+            'file_name': file.original_name,
+            'file_size': file.file_size,
             'file': file.file.url if file.file else None,
             'uploaded_at': file.uploaded_at
-        } for file in files]
+        } for file in obj.files.select_related('field')]
 
     def create(self, validated_data):
         """Create submission with current user as submitter."""

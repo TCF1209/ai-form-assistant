@@ -152,6 +152,18 @@ class IsOwnerOrManagerOrAdmin(permissions.BasePermission):
         return False
 
 
+class IsStaffOrReadOnly(permissions.BasePermission):
+    """
+    Anyone signed in may read; only Admins and Form Managers may create, change or delete.
+    Department scoping is left to the view's queryset and checks.
+    """
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return request.user.is_authenticated and request.user.role in ('ADMIN', 'MANAGER')
+
+
 class ReadOnly(permissions.BasePermission):
     """
     Permission to only allow read-only access.

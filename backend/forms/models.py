@@ -80,15 +80,6 @@ class Form(models.Model):
     def __str__(self):
         return f"{self.name} (v{self.version})"
 
-    def create_new_version(self):
-        """Create a new version of this form."""
-        self.pk = None
-        self.id = uuid.uuid4()
-        self.version += 1
-        self.status = self.FormStatus.DRAFT
-        self.save()
-        return self
-
 
 class FormField(models.Model):
     """

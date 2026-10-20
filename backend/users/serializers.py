@@ -353,8 +353,9 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
     """
-    Serializer for confirming password reset with token.
+    Serializer for confirming password reset with the uid and token from the emailed link.
     """
+    uid = serializers.CharField(required=True)
     token = serializers.CharField(required=True)
     new_password = serializers.CharField(
         required=True,

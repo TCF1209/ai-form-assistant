@@ -31,7 +31,6 @@ const WorkflowPreview = () => {
       case 'SEQUENTIAL': return 'bg-sky-100 text-sky-700 border-sky-300';
       case 'PARALLEL': return 'bg-emerald-100 text-emerald-700 border-emerald-300';
       case 'CONDITIONAL': return 'bg-amber-100 text-amber-700 border-amber-300';
-      case 'HYBRID': return 'bg-purple-100 text-purple-700 border-purple-300';
       default: return 'bg-slate-100 text-slate-700 border-slate-300';
     }
   };

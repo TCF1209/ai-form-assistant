@@ -7,10 +7,9 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Count
-from django.utils import timezone
-from .models import Form, FormField, FormSubmission, FormFile
+from .models import Form, FormField, FormSubmission
 from .serializers import (
     FormListSerializer, FormDetailSerializer,
     FormFieldSerializer, FormSubmissionListSerializer,
@@ -18,6 +17,10 @@ from .serializers import (
 )
 from .templates import FORM_TEMPLATES
 from users.audit import log_create, log_update, log_delete, log_submit, log_approve, log_reject
+from users.permissions import IsStaffOrReadOnly
+from workflows.engine import WorkflowEngine
+from workflows.models import ACTIVE_INSTANCE_STATUSES, WorkflowInstance
+from .uploads import save_uploads, validate_uploads
 
 
 class IsFormManager(permissions.BasePermission):
@@ -43,7 +46,7 @@ class IsFormOwnerOrManager(permissions.BasePermission):
 class FormViewSet(viewsets.ModelViewSet):
     """ViewSet for managing forms."""
     queryset = Form.objects.all()
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
 
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""
@@ -573,81 +576,48 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        """Set submitted_by to current user when creating submission."""
-        # Only USER role can create/submit forms
+        """Save a draft or a submitted request. Only employees (USER role) submit forms."""
         if self.request.user.role != 'USER':
             raise PermissionDenied("Only users can submit forms. Admins and Form Managers cannot submit forms.")
 
-        # Handle file uploads
-        files_data = {}
-        for key in self.request.FILES.keys():
-            files_data[key] = self.request.FILES[key]
+        uploads = validate_uploads(serializer.validated_data['form'], self.request.FILES)
 
-        # Save the submission
-        submission = serializer.save(submitted_by=self.request.user)
+        # The post_save signal starts the workflow; files and workflow are saved together or not at all.
+        with transaction.atomic():
+            submission = serializer.save(submitted_by=self.request.user)
+            save_uploads(submission, uploads)
 
-        # Save files if any
-        for field_name, file in files_data.items():
-            FormFile.objects.create(
-                submission=submission,
-                field_name=field_name,
-                file=file
-            )
-
-        # Log the submission creation
-        if submission.status == 'SUBMITTED':
+        if submission.status == FormSubmission.SubmissionStatus.SUBMITTED:
             log_submit(self.request.user, 'FormSubmission', submission, self.request)
         else:
             log_create(self.request.user, 'FormSubmission', submission, self.request)
 
-        # Check if submission is being submitted (not draft) and start workflow
-        if submission.status == 'SUBMITTED':
-            self._start_workflow_for_submission(submission)
-
-    def _start_workflow_for_submission(self, submission):
-        """Start workflow for a submitted form if there's an active workflow."""
-        from workflows.models import Workflow, WorkflowInstance
-        from workflows.engine import WorkflowEngine
-
-        # Check for active workflow for this form
-        active_workflow = Workflow.objects.filter(
-            form=submission.form,
-            status='ACTIVE'
-        ).first()
-
-        if active_workflow:
-            # Check if workflow instance already exists
-            existing_instance = WorkflowInstance.objects.filter(
-                submission=submission,
-                workflow=active_workflow
-            ).exists()
-
-            if not existing_instance:
-                # Start the workflow
-                engine = WorkflowEngine()
-                engine.start_workflow(submission, active_workflow)
-
     def perform_update(self, serializer):
-        """Check permissions when updating submission."""
-        instance = self.get_object()
-
-        # Users can only edit their own submissions
-        if self.request.user.role == 'USER' and instance.submitted_by != self.request.user:
+        """Only the submitter may change a submission, and only while it is a draft."""
+        instance = serializer.instance
+        if instance.submitted_by != self.request.user:
             raise PermissionDenied("You can only edit your own submissions.")
+        if instance.status != FormSubmission.SubmissionStatus.DRAFT:
+            raise ValidationError("Only drafts can be edited. Withdraw the request if it needs changes.")
 
-        # Managers can edit submissions from their department
-        if self.request.user.role == 'MANAGER':
-            if instance.form.department != self.request.user.department:
-                if instance.submitted_by != self.request.user:
-                    raise PermissionDenied("You can only edit submissions from your department.")
+        uploads = validate_uploads(instance.form, self.request.FILES)
+        with transaction.atomic():
+            submission = serializer.save()
+            save_uploads(submission, uploads)
 
-        # Check if status changed from DRAFT to SUBMITTED
-        old_status = instance.status
-        submission = serializer.save()
+        if submission.status == FormSubmission.SubmissionStatus.SUBMITTED:
+            log_submit(self.request.user, 'FormSubmission', submission, self.request)
 
-        # If status changed to SUBMITTED, start workflow
-        if old_status != 'SUBMITTED' and submission.status == 'SUBMITTED':
-            self._start_workflow_for_submission(submission)
+    def perform_destroy(self, instance):
+        """Drafts can be discarded by their owner; submitted requests are kept for the record."""
+        user = self.request.user
+        if user.role != 'ADMIN':
+            if instance.submitted_by != user:
+                raise PermissionDenied("You can only delete your own drafts.")
+            if instance.status != FormSubmission.SubmissionStatus.DRAFT:
+                raise ValidationError("Only drafts can be deleted. Withdraw the request instead.")
+        log_delete(user, 'FormSubmission', str(instance.id), str(instance), self.request)
+        instance.delete()
 
     @action(detail=False, methods=['get'])
     def drafts(self, request):
@@ -665,120 +635,18 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
         serializer = FormSubmissionListSerializer(queryset, many=True)
         return Response(serializer.data)
 
-    @action(detail=True, methods=['post'])
-    def save_draft(self, request, pk=None):
-        """Save progress on a submission as draft."""
-        submission = self.get_object()
-
-        if submission.submitted_by != request.user:
-            return Response(
-                {"error": "You can only save your own submissions."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        if submission.status not in [
-            FormSubmission.SubmissionStatus.DRAFT,
-            FormSubmission.SubmissionStatus.SUBMITTED
-        ]:
-            return Response(
-                {"error": "Cannot save as draft."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        submission.data = request.data.get('data', {})
-        submission.status = FormSubmission.SubmissionStatus.DRAFT
-        submission.version = submission.version + 1
-        submission.save()
-
-        serializer = self.get_serializer(submission)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['post'])
-    def submit(self, request, pk=None):
-        """Submit a draft submission."""
-        submission = self.get_object()
-
-        if submission.submitted_by != request.user:
-            return Response(
-                {"error": "You can only submit your own submissions."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        if submission.status != FormSubmission.SubmissionStatus.DRAFT:
-            return Response(
-                {"error": "Only draft submissions can be submitted."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        submission.status = FormSubmission.SubmissionStatus.SUBMITTED
-        submission.version = submission.version + 1
-        submission.save()
-
-        serializer = self.get_serializer(submission)
-        return Response(serializer.data)
-
-    @action(detail=True, methods=['post'])
-    def upload_file(self, request, pk=None):
-        """Upload a file for a submission."""
-        submission = self.get_object()
-
-        if submission.submitted_by != request.user:
-            return Response(
-                {"error": "You can only upload files to your own submissions."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        field_name = request.data.get('field_name')
-        if not field_name:
-            return Response(
-                {"error": "field_name is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        if 'file' not in request.FILES:
-            return Response(
-                {"error": "No file provided."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        file = request.FILES['file']
-
-        # Delete existing file for this field if any
-        FormFile.objects.filter(
-            submission=submission,
-            field_name=field_name
-        ).delete()
-
-        # Create new file record
-        form_file = FormFile.objects.create(
-            submission=submission,
-            field_name=field_name,
-            file=file
-        )
-
-        return Response({
-            'id': form_file.id,
-            'field_name': form_file.field_name,
-            'file': form_file.file.url,
-            'uploaded_at': form_file.uploaded_at
-        })
-
     @action(detail=True, methods=['get'])
     def files(self, request, pk=None):
         """Get all files for a submission."""
         submission = self.get_object()
-
-        files = FormFile.objects.filter(submission=submission)
-        data = []
-        for file in files:
-            data.append({
-                'id': file.id,
-                'field_name': file.field_name,
-                'file': file.file.url,
-                'uploaded_at': file.uploaded_at
-            })
-
-        return Response(data)
+        return Response([{
+            'id': file.id,
+            'field_name': file.field.name,
+            'file_name': file.original_name,
+            'file_size': file.file_size,
+            'file': file.file.url,
+            'uploaded_at': file.uploaded_at
+        } for file in submission.files.select_related('field')])
 
     @action(detail=True, methods=['post'])
     def withdraw(self, request, pk=None):
@@ -787,8 +655,6 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
         Only the submitter can withdraw their own submission.
         Only submissions in SUBMITTED or IN_REVIEW status can be withdrawn.
         """
-        from workflows.models import WorkflowInstance
-
         submission = self.get_object()
 
         # Check that the user is the submitter
@@ -810,31 +676,18 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Get the reason for withdrawal (optional)
         reason = request.data.get('reason', '')
+        cancellation_reason = f"Withdrawn by submitter: {reason}" if reason else "Withdrawn by submitter"
 
-        # Cancel any associated workflow instances
-        workflow_instances = WorkflowInstance.objects.filter(
-            submission=submission,
-            status__in=['PENDING', 'IN_PROGRESS', 'NEEDS_ADMIN_ACTION']
-        )
-
-        for instance in workflow_instances:
-            instance.status = 'CANCELLED'
-            instance.cancelled_at = timezone.now()
-            instance.cancelled_by = request.user
-            instance.cancellation_reason = f"Submission withdrawn by submitter. Reason: {reason}" if reason else "Submission withdrawn by submitter"
-            instance.save()
-
-            # Cancel all pending approvals for this instance
-            instance.approvals.filter(status='PENDING').update(
-                status='CANCELLED',
-                comments='Submission withdrawn by submitter'
-            )
-
-        # Update submission status to WITHDRAWN
-        submission.status = FormSubmission.SubmissionStatus.WITHDRAWN
-        submission.save()
+        instance = WorkflowInstance.objects.filter(
+            submission=submission, status__in=ACTIVE_INSTANCE_STATUSES
+        ).first()
+        if instance:
+            WorkflowEngine().cancel(instance, request.user, cancellation_reason, submission_status='WITHDRAWN')
+            submission.refresh_from_db()
+        else:
+            submission.status = FormSubmission.SubmissionStatus.WITHDRAWN
+            submission.save(update_fields=['status', 'updated_at'])
 
         # Log the withdrawal
         log_update(
@@ -863,6 +716,12 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        if WorkflowInstance.objects.filter(submission=submission, status__in=ACTIVE_INSTANCE_STATUSES).exists():
+            return Response(
+                {"error": "This request is going through an approval workflow; its approvers decide."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         if submission.status != FormSubmission.SubmissionStatus.SUBMITTED:
             return Response(
                 {"error": "Only submitted submissions can be approved."},
@@ -887,6 +746,12 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": "Only Form Managers and Admins can reject submissions."},
                 status=status.HTTP_403_FORBIDDEN
+            )
+
+        if WorkflowInstance.objects.filter(submission=submission, status__in=ACTIVE_INSTANCE_STATUSES).exists():
+            return Response(
+                {"error": "This request is going through an approval workflow; its approvers decide."},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         if submission.status not in [

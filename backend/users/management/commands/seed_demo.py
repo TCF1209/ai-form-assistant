@@ -6,6 +6,7 @@ Seed the database with demo departments, users, forms, workflows and submissions
     python manage.py seed_demo --flush    # wipe the database first
 """
 
+import random
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -15,7 +16,8 @@ from django.utils import timezone
 
 from users.models import Department
 from forms.models import Form, FormField, FormSubmission
-from workflows.models import Workflow, WorkflowStep
+from workflows.engine import WorkflowEngine
+from workflows.models import Workflow, WorkflowApproval, WorkflowInstance, WorkflowStep, WorkflowStepApprover
 
 User = get_user_model()
 
@@ -264,399 +266,189 @@ def create_forms(departments, admin, managers):
     return created_forms
 
 
-def create_workflows(forms, managers, admin):
-    """Create workflows for forms"""
+def create_workflows(forms, employees, admin):
+    """
+    One workflow per form. Approvers are employees (only the USER role approves); the
+    engine never assigns submitters their own request.
+    """
     print("\n=== Creating Workflows ===")
+    by_code = {f.code: f for f in forms}
+    people = {e.username: e for e in employees}
 
-    created_workflows = []
+    specs = [
+        ("LEAVE-REQ", "Leave Approval", Workflow.WorkflowType.SEQUENTIAL, {}, [
+            ("Team Lead Review", "ANY", ["jane_smith", "eric_taylor"], None),
+            ("HR Review", "ANY", ["bob_wilson", "fiona_clark"], None),
+        ]),
+        ("EXP-CLAIM", "Expense Approval", Workflow.WorkflowType.SEQUENTIAL, {}, [
+            ("Team Lead Review", "ANY", ["jane_smith", "charlie_davis"], None),
+            ("Finance Review", "ALL", ["alice_brown"], None),
+        ]),
+        ("IT-EQUIP", "IT Equipment Sign-off", Workflow.WorkflowType.PARALLEL, {"approval_threshold": 100}, [
+            ("IT and Finance Sign-off", "ALL", ["eric_taylor", "alice_brown"], None),
+        ]),
+        ("TRAIN-REQ", "Training Approval", Workflow.WorkflowType.CONDITIONAL, {}, [
+            ("HR Review", "ANY", ["fiona_clark", "bob_wilson"], None),
+            ("Finance Review (cost over RM 1,000)", "ALL", ["alice_brown"],
+             {"logic": "AND", "rules": [{"field": "cost", "operator": "gt", "value": 1000}]}),
+        ]),
+        ("WFH-REQ", "Work From Home Approval", Workflow.WorkflowType.SEQUENTIAL, {}, [
+            ("Team Lead Review", "ANY", ["jane_smith", "diana_miller"], None),
+        ]),
+    ]
 
-    # Leave Request - Sequential: Manager -> HR Manager
-    leave_form = next((f for f in forms if f.code == "LEAVE-REQ"), None)
-    if leave_form:
+    workflows = []
+    for code, name, workflow_type, options, steps in specs:
+        form = by_code.get(code)
+        if form is None:
+            continue
         workflow, created = Workflow.objects.get_or_create(
-            form=leave_form,
+            form=form,
             defaults={
-                "name": "Leave Approval Workflow",
-                "code": "WF-LEAVE",
-                "description": "Two-step approval: Department Manager then HR Manager",
-                "workflow_type": Workflow.WorkflowType.SEQUENTIAL,
+                "name": name,
+                "code": f"WF-{code}",
+                "description": f"{name} for the {form.name}",
+                "workflow_type": workflow_type,
                 "status": Workflow.WorkflowStatus.ACTIVE,
                 "created_by": admin,
-            }
+                **options,
+            },
         )
         if created:
-            # Step 1: Department Manager
-            WorkflowStep.objects.create(
-                workflow=workflow,
-                name="Manager Approval",
-                step_type=WorkflowStep.StepType.APPROVAL,
-                order=1,
-                assigned_role="MANAGER",
-                approval_mode=WorkflowStep.ApprovalMode.ANY,
-            )
-            # Step 2: HR Manager
-            WorkflowStep.objects.create(
-                workflow=workflow,
-                name="HR Approval",
-                step_type=WorkflowStep.StepType.APPROVAL,
-                order=2,
-                assigned_user=managers["HR"],
-                approval_mode=WorkflowStep.ApprovalMode.ANY,
-            )
-        created_workflows.append(workflow)
+            for order, (step_name, mode, approvers, conditions) in enumerate(steps):
+                step = WorkflowStep.objects.create(
+                    workflow=workflow,
+                    name=step_name,
+                    step_type=WorkflowStep.StepType.APPROVAL,
+                    order=order,
+                    approval_mode=mode,
+                    conditions=conditions or {},
+                )
+                for position, username in enumerate(approvers):
+                    WorkflowStepApprover.objects.create(workflow_step=step, user=people[username], order=position)
+        workflows.append(workflow)
         print(f"  {'Created' if created else 'Found'}: {workflow.name}")
-
-    # Expense Claim - Sequential: Manager -> Finance Manager
-    expense_form = next((f for f in forms if f.code == "EXP-CLAIM"), None)
-    if expense_form:
-        workflow, created = Workflow.objects.get_or_create(
-            form=expense_form,
-            defaults={
-                "name": "Expense Approval Workflow",
-                "code": "WF-EXPENSE",
-                "description": "Two-step approval: Department Manager then Finance Manager",
-                "workflow_type": Workflow.WorkflowType.SEQUENTIAL,
-                "status": Workflow.WorkflowStatus.ACTIVE,
-                "created_by": admin,
-            }
-        )
-        if created:
-            WorkflowStep.objects.create(
-                workflow=workflow,
-                name="Manager Approval",
-                step_type=WorkflowStep.StepType.APPROVAL,
-                order=1,
-                assigned_role="MANAGER",
-                approval_mode=WorkflowStep.ApprovalMode.ANY,
-            )
-            WorkflowStep.objects.create(
-                workflow=workflow,
-                name="Finance Approval",
-                step_type=WorkflowStep.StepType.APPROVAL,
-                order=2,
-                assigned_user=managers["FIN"],
-                approval_mode=WorkflowStep.ApprovalMode.ANY,
-            )
-        created_workflows.append(workflow)
-        print(f"  {'Created' if created else 'Found'}: {workflow.name}")
-
-    # IT Equipment - Sequential: Manager -> IT Manager
-    it_form = next((f for f in forms if f.code == "IT-EQUIP"), None)
-    if it_form:
-        workflow, created = Workflow.objects.get_or_create(
-            form=it_form,
-            defaults={
-                "name": "IT Equipment Approval Workflow",
-                "code": "WF-IT-EQUIP",
-                "description": "Two-step approval: Department Manager then IT Manager",
-                "workflow_type": Workflow.WorkflowType.SEQUENTIAL,
-                "status": Workflow.WorkflowStatus.ACTIVE,
-                "created_by": admin,
-            }
-        )
-        if created:
-            WorkflowStep.objects.create(
-                workflow=workflow,
-                name="Manager Approval",
-                step_type=WorkflowStep.StepType.APPROVAL,
-                order=1,
-                assigned_role="MANAGER",
-                approval_mode=WorkflowStep.ApprovalMode.ANY,
-            )
-            WorkflowStep.objects.create(
-                workflow=workflow,
-                name="IT Manager Approval",
-                step_type=WorkflowStep.StepType.APPROVAL,
-                order=2,
-                assigned_user=managers["IT"],
-                approval_mode=WorkflowStep.ApprovalMode.ANY,
-            )
-        created_workflows.append(workflow)
-        print(f"  {'Created' if created else 'Found'}: {workflow.name}")
-
-    # Training Request - Sequential: Manager -> HR Manager
-    training_form = next((f for f in forms if f.code == "TRAIN-REQ"), None)
-    if training_form:
-        workflow, created = Workflow.objects.get_or_create(
-            form=training_form,
-            defaults={
-                "name": "Training Approval Workflow",
-                "code": "WF-TRAINING",
-                "description": "Two-step approval: Department Manager then HR Manager",
-                "workflow_type": Workflow.WorkflowType.SEQUENTIAL,
-                "status": Workflow.WorkflowStatus.ACTIVE,
-                "created_by": admin,
-            }
-        )
-        if created:
-            WorkflowStep.objects.create(
-                workflow=workflow,
-                name="Manager Approval",
-                step_type=WorkflowStep.StepType.APPROVAL,
-                order=1,
-                assigned_role="MANAGER",
-                approval_mode=WorkflowStep.ApprovalMode.ANY,
-            )
-            WorkflowStep.objects.create(
-                workflow=workflow,
-                name="HR Approval",
-                step_type=WorkflowStep.StepType.APPROVAL,
-                order=2,
-                assigned_user=managers["HR"],
-                approval_mode=WorkflowStep.ApprovalMode.ANY,
-            )
-        created_workflows.append(workflow)
-        print(f"  {'Created' if created else 'Found'}: {workflow.name}")
-
-    # WFH Request - Single step: Manager only
-    wfh_form = next((f for f in forms if f.code == "WFH-REQ"), None)
-    if wfh_form:
-        workflow, created = Workflow.objects.get_or_create(
-            form=wfh_form,
-            defaults={
-                "name": "WFH Approval Workflow",
-                "code": "WF-WFH",
-                "description": "Single-step approval: Department Manager",
-                "workflow_type": Workflow.WorkflowType.SEQUENTIAL,
-                "status": Workflow.WorkflowStatus.ACTIVE,
-                "created_by": admin,
-            }
-        )
-        if created:
-            WorkflowStep.objects.create(
-                workflow=workflow,
-                name="Manager Approval",
-                step_type=WorkflowStep.StepType.APPROVAL,
-                order=1,
-                assigned_role="MANAGER",
-                approval_mode=WorkflowStep.ApprovalMode.ANY,
-            )
-        created_workflows.append(workflow)
-        print(f"  {'Created' if created else 'Found'}: {workflow.name}")
-
-    return created_workflows
+    return workflows
 
 
-def create_submissions(forms, employees, managers):
-    """Create sample submissions with various statuses"""
+def _form_data(code, rng, when):
+    day = when.date()
+    if code == "LEAVE-REQ":
+        days = rng.randint(1, 5)
+        return {
+            "leave_type": rng.choice(["Annual Leave", "Sick Leave", "Personal Leave"]),
+            "start_date": str(day + timedelta(days=7)),
+            "end_date": str(day + timedelta(days=6 + days)),
+            "total_days": days,
+            "reason": rng.choice(["Family trip", "Medical appointment", "Wedding", "Moving house"]),
+            "contact_number": "012-3456789",
+        }
+    if code == "EXP-CLAIM":
+        return {
+            "expense_type": rng.choice(["Travel", "Meals", "Accommodation", "Training"]),
+            "expense_date": str(day),
+            "amount": rng.choice([45, 120, 380, 650, 1200, 2400]),
+            "description": rng.choice(["Client visit", "Team lunch", "Conference hotel", "Course fee"]),
+            "receipt_number": f"INV-{rng.randint(1000, 9999)}",
+        }
+    if code == "IT-EQUIP":
+        return {
+            "equipment_type": rng.choice(["Laptop", "Monitor", "Headset", "Keyboard/Mouse"]),
+            "specifications": "Standard office specification",
+            "justification": rng.choice(["Replacement for a broken unit", "New hire setup", "Second screen"]),
+            "urgency": rng.choice(["Low - Within 1 month", "Medium - Within 2 weeks", "High - Within 1 week"]),
+        }
+    if code == "TRAIN-REQ":
+        return {
+            "training_name": rng.choice(["AWS Cloud Practitioner", "Leadership Essentials", "Advanced Excel"]),
+            "training_provider": rng.choice(["Coursera", "Udemy", "Local Training Centre"]),
+            "training_date": str(day + timedelta(days=30)),
+            "duration": rng.randint(1, 3),
+            "cost": rng.choice([350, 800, 1500, 2800]),
+            "benefits": "Apply the new skills to current projects",
+            "training_mode": rng.choice(["Online", "In-person", "Hybrid"]),
+        }
+    return {
+        "wfh_date": str(day + timedelta(days=2)),
+        "reason": rng.choice(["Home repairs", "Focus time for a deadline", "Waiting for a delivery"]),
+        "tasks_planned": "Code review and documentation",
+        "contactable": ["Email", "Teams"],
+    }
+
+
+def _decide_until(engine, instance, outcome, rng):
+    """Drive a submission through the engine until it reaches the wanted outcome."""
+    instance.refresh_from_db()
+    while instance.status in ("IN_PROGRESS", "NEEDS_ADMIN_ACTION"):
+        task = instance.approvals.filter(status="PENDING").order_by("assigned_at").first()
+        if task is None:
+            break
+        last_step = not instance.workflow.steps.filter(order__gt=task.workflow_step.order).exists()
+        if outcome == "pending" and (instance.approvals.exclude(status="PENDING").exists() or rng.random() < 0.5):
+            break
+        if outcome == "rejected" and (last_step or rng.random() < 0.5):
+            engine.reject_step(task, task.assigned_to, "Please revise and resubmit.")
+        else:
+            engine.approve_step(task, task.assigned_to, "Looks good.")
+        instance.refresh_from_db()
+
+
+def create_submissions(forms, employees):
+    """
+    About 50 requests spread over the last six months. Each one goes through its workflow so
+    approval history, statuses and analytics all agree. Recent ones are left pending so the
+    approvers have work in My Approvals.
+    """
     print("\n=== Creating Submissions ===")
-
+    rng = random.Random(42)
+    engine = WorkflowEngine()
     now = timezone.now()
 
-    # Leave Request Submissions
-    leave_form = next((f for f in forms if f.code == "LEAVE-REQ"), None)
-    if leave_form:
-        submissions_data = [
-            {
-                "user": employees[0],  # John Doe
-                "status": FormSubmission.SubmissionStatus.APPROVED,
-                "data": {
-                    "leave_type": "Annual Leave",
-                    "start_date": (now + timedelta(days=14)).strftime("%Y-%m-%d"),
-                    "end_date": (now + timedelta(days=18)).strftime("%Y-%m-%d"),
-                    "total_days": "5",
-                    "reason": "Family vacation to Japan",
-                    "handover_to": "Jane Smith",
-                    "contact_number": "+60123456789"
-                },
-                "days_ago": 7
-            },
-            {
-                "user": employees[1],  # Jane Smith
-                "status": FormSubmission.SubmissionStatus.IN_REVIEW,
-                "data": {
-                    "leave_type": "Sick Leave",
-                    "start_date": (now + timedelta(days=2)).strftime("%Y-%m-%d"),
-                    "end_date": (now + timedelta(days=3)).strftime("%Y-%m-%d"),
-                    "total_days": "2",
-                    "reason": "Medical appointment and recovery",
-                    "handover_to": "John Doe",
-                    "contact_number": "+60198765432"
-                },
-                "days_ago": 1
-            },
-            {
-                "user": employees[2],  # Bob Wilson
-                "status": FormSubmission.SubmissionStatus.REJECTED,
-                "data": {
-                    "leave_type": "Annual Leave",
-                    "start_date": (now + timedelta(days=5)).strftime("%Y-%m-%d"),
-                    "end_date": (now + timedelta(days=12)).strftime("%Y-%m-%d"),
-                    "total_days": "8",
-                    "reason": "Extended holiday",
-                    "handover_to": "Fiona Clark",
-                    "contact_number": "+60111222333"
-                },
-                "days_ago": 5
-            },
-        ]
+    for index in range(50):
+        form = rng.choice(forms)
+        # john_doe is the demo employee, so give him a share of the requests
+        submitter = employees[0] if index % 4 == 0 else rng.choice(employees)
+        # The last ten requests are from the past week and mostly still open
+        days_ago = rng.randint(0, 6) if index >= 40 else rng.randint(7, 175)
+        submitted_at = now - timedelta(days=days_ago, hours=rng.randint(0, 8))
 
-        for sub_data in submissions_data:
-            FormSubmission.objects.create(
-                form=leave_form,
-                submitted_by=sub_data["user"],
-                status=sub_data["status"],
-                data=sub_data["data"],
-                submitted_at=now - timedelta(days=sub_data["days_ago"])
-            )
-            print(f"  Created: Leave request by {sub_data['user'].username} - {sub_data['status']}")
+        if index >= 40:
+            outcome = rng.choice(["pending", "pending", "pending", "approved", "withdrawn"])
+        else:
+            outcome = rng.choices(["approved", "rejected"], weights=[4, 1])[0]
 
-    # Expense Claim Submissions
-    expense_form = next((f for f in forms if f.code == "EXP-CLAIM"), None)
-    if expense_form:
-        submissions_data = [
-            {
-                "user": employees[3],  # Alice Brown
-                "status": FormSubmission.SubmissionStatus.APPROVED,
-                "data": {
-                    "expense_type": "Travel",
-                    "expense_date": (now - timedelta(days=10)).strftime("%Y-%m-%d"),
-                    "amount": "450.00",
-                    "description": "Client meeting in Penang - flight and transport",
-                    "receipt_number": "INV-2024-001234",
-                    "project_code": "PROJ-CLIENT-A"
-                },
-                "days_ago": 8
-            },
-            {
-                "user": employees[4],  # Charlie Davis
-                "status": FormSubmission.SubmissionStatus.IN_REVIEW,
-                "data": {
-                    "expense_type": "Meals",
-                    "expense_date": (now - timedelta(days=3)).strftime("%Y-%m-%d"),
-                    "amount": "120.50",
-                    "description": "Team lunch with marketing partners",
-                    "receipt_number": "RCP-20240115",
-                    "project_code": ""
-                },
-                "days_ago": 2
-            },
-            {
-                "user": employees[0],  # John Doe
-                "status": FormSubmission.SubmissionStatus.SUBMITTED,
-                "data": {
-                    "expense_type": "Training",
-                    "expense_date": (now - timedelta(days=1)).strftime("%Y-%m-%d"),
-                    "amount": "850.00",
-                    "description": "AWS Cloud Certification exam fee",
-                    "receipt_number": "AWS-CERT-2024-789",
-                    "project_code": "TRAIN-2024"
-                },
-                "days_ago": 0
-            },
-        ]
-
-        for sub_data in submissions_data:
-            FormSubmission.objects.create(
-                form=expense_form,
-                submitted_by=sub_data["user"],
-                status=sub_data["status"],
-                data=sub_data["data"],
-                submitted_at=now - timedelta(days=sub_data["days_ago"])
-            )
-            print(f"  Created: Expense claim by {sub_data['user'].username} - {sub_data['status']}")
-
-    # IT Equipment Submissions
-    it_form = next((f for f in forms if f.code == "IT-EQUIP"), None)
-    if it_form:
-        submissions_data = [
-            {
-                "user": employees[1],  # Jane Smith
-                "status": FormSubmission.SubmissionStatus.APPROVED,
-                "data": {
-                    "equipment_type": "Monitor",
-                    "brand_preference": "Dell or LG",
-                    "specifications": "27 inch, 4K resolution, USB-C connectivity",
-                    "justification": "Current monitor is 5 years old and has display issues. Need higher resolution for design work.",
-                    "urgency": "Medium - Within 2 weeks",
-                    "budget_approved": True
-                },
-                "days_ago": 14
-            },
-            {
-                "user": employees[6],  # Eric Taylor
-                "status": FormSubmission.SubmissionStatus.IN_REVIEW,
-                "data": {
-                    "equipment_type": "Laptop",
-                    "brand_preference": "MacBook Pro",
-                    "specifications": "M3 Pro chip, 18GB RAM, 512GB SSD",
-                    "justification": "Current laptop is too slow for development work. Need better performance for containerized development.",
-                    "urgency": "High - Within 1 week",
-                    "budget_approved": False
-                },
-                "days_ago": 3
-            },
-        ]
-
-        for sub_data in submissions_data:
-            FormSubmission.objects.create(
-                form=it_form,
-                submitted_by=sub_data["user"],
-                status=sub_data["status"],
-                data=sub_data["data"],
-                submitted_at=now - timedelta(days=sub_data["days_ago"])
-            )
-            print(f"  Created: IT equipment request by {sub_data['user'].username} - {sub_data['status']}")
-
-    # Training Request Submissions
-    training_form = next((f for f in forms if f.code == "TRAIN-REQ"), None)
-    if training_form:
-        FormSubmission.objects.create(
-            form=training_form,
-            submitted_by=employees[5],  # Diana Miller
+        submission = FormSubmission.objects.create(
+            form=form,
+            submitted_by=submitter,
             status=FormSubmission.SubmissionStatus.SUBMITTED,
-            data={
-                "training_name": "Project Management Professional (PMP) Certification",
-                "training_provider": "PMI Authorized Training Partner",
-                "training_date": (now + timedelta(days=30)).strftime("%Y-%m-%d"),
-                "duration": "5",
-                "cost": "3500.00",
-                "benefits": "Will improve project management skills and help in leading larger projects. PMP certification is recognized globally.",
-                "training_mode": "Hybrid"
-            },
-            submitted_at=now - timedelta(days=1)
+            data=_form_data(form.code, rng, submitted_at),
+            submitted_at=submitted_at,
         )
-        print("  Created: Training request by diana_miller - SUBMITTED")
+        instance = WorkflowInstance.objects.filter(submission=submission).first()
+        if instance is not None:
+            if outcome == "withdrawn":
+                engine.cancel(instance, submitter, "Withdrawn by submitter", submission_status="WITHDRAWN")
+            else:
+                _decide_until(engine, instance, outcome, rng)
 
-    # WFH Submissions
-    wfh_form = next((f for f in forms if f.code == "WFH-REQ"), None)
-    if wfh_form:
-        submissions_data = [
-            {
-                "user": employees[0],
-                "status": FormSubmission.SubmissionStatus.APPROVED,
-                "data": {
-                    "wfh_date": (now + timedelta(days=1)).strftime("%Y-%m-%d"),
-                    "reason": "Waiting for home repair service",
-                    "tasks_planned": "Code review, documentation updates, team sync meeting",
-                    "contactable": ["Email", "Teams", "Phone"],
-                    "equipment_needed": ""
-                },
-                "days_ago": 2
-            },
-            {
-                "user": employees[7],  # Fiona Clark
-                "status": FormSubmission.SubmissionStatus.SUBMITTED,
-                "data": {
-                    "wfh_date": (now + timedelta(days=3)).strftime("%Y-%m-%d"),
-                    "reason": "Child's school event in the morning",
-                    "tasks_planned": "HR reports, interview scheduling, policy documentation",
-                    "contactable": ["Email", "Teams", "WhatsApp"],
-                    "equipment_needed": "None"
-                },
-                "days_ago": 0
-            },
-        ]
-
-        for sub_data in submissions_data:
-            FormSubmission.objects.create(
-                form=wfh_form,
-                submitted_by=sub_data["user"],
-                status=sub_data["status"],
-                data=sub_data["data"],
-                submitted_at=now - timedelta(days=sub_data["days_ago"])
+            # Spread the history over the real dates instead of "now"
+            decided_at = submitted_at + timedelta(hours=rng.randint(4, 72))
+            WorkflowInstance.objects.filter(pk=instance.pk).update(
+                started_at=submitted_at,
+                completed_at=decided_at if instance.completed_at or outcome != "pending" else None,
             )
-            print(f"  Created: WFH request by {sub_data['user'].username} - {sub_data['status']}")
+            WorkflowApproval.objects.filter(workflow_instance=instance).update(assigned_at=submitted_at)
+            WorkflowApproval.objects.filter(workflow_instance=instance, completed_at__isnull=False).update(
+                completed_at=decided_at)
+        FormSubmission.objects.filter(pk=submission.pk).update(created_at=submitted_at)
+
+    # A few drafts so the "continue your draft" flow has something to show
+    for submitter in employees[:2]:
+        FormSubmission.objects.create(
+            form=forms[0], submitted_by=submitter, status=FormSubmission.SubmissionStatus.DRAFT,
+            data={"leave_type": "Annual Leave", "reason": "Planning a holiday"},
+        )
+    print(f"  Created: {FormSubmission.objects.count()} submissions")
 
 
 def print_summary():
@@ -668,35 +460,23 @@ def print_summary():
     print("\nDatabase Statistics:")
     print(f"  Departments: {Department.objects.count()}")
     print(f"  Users: {User.objects.count()}")
-    print(f"    - Admins: {User.objects.filter(role=User.UserRole.ADMIN).count()}")
-    print(f"    - Managers: {User.objects.filter(role=User.UserRole.MANAGER).count()}")
-    print(f"    - Employees: {User.objects.filter(role=User.UserRole.USER).count()}")
     print(f"  Forms: {Form.objects.count()}")
     print(f"  Workflows: {Workflow.objects.count()}")
     print(f"  Submissions: {FormSubmission.objects.count()}")
+    for status, label in FormSubmission.SubmissionStatus.choices:
+        count = FormSubmission.objects.filter(status=status).count()
+        if count:
+            print(f"    - {label}: {count}")
+    print(f"  Pending approval tasks: {WorkflowApproval.objects.filter(status='PENDING').count()}")
 
     print("\nLogin Credentials:")
     print("-" * 60)
-    print("ADMIN:")
-    print("  Username: admin")
-    print("  Password: Admin123!")
-    print()
-    print("MANAGERS (Password: Manager123!):")
-    print("  - it_manager (IT Department)")
-    print("  - hr_manager (HR Department)")
-    print("  - fin_manager (Finance Department)")
-    print("  - mkt_manager (Marketing Department)")
-    print("  - ops_manager (Operations Department)")
-    print()
-    print("EMPLOYEES (Password: User123!):")
-    print("  - john_doe (IT)")
-    print("  - jane_smith (IT)")
-    print("  - bob_wilson (HR)")
-    print("  - alice_brown (Finance)")
-    print("  - charlie_davis (Marketing)")
-    print("  - diana_miller (Operations)")
-    print("  - eric_taylor (IT)")
-    print("  - fiona_clark (HR)")
+    print("ADMIN:      admin / Admin123!")
+    print("MANAGERS:   it_manager, hr_manager, fin_manager, mkt_manager, ops_manager / Manager123!")
+    print("EMPLOYEES:  john_doe, jane_smith, bob_wilson, alice_brown, charlie_davis,")
+    print("            diana_miller, eric_taylor, fiona_clark / User123!")
+    print("Approvers:  jane_smith, eric_taylor, bob_wilson, fiona_clark, alice_brown,")
+    print("            charlie_davis, diana_miller")
     print("-" * 60)
 
 
@@ -709,12 +489,15 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if options['flush']:
             call_command('flush', interactive=False)
+        if FormSubmission.objects.exists():
+            print("The database already has submissions; run with --flush to start from a clean demo.")
+            return
 
         departments = create_departments()
         admin, managers, employees = create_users(departments)
         forms = create_forms(departments, admin, managers)
-        create_workflows(forms, managers, admin)
-        create_submissions(forms, employees, managers)
+        create_workflows(forms, employees, admin)
+        create_submissions(forms, employees)
 
         print_summary()
         print("\nDemo data is ready. Start the server with: python manage.py runserver")

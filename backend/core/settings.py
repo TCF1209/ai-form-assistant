@@ -7,6 +7,7 @@ locally on SQLite with an in-memory cache.
 """
 
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -127,6 +128,13 @@ MEDIA_ROOT = BASE_DIR / 'media'
 MAX_UPLOAD_SIZE = int(os.getenv('MAX_UPLOAD_SIZE', 10 * 1024 * 1024))  # 10 MB
 ALLOWED_FILE_EXTENSIONS = env_list('ALLOWED_FILE_EXTENSIONS', 'pdf,doc,docx,xls,xlsx,png,jpg,jpeg')
 
+# Rate limits are not what the test suite checks, and the in-memory cache that counts
+# requests is shared by every test in the run, so tests get limits they never reach.
+TESTING = sys.argv[1:2] == ['test']
+THROTTLE_DEFAULTS = {'anon': '500/hour', 'user': '5000/hour', 'login': '10/minute', 'ai': '200/hour'}
+if TESTING:
+    THROTTLE_DEFAULTS = {scope: '100000/minute' for scope in THROTTLE_DEFAULTS}
+
 # Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -156,10 +164,7 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': os.getenv('THROTTLE_RATE_ANON', '500/hour'),
-        'user': os.getenv('THROTTLE_RATE_USER', '5000/hour'),
-        'login': os.getenv('THROTTLE_RATE_LOGIN', '10/minute'),
-        'ai': os.getenv('THROTTLE_RATE_AI', '200/hour'),
+        scope: os.getenv(f'THROTTLE_RATE_{scope.upper()}', rate) for scope, rate in THROTTLE_DEFAULTS.items()
     },
 }
 
@@ -183,6 +188,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Frontend URL, used in password reset emails
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+PASSWORD_RESET_TIMEOUT = int(os.getenv('PASSWORD_RESET_TIMEOUT', 60 * 60))  # seconds
 
 # Email (printed to the console unless an SMTP backend is configured)
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')

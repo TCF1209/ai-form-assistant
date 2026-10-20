@@ -10,10 +10,9 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from django.utils import timezone
-from django.db import transaction
 
 from .models import (
-    Workflow, WorkflowStep, WorkflowInstance,
+    ACTIVE_INSTANCE_STATUSES, Workflow, WorkflowStep, WorkflowInstance,
     WorkflowApproval, WorkflowNotification
 )
 from .serializers import (
@@ -21,9 +20,10 @@ from .serializers import (
     WorkflowInstanceSerializer, WorkflowApprovalSerializer,
     ApprovalActionSerializer, WorkflowNotificationSerializer
 )
-from .engine import WorkflowEngine
+from .engine import WorkflowEngine, WorkflowError
 from forms.models import FormSubmission
 from users.audit import log_create, log_update, log_delete, log_approve, log_reject
+from users.permissions import IsStaffOrReadOnly
 
 
 class WorkflowViewSet(viewsets.ModelViewSet):
@@ -38,7 +38,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
 
     queryset = Workflow.objects.all()
     serializer_class = WorkflowSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsStaffOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'workflow_type', 'form__department']
     search_fields = ['name', 'code', 'description']
@@ -118,12 +118,11 @@ class WorkflowViewSet(viewsets.ModelViewSet):
             raise ValidationError(f"Cannot delete workflow with status '{instance.status}'. Please deactivate it first.")
 
         # Check if workflow has active instances
-        active_instances = instance.instances.filter(status__in=['PENDING', 'IN_PROGRESS'])
+        active_instances = instance.instances.filter(status__in=ACTIVE_INSTANCE_STATUSES)
         if active_instances.exists():
-            count = active_instances.count()
             raise ValidationError(
-                f"Cannot delete workflow. It has {count} active instance(s) in PENDING or IN_PROGRESS status. "
-                f"Please complete or cancel these instances before deleting the workflow."
+                f"Cannot delete workflow. {active_instances.count()} request(s) are still being approved with it. "
+                "Please complete or cancel them before deleting the workflow."
             )
 
         # Store info before deletion for audit log
@@ -174,7 +173,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         workflow = self.get_object()
 
         instances = workflow.instances.all()
-        active_instances = instances.filter(status__in=['PENDING', 'IN_PROGRESS'])
+        active_instances = instances.filter(status__in=ACTIVE_INSTANCE_STATUSES)
 
         return Response({
             'total_instances': instances.count(),
@@ -196,19 +195,15 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         if user.role == 'MANAGER' and workflow.form.department != user.department:
             raise PermissionDenied("You can only manage workflows in your department.")
 
-        active_instances = workflow.instances.filter(status__in=['PENDING', 'IN_PROGRESS'])
-        count = active_instances.count()
+        active_instances = list(workflow.instances.filter(status__in=ACTIVE_INSTANCE_STATUSES))
+        count = len(active_instances)
 
         if count == 0:
             return Response({'message': 'No active instances to cancel'})
 
-        # Cancel all active instances
+        engine = WorkflowEngine()
         for instance in active_instances:
-            instance.status = 'CANCELLED'
-            instance.cancelled_at = timezone.now()
-            instance.cancelled_by = user
-            instance.cancellation_reason = 'Bulk cancelled for workflow deletion'
-            instance.save()
+            engine.cancel(instance, user, 'Cancelled so the workflow can be deleted')
 
         return Response({
             'status': 'success',
@@ -221,7 +216,7 @@ class WorkflowStepViewSet(viewsets.ModelViewSet):
 
     queryset = WorkflowStep.objects.all()
     serializer_class = WorkflowStepSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsStaffOrReadOnly]
 
     def get_queryset(self):
         user = self.request.user
@@ -240,48 +235,12 @@ class WorkflowStepViewSet(viewsets.ModelViewSet):
                 workflow__form__department=user.department
             )
 
-    @action(detail=False, methods=['post'], url_path='reorder')
-    def reorder(self, request):
-        """Reorder workflow steps."""
-        workflow_id = request.data.get('workflow_id')
-        step_ids = request.data.get('step_ids', [])
 
-        if not workflow_id or not step_ids:
-            return Response(
-                {'error': 'workflow_id and step_ids are required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            workflow = Workflow.objects.get(id=workflow_id)
-
-            # Check permissions
-            user = request.user
-            if user.role == 'MANAGER' and workflow.form.department != user.department:
-                return Response(
-                    {'error': 'You can only edit workflows in your department'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
-
-            # Update order
-            with transaction.atomic():
-                for index, step_id in enumerate(step_ids):
-                    WorkflowStep.objects.filter(
-                        id=step_id,
-                        workflow=workflow
-                    ).update(order=index)
-
-            return Response({'status': 'Steps reordered successfully'})
-
-        except Workflow.DoesNotExist:
-            return Response(
-                {'error': 'Workflow not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-
-class WorkflowInstanceViewSet(viewsets.ModelViewSet):
-    """ViewSet for managing workflow instances."""
+class WorkflowInstanceViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read access to workflow instances. Their state only changes through the engine:
+    starting, cancelling and admin decisions here, approver decisions on WorkflowApprovalViewSet.
+    """
 
     queryset = WorkflowInstance.objects.all()
     serializer_class = WorkflowInstanceSerializer
@@ -308,6 +267,12 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
                 Q(approvals__assigned_to=user)
             ).distinct()
 
+    def _require_staff(self, department):
+        user = self.request.user
+        if user.role == 'ADMIN' or (user.role == 'MANAGER' and department == user.department):
+            return
+        raise PermissionDenied('Only Admins and the Form Manager of this department can do this.')
+
     @action(detail=False, methods=['post'])
     def start(self, request):
         """Start a workflow for a submission."""
@@ -322,218 +287,97 @@ class WorkflowInstanceViewSet(viewsets.ModelViewSet):
 
         try:
             submission = FormSubmission.objects.get(id=submission_id)
-            workflow = Workflow.objects.get(id=workflow_id)
-
-            # Check if workflow is active
-            if workflow.status != 'ACTIVE':
-                return Response(
-                    {'error': 'Workflow is not active'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Check if instance already exists
-            if WorkflowInstance.objects.filter(
-                submission=submission,
-                workflow=workflow
-            ).exists():
-                return Response(
-                    {'error': 'Workflow instance already exists for this submission'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Start workflow using the engine
-            engine = WorkflowEngine()
-            instance = engine.start_workflow(submission, workflow)
-
-            serializer = self.get_serializer(instance)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-
+            workflow = Workflow.objects.get(id=workflow_id, form=submission.form)
         except (FormSubmission.DoesNotExist, Workflow.DoesNotExist):
             return Response(
                 {'error': 'Submission or Workflow not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-    @action(detail=True, methods=['post'])
-    def cancel(self, request, pk=None):
-        """Cancel a workflow instance."""
-        instance = self.get_object()
-        reason = request.data.get('reason', '')
+        self._require_staff(workflow.form.department)
 
-        if instance.status in ['COMPLETED', 'CANCELLED']:
+        if workflow.status != 'ACTIVE':
+            return Response({'error': 'Workflow is not active'}, status=status.HTTP_400_BAD_REQUEST)
+        if submission.status != 'SUBMITTED':
             return Response(
-                {'error': 'Cannot cancel completed or already cancelled workflow'},
+                {'error': 'Only submitted requests can enter a workflow'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if WorkflowInstance.objects.filter(submission=submission).exists():
+            return Response(
+                {'error': 'Workflow instance already exists for this submission'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        instance.status = 'CANCELLED'
-        instance.cancelled_at = timezone.now()
-        instance.cancelled_by = request.user
-        instance.cancellation_reason = reason
-        instance.save()
+        instance = WorkflowEngine().start_workflow(submission, workflow)
+        return Response(self.get_serializer(instance).data, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """Cancel a running workflow instance (Admin or the department's Form Manager)."""
+        instance = self.get_object()
+        self._require_staff(instance.workflow.form.department)
+
+        try:
+            WorkflowEngine().cancel(instance, request.user, request.data.get('reason', ''))
+        except WorkflowError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'status': 'Workflow cancelled'})
 
     @action(detail=True, methods=['post'])
     def admin_approve(self, request, pk=None):
-        """
-        Admin action to approve a workflow instance that needs admin action.
-        This is used when all approvers are the submitter (self-approval conflict).
-        Only approves the current step and progresses workflow normally.
-        """
-        instance = self.get_object()
-        user = request.user
-
-        # Only admin can use this action
-        if user.role != 'ADMIN':
-            return Response(
-                {'error': 'Only administrators can perform this action'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        # Check if instance is in NEEDS_ADMIN_ACTION status
-        if instance.status != 'NEEDS_ADMIN_ACTION':
-            return Response(
-                {'error': 'This workflow does not require admin action'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        comments = request.data.get('comments', '')
-
-        with transaction.atomic():
-            # Get pending approvals for the CURRENT step only (not all steps)
-            current_step = instance.current_step
-            if current_step:
-                pending_approvals = instance.approvals.filter(
-                    status='PENDING',
-                    workflow_step=current_step
-                )
-            else:
-                # Fallback: get all pending approvals if no current step
-                pending_approvals = instance.approvals.filter(status='PENDING')
-
-            if not pending_approvals.exists():
-                return Response(
-                    {'error': 'No pending approvals found for current step'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Use workflow engine to properly handle approval and progression
-            engine = WorkflowEngine()
-
-            for approval in pending_approvals:
-                approval.comments = comments or 'Approved by administrator (self-approval conflict resolution)'
-                approval.save()
-                engine.approve_step(approval, user, approval.comments)
-
-            # Change status back to IN_PROGRESS to allow normal workflow progression
-            # The engine will set it to COMPLETED if all steps are done
-            instance.refresh_from_db()
-
-            # Track admin action in context
-            admin_actions = instance.context_data.get('admin_actions', [])
-            admin_actions.append({
-                'action': 'approve',
-                'step': current_step.name if current_step else 'unknown',
-                'admin': user.username,
-                'timestamp': timezone.now().isoformat()
-            })
-            instance.context_data['admin_actions'] = admin_actions
-            instance.save()
-
-            # Log the action
-            log_approve(user, 'WorkflowApproval', approval, comments=comments, request=request)
-
-        # Refresh to get latest status
-        instance.refresh_from_db()
-
-        return Response({
-            'status': 'success',
-            'message': f'Step approved by administrator. Workflow status: {instance.status}',
-            'workflow_status': instance.status
-        })
+        """Approve the current step on behalf of its approvers (used when no one else can approve)."""
+        return self._admin_decide(request, approve=True)
 
     @action(detail=True, methods=['post'])
     def admin_reject(self, request, pk=None):
-        """
-        Admin action to reject a workflow instance that needs admin action.
-        This is used when all approvers are the submitter (self-approval conflict).
-        Only rejects the current step and lets workflow engine handle failure logic.
-        """
+        """Reject the current step on behalf of its approvers (used when no one else can approve)."""
+        return self._admin_decide(request, approve=False)
+
+    def _admin_decide(self, request, approve):
         instance = self.get_object()
         user = request.user
 
-        # Only admin can use this action
         if user.role != 'ADMIN':
             return Response(
                 {'error': 'Only administrators can perform this action'},
                 status=status.HTTP_403_FORBIDDEN
             )
-
-        # Check if instance is in NEEDS_ADMIN_ACTION status
         if instance.status != 'NEEDS_ADMIN_ACTION':
             return Response(
                 {'error': 'This workflow does not require admin action'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        comments = request.data.get('comments', '')
+        verb = 'Approved' if approve else 'Rejected'
+        comments = request.data.get('comments') or f'{verb} by administrator (no eligible approver)'
+        step_name = instance.current_step.name if instance.current_step else 'unknown'
 
-        with transaction.atomic():
-            # Get pending approvals for the CURRENT step only
-            current_step = instance.current_step
-            if current_step:
-                pending_approvals = instance.approvals.filter(
-                    status='PENDING',
-                    workflow_step=current_step
-                )
-            else:
-                # Fallback: get all pending approvals if no current step
-                pending_approvals = instance.approvals.filter(status='PENDING')
+        try:
+            instance = WorkflowEngine().decide_as_admin(instance, user, approve, comments)
+        except WorkflowError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-            if not pending_approvals.exists():
-                return Response(
-                    {'error': 'No pending approvals found for current step'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        instance.context_data.setdefault('admin_actions', []).append({
+            'action': 'approve' if approve else 'reject',
+            'step': step_name,
+            'admin': user.username,
+            'timestamp': timezone.now().isoformat(),
+        })
+        instance.save(update_fields=['context_data'])
 
-            # Use workflow engine to properly handle rejection
-            engine = WorkflowEngine()
-
-            for approval in pending_approvals:
-                approval.comments = comments or 'Rejected by administrator (self-approval conflict resolution)'
-                approval.save()
-                engine.reject_step(approval, user, approval.comments)
-
-            # Refresh to get latest status after engine processing
-            instance.refresh_from_db()
-
-            # Track admin action in context
-            admin_actions = instance.context_data.get('admin_actions', [])
-            admin_actions.append({
-                'action': 'reject',
-                'step': current_step.name if current_step else 'unknown',
-                'admin': user.username,
-                'timestamp': timezone.now().isoformat()
-            })
-            instance.context_data['admin_actions'] = admin_actions
-            instance.save()
-
-            # Log the action
-            log_reject(user, 'WorkflowApproval', approval, comments=comments, request=request)
-
-        # Refresh to get latest status
-        instance.refresh_from_db()
+        log = log_approve if approve else log_reject
+        log(user, 'WorkflowInstance', instance, comments=comments, request=request)
 
         return Response({
             'status': 'success',
-            'message': f'Step rejected by administrator. Workflow status: {instance.status}',
+            'message': f'Step {verb.lower()} by administrator. Workflow status: {instance.status}',
             'workflow_status': instance.status
         })
 
 
-class WorkflowApprovalViewSet(viewsets.ModelViewSet):
-    """ViewSet for managing workflow approvals."""
+class WorkflowApprovalViewSet(viewsets.ReadOnlyModelViewSet):
+    """Approval tasks. Approvers act on them only through the `process` action."""
 
     queryset = WorkflowApproval.objects.all()
     serializer_class = WorkflowApprovalSerializer
@@ -544,23 +388,17 @@ class WorkflowApprovalViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related(
+            'workflow_instance', 'workflow_step', 'assigned_to', 'approved_by'
+        )
 
         if user.role == 'ADMIN':
-            return queryset.select_related(
-                'workflow_instance', 'workflow_step', 'assigned_to', 'approved_by'
-            )
+            return queryset
         elif user.role == 'MANAGER':
-            return queryset.filter(
-                workflow_instance__workflow__form__department=user.department
-            ).select_related(
-                'workflow_instance', 'workflow_step', 'assigned_to', 'approved_by'
-            )
+            return queryset.filter(workflow_instance__workflow__form__department=user.department)
         else:
             # Regular users can only see their approvals
-            return queryset.filter(assigned_to=user).select_related(
-                'workflow_instance', 'workflow_step', 'assigned_to', 'approved_by'
-            )
+            return queryset.filter(assigned_to=user)
 
     @action(detail=False, methods=['get'])
     def my_pending(self, request):
@@ -571,12 +409,10 @@ class WorkflowApprovalViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Get pending approvals assigned to user, excluding self-approval cases
         approvals = self.get_queryset().filter(
             assigned_to=request.user,
             status='PENDING'
         ).exclude(
-            # Exclude approvals where the user is also the submitter (self-approval)
             workflow_instance__submission__submitted_by=request.user
         )
 
@@ -585,23 +421,15 @@ class WorkflowApprovalViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def process(self, request, pk=None):
-        """Process an approval (approve/reject/delegate)."""
+        """Approve, reject or delegate an approval task assigned to the current user."""
         approval = self.get_object()
 
-        # Check if user can process this approval
         if approval.assigned_to != request.user:
             return Response(
                 {'error': 'You are not assigned to this approval'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        if approval.status != 'PENDING':
-            return Response(
-                {'error': 'This approval has already been processed'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Prevent self-approval: submitter cannot approve their own submission
         submission = approval.workflow_instance.submission
         if submission.submitted_by == request.user:
             return Response(
@@ -610,47 +438,61 @@ class WorkflowApprovalViewSet(viewsets.ModelViewSet):
             )
 
         serializer = ApprovalActionSerializer(data=request.data)
-        if serializer.is_valid():
-            action = serializer.validated_data['action']
-            comments = serializer.validated_data.get('comments', '')
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            engine = WorkflowEngine()
+        action_name = serializer.validated_data['action']
+        comments = serializer.validated_data.get('comments', '')
+        engine = WorkflowEngine()
 
-            if action == 'approve':
+        try:
+            if action_name == 'approve':
                 engine.approve_step(approval, request.user, comments)
-                # Log the approval
                 log_approve(request.user, 'WorkflowApproval', approval, comments=comments, request=request)
                 return Response({'status': 'Approved'})
-            elif action == 'reject':
+
+            if action_name == 'reject':
                 engine.reject_step(approval, request.user, comments)
-                # Log the rejection
                 log_reject(request.user, 'WorkflowApproval', approval, comments=comments, request=request)
                 return Response({'status': 'Rejected'})
-            elif action == 'delegate':
-                delegate_to = serializer.validated_data['delegate_to']
-                new_approval = approval.delegate(request.user, delegate_to, comments)
-                return Response({
-                    'status': 'Delegated',
-                    'new_approval_id': str(new_approval.id)
-                })
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return self._delegate(approval, serializer.validated_data['delegate_to'], comments)
+        except WorkflowError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def _delegate(self, approval, delegate_to, comments):
+        instance = approval.workflow_instance
+        if not instance.workflow.allow_delegation:
+            raise WorkflowError('Delegation is turned off for this workflow.')
+        if instance.status not in ACTIVE_INSTANCE_STATUSES or approval.status != 'PENDING':
+            raise WorkflowError('This approval has already been processed.')
+        if not delegate_to.is_active:
+            raise WorkflowError('You cannot delegate to an inactive user.')
+        if delegate_to == instance.submission.submitted_by:
+            raise WorkflowError('You cannot delegate an approval to the person who submitted the request.')
+        if instance.approvals.filter(
+            workflow_step=approval.workflow_step,
+            assigned_to=delegate_to,
+            status__in=['PENDING', 'APPROVED', 'REJECTED'],
+        ).exists():
+            raise WorkflowError(f'{delegate_to.username} is already an approver of this step.')
+
+        new_approval = approval.delegate(self.request.user, delegate_to, comments)
+        return Response({'status': 'Delegated', 'new_approval_id': str(new_approval.id)})
 
 
-class WorkflowNotificationViewSet(viewsets.ModelViewSet):
-    """ViewSet for managing workflow notifications."""
+class WorkflowNotificationViewSet(viewsets.ReadOnlyModelViewSet):
+    """In-app notifications of the current user."""
 
     queryset = WorkflowNotification.objects.all()
     serializer_class = WorkflowNotificationSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['notification_type', 'is_read', 'recipient']
+    filterset_fields = ['notification_type', 'is_read']
     ordering = ['-created_at']
 
     def get_queryset(self):
-        user = self.request.user
-        # Users can only see their own notifications
-        return super().get_queryset().filter(recipient=user).select_related(
+        return super().get_queryset().filter(recipient=self.request.user).select_related(
             'workflow_approval', 'workflow_approval__workflow_instance',
             'workflow_approval__workflow_step', 'recipient'
         )
@@ -661,21 +503,16 @@ class WorkflowNotificationViewSet(viewsets.ModelViewSet):
         notification = self.get_object()
         notification.is_read = True
         notification.read_at = timezone.now()
-        notification.save()
-
+        notification.save(update_fields=['is_read', 'read_at'])
         return Response({'status': 'Notification marked as read'})
 
     @action(detail=False, methods=['post'])
     def mark_all_read(self, request):
         """Mark all notifications as read for the current user."""
-        self.get_queryset().filter(is_read=False).update(
-            is_read=True,
-            read_at=timezone.now()
-        )
+        self.get_queryset().filter(is_read=False).update(is_read=True, read_at=timezone.now())
         return Response({'status': 'All notifications marked as read'})
 
     @action(detail=False, methods=['get'])
     def unread_count(self, request):
         """Get the count of unread notifications."""
-        count = self.get_queryset().filter(is_read=False).count()
-        return Response({'unread_count': count})
+        return Response({'unread_count': self.get_queryset().filter(is_read=False).count()})

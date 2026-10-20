@@ -7,7 +7,6 @@ const CreateFormModal = ({ departments, onClose, onSave }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isFormManager = user?.role === 'MANAGER';
-  const isAdmin = user?.role === 'ADMIN';
 
   // Initialize with Form Manager's department if applicable
   const getDepartmentId = () => {

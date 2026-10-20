@@ -5,7 +5,6 @@ import api from '../../services/api';
 const SECURITY_ACTIONS = ['LOGIN', 'LOGOUT'];
 
 // Business actions (always shown)
-const BUSINESS_ACTIONS = ['CREATE', 'UPDATE', 'DELETE', 'SUBMIT', 'APPROVE', 'REJECT', 'EXPORT'];
 
 const AuditLog = () => {
   const [logs, setLogs] = useState([]);
@@ -160,22 +159,6 @@ const AuditLog = () => {
       'Department': '🏢',
     };
     return icons[model] || '📋';
-  };
-
-  const formatDescription = (log) => {
-    const modelIcon = getModelIcon(log.model_name);
-    const actionConfig = getActionConfig(log.action);
-
-    if (log.action === 'LOGIN') {
-      return `${log.user_name} logged into the system`;
-    }
-    if (log.action === 'LOGOUT') {
-      return `${log.user_name} logged out of the system`;
-    }
-    if (log.object_repr) {
-      return `${modelIcon} ${log.object_repr}`;
-    }
-    return `${modelIcon} ${log.model_name}`;
   };
 
   // Filter actions based on toggle

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
@@ -170,7 +170,7 @@ const Workflows = () => {
     if (!workflowToDelete) return;
 
     try {
-      const response = await api.post(`/workflows/${workflowToDelete.id}/cancel_instances/`);
+      await api.post(`/workflows/${workflowToDelete.id}/cancel_instances/`);
 
       // Re-check instances
       const checkResponse = await api.get(`/workflows/${workflowToDelete.id}/check_instances/`);
@@ -203,10 +203,6 @@ const Workflows = () => {
       const errorMsg = error.response?.data?.detail || error.response?.data?.error || 'Failed to deactivate workflow';
       setMessage({ type: 'error', text: errorMsg });
     }
-  };
-
-  const handleCloneWorkflow = async (workflow) => {
-    alert('Cloning is disabled. Each form can only have one workflow. Please create a new workflow for a different form instead.');
   };
 
   const handlePreviewWorkflow = (workflow) => {

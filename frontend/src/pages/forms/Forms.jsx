@@ -128,7 +128,6 @@ const Forms = () => {
     if (isFormManager && String(form?.department) === String(user?.department)) return true; // Manager can delete from own dept
     return false;
   };
-  const canSubmitForm = isUser; // Only USER role can submit forms
 
   // Fetch forms
   const fetchForms = async () => {
@@ -221,11 +220,6 @@ const Forms = () => {
       console.error('Failed to delete form:', error);
       alert('Failed to delete form.');
     }
-  };
-
-  const handleSubmitForm = (form) => {
-    setSelectedForm(form);
-    setShowSubmitModal(true);
   };
 
   const getStatusBadge = (status) => {

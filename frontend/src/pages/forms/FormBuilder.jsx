@@ -552,7 +552,6 @@ const FieldEditor = ({ field, formId, onClose, onSave }) => {
     onSave(fieldToSave);
   };
 
-  const fieldType = FIELD_TYPES.find(t => t.value === fieldData.field_type);
   const needsOptions = ['SELECT', 'MULTISELECT', 'RADIO', 'CHECKBOX'].includes(fieldData.field_type);
 
   return (

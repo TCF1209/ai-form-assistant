@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 
 // Eye icons for password visibility toggle
@@ -36,7 +36,6 @@ const ExclamationIcon = () => (
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const uid = searchParams.get('uid');
   const token = searchParams.get('token');
 

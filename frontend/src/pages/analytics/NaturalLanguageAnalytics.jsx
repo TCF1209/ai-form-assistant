@@ -3,10 +3,10 @@ import { ChatMessage, TypingIndicator } from '../../components/chat/Chat';
 import { useAuth } from '../../hooks/useAuth';
 import analyticsService from '../../services/analyticsService';
 import {
-  LineChart, Line, AreaChart, Area,
+  AreaChart, Area,
   BarChart as RechartsBarChart, Bar,
   PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 
 // Icons
@@ -151,81 +151,6 @@ const MetricCard = ({ label, value, unit, trend, icon, comparison, color }) => {
           {comparison && (
             <span className="text-slate-400 text-xs">{comparison}</span>
           )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Bar Chart component - Enhanced with gradient bars and ranking
-const BarChart = ({ data }) => {
-  const maxValue = Math.max(...data.map(d => d.submissions || d.pending || d.value || d.count || 0));
-  const total = data.reduce((sum, item) => sum + (item.submissions || item.pending || item.value || item.count || 0), 0);
-
-  // Helper to get the label from item - check various possible field names
-  const getLabel = (item) => {
-    return item.form_name || item.name || item.form || item.department ||
-           item.label || item.month || item.status || item.user ||
-           item.category || item.type || 'Unknown';
-  };
-
-  // Helper to get the value from item
-  const getValue = (item) => {
-    return item.submissions || item.pending || item.value || item.count || 0;
-  };
-
-  // Color gradient based on position in ranking
-  const getBarColor = (index) => {
-    const colors = [
-      'from-sky-500 to-sky-600',      // 1st
-      'from-sky-400 to-sky-500',      // 2nd
-      'from-sky-300 to-sky-400',      // 3rd
-      'from-slate-400 to-slate-500',  // 4th+
-      'from-slate-300 to-slate-400',
-    ];
-    return colors[Math.min(index, colors.length - 1)];
-  };
-
-  return (
-    <div className="bg-white rounded-xl shadow-md p-5 border border-slate-200">
-      <div className="space-y-4">
-        {data.map((item, index) => {
-          const value = getValue(item);
-          const percentage = maxValue > 0 ? (value / maxValue) * 100 : 0;
-          const percentOfTotal = total > 0 ? Math.round((value / total) * 100) : 0;
-          const label = getLabel(item);
-          return (
-            <div key={index} className="group">
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-2">
-                  <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
-                    index === 0 ? 'bg-sky-100 text-sky-600' : 'bg-slate-100 text-slate-500'
-                  }`}>
-                    {index + 1}
-                  </span>
-                  <span className="text-sm font-medium text-slate-700 truncate max-w-[150px]" title={label}>
-                    {label}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-800">{value.toLocaleString()}</span>
-                  <span className="text-xs text-slate-400">({percentOfTotal}%)</span>
-                </div>
-              </div>
-              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full bg-gradient-to-r ${getBarColor(index)} rounded-full transition-all duration-500 ease-out group-hover:opacity-80`}
-                  style={{ width: `${percentage}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {total > 0 && (
-        <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-sm">
-          <span className="text-slate-500">Total</span>
-          <span className="font-bold text-slate-700">{total.toLocaleString()}</span>
         </div>
       )}
     </div>

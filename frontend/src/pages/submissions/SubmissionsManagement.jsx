@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 
@@ -261,7 +260,6 @@ const SubmissionsManagement = () => {
   const [adminActionType, setAdminActionType] = useState(null); // 'approve' or 'reject'
   const [adminComments, setAdminComments] = useState('');
   const [processingAction, setProcessingAction] = useState(false);
-  const navigate = useNavigate();
   const { user } = useAuth();
 
   // Initial load and filter changes - reset to page 1

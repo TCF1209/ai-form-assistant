@@ -219,7 +219,6 @@ const WorkflowDiagram = ({
     const edges = [];
 
     const nodeSpacingX = 220;
-    const nodeSpacingY = 120;
     const startX = 50;
     const centerY = 150;
 
@@ -409,19 +408,7 @@ const WorkflowDiagram = ({
     setEdges(initialEdges);
   }, [initialNodes, initialEdges, setNodes, setEdges]);
 
-  // Calculate diagram width based on steps
-  const diagramWidth = useMemo(() => {
-    if (workflowType === 'PARALLEL') {
-      return Math.max(500, 220 * 3); // Start + Steps + End
-    }
-    return Math.max(500, 220 * (steps.length + 2)); // Start + all steps + End
-  }, [steps.length, workflowType]);
-
-  // Calculate diagram height based on workflow type
-  const diagramHeight = useMemo(() => {
-    // Use consistent height like SEQUENTIAL
-    return 200;
-  }, [steps, workflowType]);
+  const diagramHeight = 200;
 
   if (steps.length === 0 || (workflowType === 'PARALLEL' && (!steps[0]?.approvers || steps[0]?.approvers.length === 0))) {
     return (

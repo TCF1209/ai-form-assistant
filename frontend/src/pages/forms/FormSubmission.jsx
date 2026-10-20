@@ -1,13 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
-import { useAuth } from '../../hooks/useAuth';
 import { EMAIL_PATTERN, PHONE_PATTERN } from '../../utils/patterns';
 
 const FormSubmission = () => {
   const { formId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
 
   const [form, setForm] = useState(null);
   const [fields, setFields] = useState([]);

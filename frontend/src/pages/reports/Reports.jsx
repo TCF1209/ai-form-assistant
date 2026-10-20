@@ -788,7 +788,6 @@ const Reports = () => {
 
       // Design System Colors
       const skyBlue = [14, 165, 233];      // #0EA5E9 - Primary
-      const skyBlueHover = [2, 132, 199];  // #0284C7 - Primary dark
       const darkGray = [30, 41, 59];       // #1E293B - Text
       const mediumGray = [100, 116, 139];  // #64748B - Secondary text
       const lightGray = [248, 250, 252];   // #F8FAFC - Background
@@ -832,7 +831,6 @@ const Reports = () => {
       // Create PDF document (portrait for better chart display)
       const doc = new jsPDF('portrait');
       const pageWidth = doc.internal.pageSize.width;
-      const pageHeight = doc.internal.pageSize.height;
 
       // ============ PAGE 1: Cover & Summary ============
 

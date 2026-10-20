@@ -44,19 +44,6 @@ const SparklesIcon = () => (
 );
 
 
-// Helper to get consistent color based on user name
-const getUserColor = (user) => {
-  if (!user) return 'bg-slate-400';
-  const colors = [
-    'bg-rose-500', 'bg-pink-500', 'bg-fuchsia-500', 'bg-purple-500',
-    'bg-violet-500', 'bg-indigo-500', 'bg-blue-500', 'bg-cyan-500',
-    'bg-teal-500', 'bg-emerald-500', 'bg-green-500', 'bg-amber-500'
-  ];
-  const name = user.username || user.first_name || 'user';
-  const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return colors[hash % colors.length];
-};
-
 const FormIcon = () => (
   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -804,7 +791,6 @@ const SmartAssistant = () => {
     // Normal form filling flow
     // Use fieldsNeedingInput if available, otherwise fall back to all fields
     const fieldsToUse = fieldsNeedingInput.length > 0 ? fieldsNeedingInput : currentForm.fields;
-    const currentField = fieldsToUse[currentFieldIndex];
 
     addMessage({
       content: value || '(empty)',

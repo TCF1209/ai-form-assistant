@@ -18,7 +18,6 @@ const AIFormGeneration = () => {
   const [departments, setDepartments] = useState([]);
   const [selectedDepartment, setSelectedDepartment] = useState(null);
   const [prompt, setPrompt] = useState('');
-  const [generatedForm, setGeneratedForm] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     code: '',
@@ -182,8 +181,6 @@ const AIFormGeneration = () => {
             conditions: field.conditions || []  // Conditional logic support
           }))
         };
-
-        setGeneratedForm(generatedFormData);
         setFormData(generatedFormData);
         saveToHistory(prompt, selectedDepartment);
         message.success('Form generated successfully with AI! Review and customize as needed.');
@@ -196,7 +193,6 @@ const AIFormGeneration = () => {
 
       // Check if it's an API error with a message
       const errorMessage = error.response?.data?.error || error.message || 'Failed to generate form';
-      const errorType = error.response?.data?.error_type;
 
       // Handle timeout errors
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
@@ -222,7 +218,6 @@ const AIFormGeneration = () => {
       else if (errorMessage.includes('not configured') || errorMessage.includes('API key') || error.response?.status === 503) {
         message.warning('AI service not available. Using template-based generation.');
         const mockForm = generateMockForm(prompt, selectedDepartment);
-        setGeneratedForm(mockForm);
         setFormData(mockForm);
         saveToHistory(prompt, selectedDepartment);
         setCurrentStep(2);
@@ -352,7 +347,7 @@ const AIFormGeneration = () => {
     }
     setLoading(true);
     try {
-      const savedForm = await saveFormToBackend();
+      await saveFormToBackend();
       message.success('Form created successfully!');
       // Navigate to the forms list
       navigate('/forms');
@@ -705,7 +700,6 @@ const AIFormGeneration = () => {
             <button
               onClick={() => {
                 setCurrentStep(0);
-                setGeneratedForm(null);
                 setViewMode('edit');
               }}
               className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-md transition-colors"
@@ -932,7 +926,6 @@ const AIFormGeneration = () => {
             onClick={() => {
               // Reset everything to initial state
               setCurrentStep(0);
-              setGeneratedForm(null);
               setViewMode('edit');
               setPrompt('');
               setSelectedDepartment(null);

@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 
 // Icons
@@ -312,8 +310,6 @@ const MySubmissions = () => {
   const [withdrawReason, setWithdrawReason] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const navigate = useNavigate();
-  const { user } = useAuth();
 
   // Auto-hide message after 3 seconds
   useEffect(() => {

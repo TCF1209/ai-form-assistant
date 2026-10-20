@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { EMAIL_PATTERN, PHONE_PATTERN } from '../../utils/patterns';
 
 const FormSubmitModal = ({ form, onClose, onSubmit }) => {
   const [fields, setFields] = useState([]);
@@ -60,15 +61,13 @@ const FormSubmitModal = ({ form, onClose, onSubmit }) => {
         const rules = field.validation_rules;
 
         if (field.field_type === 'EMAIL') {
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(formData[field.name])) {
+          if (!EMAIL_PATTERN.test(formData[field.name])) {
             newErrors[field.name] = 'Invalid email address';
           }
         }
 
         if (field.field_type === 'PHONE') {
-          const phoneRegex = /^[\d\s\-\+\(\)]+$/;
-          if (!phoneRegex.test(formData[field.name])) {
+          if (!PHONE_PATTERN.test(formData[field.name])) {
             newErrors[field.name] = 'Invalid phone number';
           }
         }

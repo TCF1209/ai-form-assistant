@@ -216,12 +216,14 @@ class FormSubmissionDetailSerializer(serializers.ModelSerializer):
         return None
 
     def get_files(self, obj):
+        request = self.context.get('request')
+        absolute = request.build_absolute_uri if request else (lambda url: url)
         return [{
             'id': str(file.id),
             'field_name': file.field.name,
             'file_name': file.original_name,
             'file_size': file.file_size,
-            'file': file.file.url if file.file else None,
+            'file': absolute(file.file.url) if file.file else None,
             'uploaded_at': file.uploaded_at
         } for file in obj.files.select_related('field')]
 

@@ -56,7 +56,7 @@ const AIFormGeneration = () => {
   const fetchDepartments = async () => {
     setDepartmentsLoading(true);
     try {
-      const response = await api.get('/departments/');
+      const response = await api.get('/departments/', { params: { page_size: 1000 } });
       // Handle different response formats
       let departmentData = [];
       if (Array.isArray(response.data)) {
@@ -119,29 +119,10 @@ const AIFormGeneration = () => {
   };
 
   const loadGenerationHistory = () => {
-    // Load from localStorage for now (mock data)
-    const history = localStorage.getItem('ai_form_generation_history');
-    if (history) {
-      setGenerationHistory(JSON.parse(history));
-    } else {
-      // Set mock history
-      const mockHistory = [
-        {
-          id: 1,
-          prompt: 'Create a leave application form',
-          department: 'HR',
-          timestamp: new Date(Date.now() - 86400000).toISOString(),
-          status: 'completed'
-        },
-        {
-          id: 2,
-          prompt: 'Generate expense reimbursement form with approval workflow',
-          department: 'Finance',
-          timestamp: new Date(Date.now() - 172800000).toISOString(),
-          status: 'completed'
-        }
-      ];
-      setGenerationHistory(mockHistory);
+    try {
+      setGenerationHistory(JSON.parse(localStorage.getItem('ai_form_generation_history')) || []);
+    } catch {
+      setGenerationHistory([]);
     }
   };
 

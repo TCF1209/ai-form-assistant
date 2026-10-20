@@ -143,7 +143,7 @@ const FormBuilder = () => {
   );
 
   // Check if user can edit this form
-  const canEdit = user?.role === 'ADMIN' || (user?.role === 'MANAGER' && form?.department_id === user?.department?.id);
+  const canEdit = user?.role === 'ADMIN' || (user?.role === 'MANAGER' && String(form?.department) === String(user?.department));
 
   useEffect(() => {
     fetchForm();

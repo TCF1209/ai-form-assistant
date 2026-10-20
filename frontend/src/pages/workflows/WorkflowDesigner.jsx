@@ -554,7 +554,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
 
   const fetchUsers = async () => {
     try {
-      const response = await api.get('/users/');
+      const response = await api.get('/users/', { params: { page_size: 1000 } });
       setUsers(response.data.results || response.data);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -563,7 +563,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
 
   const fetchDepartments = async () => {
     try {
-      const response = await api.get('/departments/');
+      const response = await api.get('/departments/', { params: { page_size: 1000 } });
       setDepartments(response.data.results || response.data);
     } catch (error) {
       console.error('Error fetching departments:', error);
@@ -572,7 +572,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
 
   const fetchExistingWorkflows = async () => {
     try {
-      const response = await api.get('/workflows/');
+      const response = await api.get('/workflows/', { params: { page_size: 1000 } });
       setExistingWorkflows(response.data.results || response.data);
     } catch (error) {
       console.error('Error fetching existing workflows:', error);
@@ -774,7 +774,7 @@ const WorkflowDesigner = ({ visible, onClose, workflow, forms }) => {
     ? forms
     : user.role === 'MANAGER'
       ? forms
-      : forms.filter(f => f.department === user.department || f.department === user.department_id);
+      : forms.filter(f => String(f.department) === String(user.department));
 
   // Check which forms already have workflows (convert to strings for consistent comparison)
   const formsWithWorkflows = new Set(

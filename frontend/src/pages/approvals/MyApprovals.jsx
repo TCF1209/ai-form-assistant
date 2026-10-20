@@ -261,7 +261,7 @@ const MyApprovals = () => {
       }
 
       // Get other stats from all approvals assigned to user
-      const response = await api.get('/workflow-approvals/');
+      const response = await api.get('/workflow-approvals/', { params: { page_size: 1000 } });
       const data = response.data.results || response.data;
 
       setStats({
@@ -277,7 +277,7 @@ const MyApprovals = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await api.get('/users/');
+      const response = await api.get('/users/', { params: { page_size: 1000 } });
       const data = response.data.results || response.data;
       setUsers(data.filter(u => u.role === 'USER' && u.id !== user.id));
     } catch (error) {

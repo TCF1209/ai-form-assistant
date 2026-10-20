@@ -4,6 +4,7 @@
  */
 
 import api, { AI_TIMEOUT } from './api';
+import { EMAIL_PATTERN, PHONE_PATTERN } from '../utils/patterns';
 
 // Auto-fill field mappings - maps form field names to user profile fields
 const AUTO_FILL_MAPPINGS = {
@@ -187,7 +188,7 @@ const assistantService = {
     }
 
     try {
-      const response = await api.get('/forms/');
+      const response = await api.get('/forms/', { params: { page_size: 1000 } });
       const forms = response.data.results || response.data;
 
       // Transform forms to include fields info
@@ -575,8 +576,7 @@ const assistantService = {
 
       switch (fieldType) {
         case 'EMAIL':
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(processedValue)) {
+          if (!EMAIL_PATTERN.test(processedValue)) {
             isValid = false;
             errorMessage = 'Please enter a valid email address.';
           }
@@ -588,8 +588,7 @@ const assistantService = {
           }
           break;
         case 'PHONE':
-          const phoneRegex = /^[\d\s\-\+\(\)]+$/;
-          if (!phoneRegex.test(processedValue)) {
+          if (!PHONE_PATTERN.test(processedValue)) {
             isValid = false;
             errorMessage = 'Please enter a valid phone number.';
           }
@@ -675,8 +674,7 @@ const assistantService = {
 
       switch (fieldType) {
         case 'EMAIL':
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(processedValue)) {
+          if (!EMAIL_PATTERN.test(processedValue)) {
             isValid = false;
             errorMessage = 'Please enter a valid email address.';
           }
@@ -690,8 +688,7 @@ const assistantService = {
           }
           break;
         case 'PHONE':
-          const phoneRegex = /^[\d\s\-\+\(\)]+$/;
-          if (!phoneRegex.test(processedValue)) {
+          if (!PHONE_PATTERN.test(processedValue)) {
             isValid = false;
             errorMessage = 'Please enter a valid phone number.';
           }

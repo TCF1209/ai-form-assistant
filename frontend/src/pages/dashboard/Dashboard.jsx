@@ -176,7 +176,7 @@ const Dashboard = () => {
       // Fetch common data for all roles
       const [notificationsRes, formsRes] = await Promise.all([
         api.get('/workflow-notifications/unread_count/').catch(() => ({ data: { unread_count: 0 } })),
-        api.get('/forms/').catch(() => ({ data: { results: [] } })),
+        api.get('/forms/', { params: { page_size: 1000 } }).catch(() => ({ data: { results: [] } })),
       ]);
 
       const forms = formsRes.data.results || formsRes.data || [];
@@ -191,7 +191,7 @@ const Dashboard = () => {
       if (user?.role === 'USER') {
         // User-specific data
         const [submissionsRes, approvalsRes, draftsRes] = await Promise.all([
-          api.get('/submissions/', { params: { submitted_by: user.id } }).catch(() => ({ data: { results: [] } })),
+          api.get('/submissions/', { params: { page_size: 1000 } }).catch(() => ({ data: { results: [] } })),
           api.get('/workflow-approvals/my_pending/').catch(() => ({ data: [] })),
           api.get('/submissions/drafts/').catch(() => ({ data: [] })),
         ]);
@@ -213,8 +213,8 @@ const Dashboard = () => {
       } else if (user?.role === 'MANAGER') {
         // Form Manager-specific data
         const [submissionsRes, workflowsRes] = await Promise.all([
-          api.get('/submissions/').catch(() => ({ data: { results: [] } })),
-          api.get('/workflows/').catch(() => ({ data: { results: [] } })),
+          api.get('/submissions/', { params: { page_size: 1000 } }).catch(() => ({ data: { results: [] } })),
+          api.get('/workflows/', { params: { page_size: 1000 } }).catch(() => ({ data: { results: [] } })),
         ]);
 
         const submissions = submissionsRes.data.results || submissionsRes.data || [];
@@ -235,8 +235,8 @@ const Dashboard = () => {
         const [usersRes, departmentsRes, submissionsRes, workflowsRes] = await Promise.all([
           api.get('/users/stats/').catch(() => ({ data: {} })),
           api.get('/departments/stats/').catch(() => ({ data: {} })),
-          api.get('/submissions/').catch(() => ({ data: { results: [] } })),
-          api.get('/workflows/').catch(() => ({ data: { results: [] } })),
+          api.get('/submissions/', { params: { page_size: 1000 } }).catch(() => ({ data: { results: [] } })),
+          api.get('/workflows/', { params: { page_size: 1000 } }).catch(() => ({ data: { results: [] } })),
         ]);
 
         const submissions = submissionsRes.data.results || submissionsRes.data || [];

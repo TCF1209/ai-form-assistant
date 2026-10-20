@@ -314,11 +314,11 @@ const Reports = () => {
     setLoading(true);
     try {
       // Fetch ALL submissions (bypass pagination for reports)
-      const submissionsRes = await api.get('/submissions/?page_size=10000');
+      const submissionsRes = await api.get('/submissions/?page_size=1000');
       const submissions = submissionsRes.data.results || submissionsRes.data || [];
 
       // Fetch ALL forms (bypass pagination for reports)
-      const formsRes = await api.get('/forms/?page_size=10000');
+      const formsRes = await api.get('/forms/?page_size=1000');
       const forms = formsRes.data.results || formsRes.data || [];
 
       // Filter by date range
@@ -478,7 +478,7 @@ const Reports = () => {
     setExporting(true);
     try {
       // Fetch ALL submissions data (bypass pagination)
-      const submissionsRes = await api.get('/submissions/?page_size=10000');
+      const submissionsRes = await api.get('/submissions/?page_size=1000');
       const submissions = submissionsRes.data.results || submissionsRes.data || [];
 
       // Filter by date range
@@ -775,7 +775,7 @@ const Reports = () => {
     setExporting(true);
     try {
       // Fetch ALL submissions data (bypass pagination)
-      const submissionsRes = await api.get('/submissions/?page_size=10000');
+      const submissionsRes = await api.get('/submissions/?page_size=1000');
       const submissions = submissionsRes.data.results || submissionsRes.data || [];
 
       // Filter by date range
@@ -1200,7 +1200,7 @@ const Reports = () => {
               <h1 className="text-2xl font-bold text-slate-800">Reports</h1>
               <p className="text-slate-500">
                 View analytics and export data
-                {user?.role === 'MANAGER' && user?.department && ` • ${user.department.name} Department`}
+                {user?.role === 'MANAGER' && user?.department_name && ` • ${user.department_name}`}
               </p>
             </div>
           </div>

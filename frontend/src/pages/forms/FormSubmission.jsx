@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
+import { EMAIL_PATTERN, PHONE_PATTERN } from '../../utils/patterns';
 
 const FormSubmission = () => {
   const { formId } = useParams();
@@ -99,31 +100,30 @@ const FormSubmission = () => {
         ? JSON.parse(field.validation_rules)
         : field.validation_rules;
 
+      const numValue = parseFloat(value);
       switch (field.field_type) {
         case 'EMAIL':
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(value)) {
+          if (!EMAIL_PATTERN.test(value)) {
             errors.push('Please enter a valid email address');
           }
           break;
 
         case 'PHONE':
-          const phoneRegex = /^[\d\s\-\+\(\)]+$/;
-          if (!phoneRegex.test(value)) {
+          if (!PHONE_PATTERN.test(value)) {
             errors.push('Please enter a valid phone number');
           }
           break;
 
         case 'URL':
           try {
-            new URL(value);
+            // Only web links: new URL() alone also accepts javascript: and data: URLs
+            if (!['http:', 'https:'].includes(new URL(value).protocol)) throw new Error();
           } catch {
-            errors.push('Please enter a valid URL');
+            errors.push('Please enter a valid http(s) URL');
           }
           break;
 
         case 'NUMBER':
-          const numValue = parseFloat(value);
           if (isNaN(numValue)) {
             errors.push('Please enter a valid number');
           } else {
@@ -252,8 +252,7 @@ const FormSubmission = () => {
       const draftData = {
         form: formId,
         status: 'DRAFT',
-        data: formData,
-        version: draft ? draft.version + 1 : 1
+        data: formData
       };
 
       let response;
@@ -326,7 +325,6 @@ const FormSubmission = () => {
       submitData.append('form', formId);
       submitData.append('status', 'SUBMITTED');
       submitData.append('data', JSON.stringify(formData));
-      submitData.append('version', draft ? draft.version + 1 : 1);
 
       // Append files
       Object.keys(files).forEach(fieldName => {

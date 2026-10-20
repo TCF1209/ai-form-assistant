@@ -42,5 +42,5 @@ htmlcov/
 Thumbs.db
 Desktop.ini
 
-# Local Claude Code settings
-.claude/settings.local.json
+# Local tool settings
+.claude/

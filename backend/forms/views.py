@@ -644,7 +644,7 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
             'field_name': file.field.name,
             'file_name': file.original_name,
             'file_size': file.file_size,
-            'file': file.file.url,
+            'file': request.build_absolute_uri(file.file.url),
             'uploaded_at': file.uploaded_at
         } for file in submission.files.select_related('field')])
 

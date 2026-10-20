@@ -1,33 +1,18 @@
-import api from './api';
+import api, { clearSession } from './api';
 
 const authService = {
-  // Register new user
-  register: async (userData) => {
-    try {
-      const response = await api.post('/auth/register/', userData);
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || error.message;
-    }
-  },
-
   // Login user
   login: async (credentials) => {
     try {
-      // Map email field to email_or_username for backend compatibility
-      const loginData = {
+      const response = await api.post('/auth/login/', {
         email_or_username: credentials.email || credentials.username,
         password: credentials.password,
-      };
-      const response = await api.post('/auth/login/', loginData);
+      });
 
       // Backend sends tokens in a nested 'tokens' object
       const { tokens, user } = response.data;
-      const { access, refresh } = tokens;
-
-      // Store tokens and user data
-      localStorage.setItem('access_token', access);
-      localStorage.setItem('refresh_token', refresh);
+      localStorage.setItem('access_token', tokens.access);
+      localStorage.setItem('refresh_token', tokens.refresh);
       localStorage.setItem('user', JSON.stringify(user));
 
       return response.data;
@@ -36,40 +21,27 @@ const authService = {
     }
   },
 
-  // Logout user
+  // Logout user (the server blacklists the refresh token)
   logout: async () => {
     try {
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
-        // Backend expects 'refresh_token' not 'refresh'
         await api.post('/auth/logout/', { refresh_token: refreshToken });
       }
     } catch (error) {
       console.error('Logout error:', error);
       // Even if logout fails on server, we should clear local session
     } finally {
-      // Clear local storage regardless of API call success
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('user');
+      clearSession();
     }
   },
 
-  // Refresh access token
-  refreshToken: async () => {
-    try {
-      const refreshToken = localStorage.getItem('refresh_token');
-      const response = await api.post('/auth/token/refresh/', {
-        refresh: refreshToken,
-      });
-
-      const { access } = response.data;
-      localStorage.setItem('access_token', access);
-
-      return access;
-    } catch (error) {
-      throw error.response?.data || error.message;
-    }
+  // Load the signed-in user from the server, so role or department changes made by an
+  // admin show up on the next page load. Expired access tokens are refreshed by api.js.
+  fetchCurrentUser: async () => {
+    const { data } = await api.get('/users/me/');
+    localStorage.setItem('user', JSON.stringify(data));
+    return data;
   },
 
   // Get current user
@@ -79,21 +51,7 @@ const authService = {
   },
 
   // Check if user is authenticated
-  isAuthenticated: () => {
-    const token = localStorage.getItem('access_token');
-    return !!token;
-  },
-
-  // Verify token
-  verifyToken: async () => {
-    try {
-      const token = localStorage.getItem('access_token');
-      await api.post('/auth/token/verify/', { token });
-      return true;
-    } catch (error) {
-      return false;
-    }
-  },
+  isAuthenticated: () => !!localStorage.getItem('access_token'),
 };
 
 export default authService;

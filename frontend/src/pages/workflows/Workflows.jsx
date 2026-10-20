@@ -92,7 +92,7 @@ const Workflows = () => {
 
   const fetchForms = async () => {
     try {
-      const response = await api.get('/forms/');
+      const response = await api.get('/forms/', { params: { page_size: 1000 } });
       setForms(response.data.results || response.data);
     } catch (error) {
       console.error('Error fetching forms:', error);

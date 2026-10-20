@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import authService from '../services/authService';
+import assistantService from '../services/assistantService';
 
 export const AuthContext = createContext(null);
 
@@ -8,27 +9,25 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Initialize auth state from localStorage
+  // Restore the session: show the stored user right away, then refresh it from the server
   useEffect(() => {
     const initAuth = async () => {
-      try {
-        const storedUser = authService.getCurrentUser();
-        const isAuth = authService.isAuthenticated();
+      const storedUser = authService.getCurrentUser();
+      if (!authService.isAuthenticated() || !storedUser) {
+        setLoading(false);
+        return;
+      }
 
-        if (isAuth && storedUser) {
-          // Verify token is still valid
-          const isValid = await authService.verifyToken();
-          if (isValid) {
-            setUser(storedUser);
-          } else {
-            // Token invalid, clear auth
-            await authService.logout();
-            setUser(null);
-          }
+      setUser(storedUser);
+      try {
+        setUser(await authService.fetchCurrentUser());
+      } catch (err) {
+        // No response means the backend is unreachable; keep the stored user.
+        // Anything else (e.g. an expired session) signs the user out.
+        if (err.response) {
+          await authService.logout();
+          setUser(null);
         }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        setUser(null);
       } finally {
         setLoading(false);
       }
@@ -55,37 +54,14 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Register function
-  const register = useCallback(async (userData) => {
-    try {
-      setError(null);
-      setLoading(true);
-
-      const data = await authService.register(userData);
-
-      // Auto-login after registration
-      if (data.user) {
-        const loginData = await authService.login({
-          email: userData.email,
-          password: userData.password,
-        });
-        setUser(loginData.user);
-      }
-
-      return { success: true, data };
-    } catch (error) {
-      setError(error);
-      return { success: false, error };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   // Logout function
   const logout = useCallback(async () => {
     try {
       setLoading(true);
       await authService.logout();
+      // Forget data cached for the previous user (profile auto-fill, form list, AI history)
+      assistantService.clearCache();
+      localStorage.removeItem('ai_form_generation_history');
       setUser(null);
       setError(null);
     } catch (error) {
@@ -132,7 +108,6 @@ export const AuthProvider = ({ children }) => {
     error,
     isAuthenticated: !!user,
     login,
-    register,
     logout,
     updateUser,
     hasRole,

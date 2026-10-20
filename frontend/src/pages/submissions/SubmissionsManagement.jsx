@@ -320,7 +320,7 @@ const SubmissionsManagement = () => {
 
   const fetchForms = async () => {
     try {
-      const response = await api.get('/forms/');
+      const response = await api.get('/forms/', { params: { page_size: 1000 } });
       setForms(response.data.results || response.data);
     } catch (error) {
       console.error('Error fetching forms:', error);
@@ -329,7 +329,7 @@ const SubmissionsManagement = () => {
 
   const fetchDepartments = async () => {
     try {
-      const response = await api.get('/departments/');
+      const response = await api.get('/departments/', { params: { page_size: 1000 } });
       setDepartments(response.data.results || response.data);
     } catch (error) {
       console.error('Error fetching departments:', error);

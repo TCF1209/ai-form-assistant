@@ -29,9 +29,6 @@ const welcomeMessages = [
   "I'll analyze your data and show you the results in an easy-to-understand format."
 ];
 
-// Simulate typing delay
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
 /**
  * Analytics Service
  */
@@ -61,9 +58,6 @@ const analyticsService = {
    * @param {Array} conversationHistory - Recent conversation messages for context
    */
   async processQuery(query, context = {}, conversationHistory = []) {
-    // Add artificial delay for better UX
-    await delay(300 + Math.random() * 300);
-
     // Note: Greetings, thanks, and help requests are now handled by backend AI
     // This allows multi-language support (Chinese, Malay, etc.)
 

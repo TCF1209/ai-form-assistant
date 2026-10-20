@@ -36,6 +36,7 @@ const formService = {
    * @param {Object} aiFormData - AI generated form data
    */
   async createAIForm(aiFormData) {
+    let createdForm = null;
     try {
       // Transform AI generated data to match backend format
       const formData = {
@@ -50,8 +51,7 @@ const formService = {
         fields: aiFormData.fields || []
       };
 
-      // Try to create the form via API
-      const createdForm = await this.createForm({
+      createdForm = await this.createForm({
         name: formData.name,
         code: formData.code,
         description: formData.description,
@@ -86,30 +86,11 @@ const formService = {
       // Return the complete form with fields
       return await this.getForm(createdForm.id);
     } catch (error) {
-      console.error('Failed to create AI form via API, using mock:', error);
-
-      // Return mock form data if API fails
-      const mockFormId = `mock-form-${Date.now()}`;
-      const mockForm = {
-        id: mockFormId,
-        name: aiFormData.title || aiFormData.name,
-        code: aiFormData.code || this.generateFormCode(aiFormData.title || aiFormData.name),
-        description: aiFormData.description || '',
-        department: aiFormData.department,
-        status: 'DRAFT',
-        ai_generated: true,
-        ai_prompt: aiFormData.prompt || '',
-        fields: aiFormData.fields || [],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      // Store in localStorage for persistence
-      const storedForms = JSON.parse(localStorage.getItem('mock_forms') || '[]');
-      storedForms.push(mockForm);
-      localStorage.setItem('mock_forms', JSON.stringify(storedForms));
-
-      return mockForm;
+      // Don't leave a half-built form behind when adding one of its fields failed
+      if (createdForm?.id) {
+        await api.delete(`/forms/${createdForm.id}/`).catch(() => {});
+      }
+      throw error;
     }
   },
 

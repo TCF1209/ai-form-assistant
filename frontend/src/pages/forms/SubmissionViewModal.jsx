@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 
+// Submitted values come from users, so only render web links as clickable
+const isWebLink = (value) => typeof value === 'string' && /^https?:\/\//i.test(value);
+
 const SubmissionViewModal = ({ submissionId, onClose }) => {
   const [submission, setSubmission] = useState(null);
   const [fields, setFields] = useState([]);
@@ -53,6 +56,7 @@ const SubmissionViewModal = ({ submissionId, onClose }) => {
         return value;
 
       case 'FILE':
+        if (!isWebLink(value)) return String(value);
         return (
           <a
             href={value}
@@ -65,6 +69,7 @@ const SubmissionViewModal = ({ submissionId, onClose }) => {
         );
 
       case 'URL':
+        if (!isWebLink(value)) return String(value);
         return (
           <a
             href={value}

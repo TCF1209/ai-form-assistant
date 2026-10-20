@@ -120,12 +120,12 @@ const Forms = () => {
   const canCreateForm = isAdmin || isFormManager; // Admin and Form Manager can create
   const canEditForm = (form) => {
     if (isAdmin) return true; // Admin can edit any form
-    if (isFormManager && form?.department_id === user?.department?.id) return true; // Manager can edit own dept
+    if (isFormManager && String(form?.department) === String(user?.department)) return true; // Manager can edit own dept
     return false;
   };
   const canDeleteForm = (form) => {
     if (isAdmin) return true; // Admin can delete any form
-    if (isFormManager && form?.department_id === user?.department?.id) return true; // Manager can delete from own dept
+    if (isFormManager && String(form?.department) === String(user?.department)) return true; // Manager can delete from own dept
     return false;
   };
   const canSubmitForm = isUser; // Only USER role can submit forms

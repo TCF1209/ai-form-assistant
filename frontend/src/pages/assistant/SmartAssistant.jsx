@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ChatMessage, TypingIndicator } from '../../components/chat/Chat';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import assistantService from '../../services/assistantService';
@@ -42,13 +43,6 @@ const SparklesIcon = () => (
   </svg>
 );
 
-// Helper to get user initial (first letter of first name only - matches profile icon)
-const getUserInitial = (user) => {
-  if (!user) return 'U';
-  if (user.first_name) return user.first_name[0].toUpperCase();
-  if (user.username) return user.username[0].toUpperCase();
-  return 'U';
-};
 
 // Helper to get consistent color based on user name
 const getUserColor = (user) => {
@@ -74,36 +68,6 @@ const EditIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
   </svg>
 );
-
-// Message component
-const ChatMessage = ({ message, isUser, user }) => {
-  return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
-      {!isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center mr-3 shadow-md text-white">
-          <SparklesIcon />
-        </div>
-      )}
-      <div
-        className={`max-w-[70%] px-4 py-3 rounded-2xl ${
-          isUser
-            ? 'bg-sky-500 text-white rounded-br-md'
-            : 'bg-white text-slate-800 shadow-md rounded-bl-md'
-        }`}
-      >
-        <div className="whitespace-pre-wrap text-sm">{message.content}</div>
-        <div className={`text-xs mt-1 ${isUser ? 'text-sky-100' : 'text-slate-400'}`}>
-          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </div>
-      </div>
-      {isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center ml-3 shadow-md">
-          <span className="text-white text-sm font-bold">{getUserInitial(user)}</span>
-        </div>
-      )}
-    </div>
-  );
-};
 
 // Form recommendation card component
 const FormRecommendationCard = ({ form, onYes, onNo, onFillManually, onFillWithAI, showFillOptions }) => {
@@ -551,22 +515,6 @@ const FormCompletionCard = ({ form, formData, onSubmit, onEditField, onCancel, i
     </div>
   );
 };
-
-// Typing indicator component
-const TypingIndicator = () => (
-  <div className="flex justify-start mb-4">
-    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center mr-3 shadow-md text-white">
-      <SparklesIcon />
-    </div>
-    <div className="bg-white px-4 py-3 rounded-2xl rounded-bl-md shadow-md">
-      <div className="flex gap-1">
-        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-      </div>
-    </div>
-  </div>
-);
 
 // Main Smart Assistant component
 const SmartAssistant = () => {
@@ -1395,12 +1343,12 @@ const SmartAssistant = () => {
           </div>
         ) : (
           messages.map((message, index) => (
-            <ChatMessage key={index} message={message} isUser={message.isUser} user={user} />
+            <ChatMessage key={index} message={message} isUser={message.isUser} user={user} accent="violet" />
           ))
         )}
 
         {/* Typing indicator */}
-        {isTyping && <TypingIndicator />}
+        {isTyping && <TypingIndicator accent="violet" />}
 
         {/* Form recommendation card */}
         {currentRecommendation && !isFillingForm && !showCompletionSummary && (

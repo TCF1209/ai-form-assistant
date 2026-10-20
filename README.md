@@ -16,13 +16,22 @@ Built as my Final Year Project (Computer Science, Artificial Intelligence).
 
 ## What it does
 
-| | |
+- **AI form generation**: a Form Manager describes the form ("an expense claim with receipt
+  upload and amount limits"); GPT returns a typed schema that is validated, mapped onto the
+  form builder's field types and opened for review before saving.
+- **Smart Assistant**: an employee writes "I need 3 days off next week for a family event".
+  The assistant picks the right form, pre-fills what it understood plus the employee's
+  profile, asks only for what is missing, and submits.
+- **Analytics in plain language**: "How many leave requests were rejected last month?"
+  returns a number, chart or table with a short written summary, and follow-up questions
+  keep their context.
+- **Approval workflows**: managers design sequential or parallel workflows, choosing per
+  step whether all, a majority or any one of its approvers must agree. Approvers approve,
+  reject or delegate in *My Approvals*, and the submitter is notified of the outcome.
+
+| Workflow map | My Approvals |
 |---|---|
-| **AI form generation**: a Form Manager describes the form ("an expense claim with receipt upload and amount limits"); GPT returns a typed schema that is validated, mapped onto the form builder's field types and opened for review before saving. | ![AI form generator](docs/screenshots/ai-form-generator.png) |
-| **Smart Assistant**: an employee writes "I need 3 days off next week for a family event". The assistant picks the right form, pre-fills what it understood plus the employee's profile, asks only for what is missing, and submits. | ![Smart Assistant](docs/screenshots/smart-assistant.png) |
-| **Analytics in plain language**: "How many leave requests were rejected last month?" returns a number, chart or table with a short written summary, and follow-up questions keep their context. | ![Analytics query](docs/screenshots/analytics.png) |
-| **Approval workflows**: managers design sequential or parallel workflows, choosing per step whether all, a majority or any one of its approvers must agree. | ![Workflow map](docs/screenshots/workflow.png) |
-| **My Approvals**: approvers approve, reject or delegate with a comment; the submitter is notified of the outcome. | ![My Approvals](docs/screenshots/approvals.png) |
+| ![Workflow map](docs/screenshots/workflow.png) | ![My Approvals](docs/screenshots/approvals.png) |
 
 Also: drag-and-drop form builder with 35 templates, file attachments, drafts and withdrawals,
 Excel/PDF reports, in-app notifications, user and department management, and an audit log.

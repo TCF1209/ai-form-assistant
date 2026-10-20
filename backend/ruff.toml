@@ -1,0 +1,6 @@
+target-version = "py310"
+extend-exclude = ["*/migrations/*"]
+
+[lint]
+# Pyflakes: undefined names, unused imports and variables, redefinitions
+select = ["F"]

@@ -6,6 +6,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
 import uuid
 import json
 
@@ -241,11 +242,9 @@ class FormSubmission(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.submission_number:
-            # Generate submission number
-            import datetime
-            prefix = self.form.code
-            timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-            self.submission_number = f"{prefix}-{timestamp}"
+            # e.g. LEAVE-20260121-3F9A2C: readable, and unique even for submissions made in the same second
+            date = timezone.localdate().strftime('%Y%m%d')
+            self.submission_number = f"{self.form.code}-{date}-{uuid.uuid4().hex[:6].upper()}"
         super().save(*args, **kwargs)
 
 

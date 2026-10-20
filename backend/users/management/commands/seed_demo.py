@@ -1,26 +1,18 @@
 """
-Comprehensive Demo Data Script for AI Office Assistant
-Creates realistic mock data for FYP presentation demo.
+Seed the database with demo departments, users, forms, workflows and submissions.
 
-Run this script:
-1. Activate virtual environment: venv_windows\Scripts\activate
-2. Flush database: python manage.py flush --no-input
-3. Run migrations: python manage.py migrate
-4. Run this script: python create_demo_data.py
+    python manage.py migrate
+    python manage.py seed_demo            # add demo data (safe to re-run)
+    python manage.py seed_demo --flush    # wipe the database first
 """
 
-import os
-import sys
-import django
-from datetime import datetime, timedelta
-import random
+from datetime import timedelta
 
-# Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
-django.setup()
-
-from django.utils import timezone
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
+from django.core.management.base import BaseCommand
+from django.utils import timezone
+
 from users.models import Department
 from forms.models import Form, FormField, FormSubmission
 from workflows.models import Workflow, WorkflowStep, WorkflowStepApprover, WorkflowInstance, WorkflowApproval
@@ -673,7 +665,7 @@ def print_summary():
     print("DEMO DATA CREATION COMPLETE!")
     print("=" * 60)
 
-    print("\n📊 Database Statistics:")
+    print("\nDatabase Statistics:")
     print(f"  Departments: {Department.objects.count()}")
     print(f"  Users: {User.objects.count()}")
     print(f"    - Admins: {User.objects.filter(role=User.UserRole.ADMIN).count()}")
@@ -683,7 +675,7 @@ def print_summary():
     print(f"  Workflows: {Workflow.objects.count()}")
     print(f"  Submissions: {FormSubmission.objects.count()}")
 
-    print("\n🔐 Login Credentials:")
+    print("\nLogin Credentials:")
     print("-" * 60)
     print("ADMIN:")
     print("  Username: admin")
@@ -708,24 +700,21 @@ def print_summary():
     print("-" * 60)
 
 
-def main():
-    print("=" * 60)
-    print("AI OFFICE ASSISTANT - DEMO DATA GENERATOR")
-    print("=" * 60)
+class Command(BaseCommand):
+    help = 'Create demo departments, users, forms, workflows and submissions.'
 
-    # Create data
-    departments = create_departments()
-    admin, managers, employees = create_users(departments)
-    forms = create_forms(departments, admin, managers)
-    workflows = create_workflows(forms, managers, admin)
-    create_submissions(forms, employees, managers)
+    def add_arguments(self, parser):
+        parser.add_argument('--flush', action='store_true', help='Delete all existing data first.')
 
-    # Print summary
-    print_summary()
+    def handle(self, *args, **options):
+        if options['flush']:
+            call_command('flush', interactive=False)
 
-    print("\n✅ Demo data ready for your FYP presentation!")
-    print("   Run the server: python manage.py runserver")
+        departments = create_departments()
+        admin, managers, employees = create_users(departments)
+        forms = create_forms(departments, admin, managers)
+        create_workflows(forms, managers, admin)
+        create_submissions(forms, employees, managers)
 
-
-if __name__ == "__main__":
-    main()
+        print_summary()
+        print("\nDemo data is ready. Start the server with: python manage.py runserver")

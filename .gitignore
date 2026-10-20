@@ -1,156 +1,46 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Django
-*.log
-*.pot
-*.pyc
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-media/
-staticfiles/
-
-# Virtual environments
+.venv/
 venv/
 venv_windows/
 env/
-ENV/
-env.bak/
-venv.bak/
 
-# Node modules
+# Django
+backend/db.sqlite3
+backend/db.sqlite3-journal
+backend/db_backup_*.sqlite3
+backend/media/
+backend/staticfiles/
+backend/logs/
+
+# Node / frontend
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-.pnpm-debug.log*
-
-# React / Frontend
 frontend/dist/
-frontend/build/
 .eslintcache
-.parcel-cache
 
-# IDEs
+# Environment files (copy the matching .env.example instead)
+.env
+.env.*
+!.env.example
+
+# Tests and coverage
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# Logs
+*.log
+
+# Editors and OS
 .vscode/
 .idea/
 *.swp
-*.swo
-*~
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
-
-# OS
 .DS_Store
 Thumbs.db
-ehthumbs.db
 Desktop.ini
-$RECYCLE.BIN/
-*.cab
-*.msi
-*.msix
-*.msm
-*.msp
-*.lnk
 
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Logs
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# Testing
-.coverage
-.coverage.*
-.cache
-.pytest_cache/
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-htmlcov/
-.tox/
-.nox/
-
-# Output files
-output/
-*.csv
-*.json
-*.xlsx
-*.pdf
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-*.bak
-.temp/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Redis
-dump.rdb
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# Documentation build
-docs/_build/
-docs/.docusaurus
-
-# Package files
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
-
-# Project specific
-data/raw/*
-data/processed/*
-!data/raw/.gitkeep
-!data/processed/.gitkeep*.jpeg
-image.png
+# Local Claude Code settings
+.claude/settings.local.json

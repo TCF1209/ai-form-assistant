@@ -154,7 +154,3 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep*.jpeg
 image.png
-
-# Claude Code (local config, not for submission)
-CLAUDE.md
-.claude/

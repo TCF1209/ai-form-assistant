@@ -13,10 +13,9 @@ An intelligent web-based form management system for enterprise environments that
 
 ## 🚀 Quick Start
 
-1. **Read CLAUDE.md first** - Contains essential rules for Claude Code
-2. Follow the pre-task compliance checklist before starting any work
-3. Use proper module structure under `backend/` and `frontend/`
-4. Commit after every completed task
+1. Follow the setup instructions below
+2. Use proper module structure under `backend/` and `frontend/`
+3. Commit after every completed task
 
 ## 🛠 Tech Stack
 
@@ -60,7 +59,6 @@ project-root/
 
 - **Always search first** before creating new files
 - **Extend existing** functionality rather than duplicating
-- **Use Task agents** for operations >30 seconds
 - **Single source of truth** for all functionality
 - **Commit frequently** with clear messages
 - **Test incrementally** to catch issues early
@@ -133,7 +131,6 @@ This is a Final Year Project. Development follows these principles:
 - Maintain clean code architecture
 - Document complex logic
 - Test all critical paths
-- Follow CLAUDE.md rules strictly
 
 ## 📄 License
 
@@ -143,7 +140,6 @@ This project is part of an academic Final Year Project (FYP).
 
 - Project template by Chang Ho Chien | HC AI 說人話channel
 - Tutorial: https://youtu.be/8Q1bRZaHH24
-- Built with Claude Code assistance
 
 ---
 

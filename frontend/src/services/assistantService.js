@@ -27,6 +27,8 @@ const AUTO_FILL_MAPPINGS = {
   'email_address': 'email',
   'e_mail': 'email',
   'your_email': 'email',
+  'contact_email': 'email',
+  'my_email': 'email',
 
   // Employee ID variations
   'employee_id': 'employee_id',
@@ -310,7 +312,8 @@ const assistantService = {
     // Check for greetings (English, Chinese, Malay)
     // Chinese: 你好, 嗨, 早上好, 下午好, 晚上好
     // Malay: selamat pagi, selamat petang, selamat malam, hai
-    if (/^(hi|hello|hey|good morning|good afternoon|good evening|你好|嗨|早上好|下午好|晚上好|selamat pagi|selamat petang|selamat malam|hai)/i.test(messageLower)) {
+    // Only match SHORT greetings (less than 30 chars) to avoid matching "Hi I want to apply for leave"
+    if (messageLower.length < 30 && /^(hi|hello|hey|good morning|good afternoon|good evening|你好|嗨|早上好|下午好|晚上好|selamat pagi|selamat petang|selamat malam|hai)[\s!.?]*$/i.test(messageLower)) {
       return {
         type: 'greeting',
         content: "Hello! I'm here to help you find and fill out forms. What would you like to do today?",
@@ -321,7 +324,8 @@ const assistantService = {
     // Check for thanks (English, Chinese, Malay)
     // Chinese: 谢谢, 感谢, 多谢
     // Malay: terima kasih
-    if (/^(thank|thanks|thx|ty|appreciate|谢谢|感谢|多谢|terima kasih)/i.test(messageLower)) {
+    // Only match SHORT thanks messages
+    if (messageLower.length < 30 && /^(thank|thanks|thx|ty|appreciate|谢谢|感谢|多谢|terima kasih)[\s!.?]*$/i.test(messageLower)) {
       return {
         type: 'thanks',
         content: "You're welcome! Is there anything else I can help you with?",
@@ -332,7 +336,8 @@ const assistantService = {
     // Check for goodbye (English, Chinese, Malay)
     // Chinese: 再见, 拜拜
     // Malay: selamat tinggal, jumpa lagi
-    if (/^(bye|goodbye|see you|exit|quit|再见|拜拜|selamat tinggal|jumpa lagi)/i.test(messageLower)) {
+    // Only match SHORT goodbye messages
+    if (messageLower.length < 30 && /^(bye|goodbye|see you|exit|quit|再见|拜拜|selamat tinggal|jumpa lagi)[\s!.?]*$/i.test(messageLower)) {
       return {
         type: 'goodbye',
         content: "Goodbye! Feel free to come back anytime you need help with forms.",

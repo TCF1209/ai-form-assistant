@@ -212,6 +212,9 @@ Examples:
 - "expense claim for $500 taxi" → {"amount": "500", "expense_type": "Transportation", "description": "taxi"}
 - "sick leave tomorrow" → {"leave_type": "Sick Leave"}
 - "我打算请年假，跟家人去度假" → {"leave_type": "Annual Leave", "reason_for_leave": "Family vacation"}
+- "My computer is broken, it suddenly shut down" → {"equipment_type": "Computer", "equipment_or_facility_type": "Computer", "issue_description": "suddenly shut down without warning"}
+- "Laptop screen is not working" → {"equipment_type": "Laptop", "equipment_or_facility_type": "Laptop", "issue_description": "screen is not working"}
+- "Printer keeps jamming" → {"equipment_type": "Printer", "equipment_or_facility_type": "Printer", "issue_description": "keeps jamming"}
 
 If the query is a greeting or not related to forms, return:
 {

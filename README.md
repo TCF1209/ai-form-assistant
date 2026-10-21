@@ -29,9 +29,13 @@ Built as my Final Year Project (Computer Science, Artificial Intelligence).
   step whether all, a majority or any one of its approvers must agree. Approvers approve,
   reject or delegate in *My Approvals*, and the submitter is notified of the outcome.
 
-| Workflow map | My Approvals |
+| Smart Assistant | AI form generator |
 |---|---|
-| ![Workflow map](docs/screenshots/workflow.png) | ![My Approvals](docs/screenshots/approvals.png) |
+| ![Smart Assistant pre-filling a leave request](docs/screenshots/smart-assistant.png) | ![AI form generator](docs/screenshots/ai-form-generator.png) |
+| **Analytics query** | **Workflow map** |
+| ![Analytics query with chart](docs/screenshots/analytics.png) | ![Workflow map](docs/screenshots/workflow.png) |
+| **My Approvals** | |
+| ![My Approvals](docs/screenshots/approvals.png) | |
 
 Also: drag-and-drop form builder with 35 templates, file attachments, drafts and withdrawals,
 Excel/PDF reports, in-app notifications, user and department management, and an audit log.
@@ -172,7 +176,7 @@ Other managers: `hr_manager`, `fin_manager`, `mkt_manager`, `ops_manager`. Other
 
 ```bash
 cd backend
-python manage.py test        # 112 tests
+python manage.py test        # 113 tests
 ruff check .
 
 cd ../frontend

@@ -10,7 +10,7 @@ from django.test import SimpleTestCase
 from rest_framework.test import APITestCase
 
 from ai_integration.services import OpenAIService, parse_json_response
-from ai_integration.views import time_range_bounds
+from ai_integration.views import date_reference, time_range_bounds
 from core.factories import make_department, make_form, make_user, submit
 
 KL = ZoneInfo('Asia/Kuala_Lumpur')
@@ -50,6 +50,13 @@ class TimeRangeTests(SimpleTestCase):
 
     def test_unknown_ranges_are_unbounded(self):
         self.assertEqual(time_range_bounds('someday', self.now), (None, None))
+
+
+class DateReferenceTests(SimpleTestCase):
+    def test_next_week_starts_on_the_coming_monday(self):
+        text = date_reference(datetime(2026, 10, 21).date())  # a Wednesday
+        self.assertIn('Yesterday: 2026-10-20 (Tuesday)', text)
+        self.assertIn('Next week: 2026-10-26 (Monday) to 2026-11-01', text)
 
 
 GENERATED_FORM = '''```json

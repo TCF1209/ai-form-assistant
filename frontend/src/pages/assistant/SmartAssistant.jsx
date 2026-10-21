@@ -568,22 +568,18 @@ const SmartAssistant = () => {
       setIsLoadingHistory(true);
       const result = await assistantService.loadChatHistory();
 
-      if (result.success && result.messages && result.messages.length > 0) {
-        // Convert backend messages to frontend format
-        const loadedMessages = result.messages.map(msg => ({
+      // The welcome text is shown on every visit and never stored, so it cannot pile up.
+      // Older sessions may still contain stored copies; those are skipped.
+      const welcomeMessage = { ...assistantService.getWelcomeMessage(), isUser: false };
+      const loadedMessages = (result.success && result.messages ? result.messages : [])
+        .filter(msg => !(msg.message_type === 'ASSISTANT' && msg.content === welcomeMessage.content))
+        .map(msg => ({
           content: msg.content,
           isUser: msg.message_type === 'USER',
           timestamp: msg.created_at,
           metadata: msg.metadata
         }));
-        setMessages(loadedMessages);
-      } else {
-        // No history, show welcome message
-        const welcomeMessage = assistantService.getWelcomeMessage();
-        setMessages([{ ...welcomeMessage, isUser: false }]);
-        // Save welcome message to backend
-        assistantService.saveMessage(welcomeMessage.content, 'ASSISTANT');
-      }
+      setMessages([welcomeMessage, ...loadedMessages]);
       setIsLoadingHistory(false);
     };
 
@@ -994,8 +990,6 @@ const SmartAssistant = () => {
       // Reset to welcome message
       const welcomeMessage = assistantService.getWelcomeMessage();
       setMessages([{ ...welcomeMessage, isUser: false }]);
-      // Save welcome message to new session
-      assistantService.saveMessage(welcomeMessage.content, 'ASSISTANT');
       // Reset all states
       resetRecommendationState();
       setIsFillingForm(false);

@@ -62,6 +62,22 @@ def time_range_bounds(time_range, now):
     return None, None
 
 
+def date_reference(today):
+    """
+    Spell out nearby dates for the model, which is unreliable at date arithmetic, so that
+    "yesterday" or "next week" in a request become the right calendar dates.
+    """
+    week_start = today - timedelta(days=today.weekday())
+    next_week = week_start + timedelta(days=7)
+    day = lambda d: f"{d.isoformat()} ({d:%A})"
+    return (
+        f"Today: {day(today)}. Yesterday: {day(today - timedelta(days=1))}. "
+        f"Tomorrow: {day(today + timedelta(days=1))}.\n"
+        f"This week: {week_start.isoformat()} to {(week_start + timedelta(days=6)).isoformat()}. "
+        f"Next week: {next_week.isoformat()} (Monday) to {(next_week + timedelta(days=6)).isoformat()}."
+    )
+
+
 class AIFormGenerationViewSet(viewsets.ViewSet):
     """ViewSet for AI-powered form generation"""
     permission_classes = [IsAuthenticated]
@@ -181,7 +197,8 @@ IMPORTANT for extracted_fields:
 - Only extract values that are clearly stated in the user's query
 - Use the exact field "name" (not label) as the key
 - For SELECT/RADIO fields, match the value to one of the available options
-- For DATE fields, convert to YYYY-MM-DD format if possible
+- For DATE fields, convert to YYYY-MM-DD format if possible, resolving relative dates
+  ("yesterday", "next Monday") against today's date given in the user message
 - Leave out fields that have no clear value in the query
 - Be generous in extraction - if user mentions something related to a field, extract it
 - IMPORTANT: Always translate extracted values to English, even if the user's query is in another language (Chinese, Malay, etc.)
@@ -208,7 +225,9 @@ If the query is a greeting or not related to forms, return:
     "extracted_fields": {}
 }"""
 
-            user_prompt = f"""User query: "{query}"
+            user_prompt = f"""{date_reference(timezone.localdate())}
+
+User query: "{query}"
 
 Available forms:
 {forms_data}

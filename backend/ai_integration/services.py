@@ -123,7 +123,7 @@ For valid form requests, return a JSON object with this structure:
         {
             "name": "field_name_in_english_lowercase_with_underscores",
             "label": "Field Label in English",
-            "type": "text|number|email|date|time|phone|url|select|multiselect|checkbox|radio|file|textarea",
+            "type": "text|number|email|date|time|datetime|phone|url|select|multiselect|checkbox|radio|file|textarea",
             "required": true/false,
             "validation": {
                 "min": number (for number fields),
@@ -166,6 +166,7 @@ FIELD TYPE GUIDELINES:
 - email: Email address
 - date: Date picker
 - time: Time picker
+- datetime: Date and time together (e.g. when an incident happened)
 - phone: Phone number
 - url: Web URL
 - select: Single-choice dropdown

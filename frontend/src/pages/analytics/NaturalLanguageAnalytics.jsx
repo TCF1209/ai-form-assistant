@@ -876,39 +876,35 @@ const NaturalLanguageAnalytics = () => {
       setIsLoadingHistory(true);
       const result = await analyticsService.loadChatHistory();
 
-      if (result.success && result.messages && result.messages.length > 0) {
-        // Convert backend messages to frontend format
-        const loadedMessages = result.messages.map(msg => {
-          const baseMessage = {
-            content: msg.content,
-            isUser: msg.message_type === 'USER',
-            timestamp: msg.created_at
+      // The welcome text is shown on every visit and never stored, so it cannot pile up.
+      // Older sessions may still contain stored copies; those are skipped.
+      const welcomeMessage = { ...analyticsService.getWelcomeMessage(), isUser: false };
+      const storedMessages = (result.success && result.messages ? result.messages : [])
+        .filter(msg => !(msg.message_type === 'ASSISTANT' && msg.content === welcomeMessage.content));
+      const loadedMessages = storedMessages.map(msg => {
+        const baseMessage = {
+          content: msg.content,
+          isUser: msg.message_type === 'USER',
+          timestamp: msg.created_at
+        };
+
+        // Check if this is an analytics result (has visualization data in metadata)
+        if (msg.metadata && msg.metadata.visualization) {
+          return {
+            ...baseMessage,
+            isAnalyticsResult: true,
+            visualization: msg.metadata.visualization,
+            data: msg.metadata.data || [],
+            summary: msg.metadata.summary,
+            interpretation: msg.metadata.interpretation,
+            query_metadata: msg.metadata.query_metadata
           };
+        }
 
-          // Check if this is an analytics result (has visualization data in metadata)
-          if (msg.metadata && msg.metadata.visualization) {
-            return {
-              ...baseMessage,
-              isAnalyticsResult: true,
-              visualization: msg.metadata.visualization,
-              data: msg.metadata.data || [],
-              summary: msg.metadata.summary,
-              interpretation: msg.metadata.interpretation,
-              query_metadata: msg.metadata.query_metadata
-            };
-          }
-
-          return baseMessage;
-        });
-        setMessages(loadedMessages);
-        setShowSuggestions(false); // Hide suggestions if there's history
-      } else {
-        // No history, show welcome message
-        const welcomeMessage = analyticsService.getWelcomeMessage();
-        setMessages([{ ...welcomeMessage, isUser: false }]);
-        // Save welcome message to backend (fire and forget)
-        analyticsService.saveMessage(welcomeMessage.content, 'ASSISTANT');
-      }
+        return baseMessage;
+      });
+      setMessages([welcomeMessage, ...loadedMessages]);
+      setShowSuggestions(storedMessages.length === 0);
       setIsLoadingHistory(false);
     };
 
@@ -940,8 +936,6 @@ const NaturalLanguageAnalytics = () => {
       const welcomeMessage = analyticsService.getWelcomeMessage();
       setMessages([{ ...welcomeMessage, isUser: false }]);
       setShowSuggestions(true);
-      // Save welcome message to new session
-      analyticsService.saveMessage(welcomeMessage.content, 'ASSISTANT');
     }
   };
 

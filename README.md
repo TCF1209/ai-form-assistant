@@ -176,7 +176,7 @@ Other managers: `hr_manager`, `fin_manager`, `mkt_manager`, `ops_manager`. Other
 
 ```bash
 cd backend
-python manage.py test        # 113 tests
+python manage.py test        # 134 tests
 ruff check .
 
 cd ../frontend
@@ -185,6 +185,25 @@ npm run build
 ```
 
 GitHub Actions runs the same checks on every push.
+
+## AI evaluation
+
+`python manage.py eval_ai --output docs/ai-evaluation.md` sends 45 labelled questions (English,
+Chinese, Malay, greetings, help requests, gibberish) through the real intent parser and scores each
+field the way the backend reads it: [latest report](docs/ai-evaluation.md). It needs an API key
+and `seed_demo`; CI tests the scoring itself with a mocked model.
+
+| Prompt (gpt-4o-mini) | Exact intent, per run | Latency p50 / p95 | Cost per run |
+|---|---|---|---|
+| Original | 43/44, 43/44, 45/45 | 2.0–2.7 s / 2.4–3.6 s | $0.02 |
+| Form types copied from the listed names | 44/44, 45/45, 45/45 | 2.1–2.5 s / 2.7–3.2 s | $0.02 |
+
+The one miss was `work_from_home`, a form type that matches no form, modelled on the prompt's
+example `it_support`; the prompt now asks for words from the listed form names (six extra questions
+outside the set: 3/6 named a real form before, 6/6 after). The 45th case was added after the first
+two runs. Not covered: follow-ups that rely on chat history, whether a correct intent returns the
+right rows, the written summary, and questions with a debatable answer, so read 100% as "no
+regressions", not "always right".
 
 ## Limitations and next steps
 

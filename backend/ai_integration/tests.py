@@ -121,9 +121,11 @@ COUNT_INTENT = {
 }
 
 
+# The summary is patched too: with a key in backend/.env the view would otherwise call OpenAI for it.
+@mock.patch.object(OpenAIService, 'format_analytics_response', return_value='Three submissions.')
 @mock.patch.object(OpenAIService, 'parse_analytics_intent', return_value=COUNT_INTENT)
 class AnalyticsQueryApiTests(APITestCase):
-    """The model only interprets the question; the numbers come from ORM queries scoped by role."""
+    """The model only interprets the question and words the answer; the numbers come from ORM queries scoped by role."""
 
     url = '/api/v1/ai/query/'
 
@@ -144,12 +146,12 @@ class AnalyticsQueryApiTests(APITestCase):
         self.assertEqual(response.status_code, 200, response.data)
         return response.data['data'][0]['value']
 
-    def test_a_manager_only_counts_their_department(self, _):
+    def test_a_manager_only_counts_their_department(self, *_):
         self.assertEqual(self.count_for(self.it_manager), 3)
 
-    def test_an_admin_counts_every_department(self, _):
+    def test_an_admin_counts_every_department(self, *_):
         self.assertEqual(self.count_for(self.admin), 4)
 
-    def test_employees_cannot_query_analytics(self, _):
+    def test_employees_cannot_query_analytics(self, *_):
         self.client.force_authenticate(self.employee)
         self.assertEqual(self.client.post(self.url, {'query': 'How many?'}, format='json').status_code, 403)

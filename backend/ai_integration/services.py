@@ -252,6 +252,11 @@ CONVERSATION CONTEXT:
 - Example: If user first asks "How many leave requests last month?" and then asks "how about yesterday?", they still mean leave request submissions, just for yesterday.
 - Carry forward the entity, form_type, and other relevant filters from previous messages when the current query is ambiguous.
 
+FILTER VALUES:
+- The backend finds forms and departments whose name CONTAINS form_type or department, so copy a word or phrase from a name in "Available context", keeping its spaces: "leave" or "Leave Request Form" both find "Leave Request Form".
+- Use the listed English name even when the question is in Chinese or Malay.
+- Never invent codes or join words with underscores: such a value matches no form and the user gets no data.
+
 QUERY TYPE CLASSIFICATION (VERY IMPORTANT - read carefully):
 
 1. "trend" - Use when user asks about changes OVER TIME:
@@ -295,7 +300,7 @@ Analyze the user's query and return a JSON object with this structure:
     "entity": "submissions|forms|departments|workflows",
     "filters": {
         "status": ["APPROVED", "REJECTED"] or null,
-        "form_type": "leave|expense|it_support|travel|etc" or null,
+        "form_type": "a word or phrase from one of the available form types, e.g. leave" or null,
         "department": "department_name" or null,
         "time_range": "today|this_week|last_week|this_month|last_month|this_year|last_6_months|yesterday" or null
     },
